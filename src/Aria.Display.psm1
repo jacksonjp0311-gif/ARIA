@@ -630,7 +630,19 @@ function Invoke-AriaBufferedProcess {
             if ($errText) { Write-Host $errText.TrimEnd() -ForegroundColor DarkGray }
         }
 
+        $completedAt = [datetime]::UtcNow
         Complete-AriaTransmissionBuffer -State $buffer -Outcome $(if ($exitCode -eq 0) { 'PASS' } else { 'FAIL' })
+
+        $receipt = New-AriaTransmissionReceipt `
+            -Label $Label `
+            -Mode $Mode `
+            -ExitCode $exitCode `
+            -StartedAt ([datetime]$buffer.startedAt) `
+            -CompletedAt $completedAt `
+            -Stdout $outText `
+            -Stderr $errText
+
+        Write-AriaTransmissionReceipt -Receipt $receipt
 
         [pscustomobject][ordered]@{
             exitCode = $exitCode
@@ -640,6 +652,7 @@ function Invoke-AriaBufferedProcess {
             arguments = @($ArgumentList)
             label = $Label
             mode = $Mode
+            receipt = $receipt
         }
     }
     finally {
@@ -654,6 +667,157 @@ Export-ModuleMember -Function `
     Write-AriaBufferFrame, `
     Stop-AriaBuffer
 # Alpha.13 Bufferflow surface.
+function New-AriaTransmissionReceipt {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$Label,
+        [Parameter(Mandatory=$true)][ValidateSet('local','remote','verification','runtime')][string]$Mode,
+        [Parameter(Mandatory=$true)][int]$ExitCode,
+        [Parameter(Mandatory=$true)][datetime]$StartedAt,
+        [Parameter(Mandatory=$true)][datetime]$CompletedAt,
+        [string]$Stdout = '',
+        [string]$Stderr = ''
+    )
+
+    $durationMs = [math]::Max(0,[int][math]::Round(($CompletedAt - $StartedAt).TotalMilliseconds))
+    $stdoutBytes = [Text.Encoding]::UTF8.GetByteCount([string]$Stdout)
+    $stderrBytes = [Text.Encoding]::UTF8.GetByteCount([string]$Stderr)
+    $totalBytes = $stdoutBytes + $stderrBytes
+    $outcome = if ($ExitCode -eq 0) { 'PASS' } else { 'FAIL' }
+    $coherence = if ($ExitCode -eq 0) { 'aligned' } else { 'fractured' }
+
+    [pscustomobject][ordered]@{
+        label = $Label
+        mode = $Mode
+        outcome = $outcome
+        coherence = $coherence
+        exitCode = $ExitCode
+        durationMs = $durationMs
+        stdoutBytes = $stdoutBytes
+        stderrBytes = $stderrBytes
+        totalBytes = $totalBytes
+        startedAt = $StartedAt.ToUniversalTime().ToString('o',[Globalization.CultureInfo]::InvariantCulture)
+        completedAt = $CompletedAt.ToUniversalTime().ToString('o',[Globalization.CultureInfo]::InvariantCulture)
+    }
+}
+
+function Format-AriaTransmissionReceipt {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$Receipt)
+
+    $glyph = if ([string]$Receipt.outcome -eq 'PASS') { '└─ ∿' } else { '└─ ⬗' }
+    $authority = switch ([string]$Receipt.mode) {
+        'remote' { 'provider' }
+        'verification' { 'verifier' }
+        'runtime' { 'runtime' }
+        default { 'local' }
+    }
+
+    "{0} {1} · {2} · {3}ms · {4}B · exit:{5}" -f `
+        $glyph, `
+        $authority, `
+        [string]$Receipt.coherence, `
+        [int]$Receipt.durationMs, `
+        [int]$Receipt.totalBytes, `
+        [int]$Receipt.exitCode
+}
+
+function Write-AriaTransmissionReceipt {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$Receipt)
+
+    $line = Format-AriaTransmissionReceipt -Receipt $Receipt
+    $color = if ([string]$Receipt.outcome -eq 'PASS') { [ConsoleColor]::DarkCyan } else { [ConsoleColor]::Red }
+    Write-Host $line -ForegroundColor $color
+}
+
+function Invoke-AriaBufferedItem {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$Name,
+        [Parameter(Mandatory=$true)][scriptblock]$Action,
+        [ValidateSet('local','remote','verification','runtime')][string]$Mode = 'local',
+        [switch]$VerboseBuffer
+    )
+
+    $startedAt = [datetime]::UtcNow
+    $stdout = ''
+    $stderr = ''
+    $exitCode = 0
+
+    $state = New-AriaTransmissionBuffer -Label $Name -Mode $Mode
+    try {
+        Write-AriaTransmissionFrame -State $state
+        try {
+            $output = & $Action 2>&1
+            if ($null -ne $output) {
+                $stdout = ($output | Out-String).TrimEnd()
+            }
+        }
+        catch {
+            $exitCode = 1
+            $stderr = $_ | Out-String
+        }
+
+        $null = Step-AriaTransmissionBuffer -State $state
+        Complete-AriaTransmissionBuffer -State $state -Outcome $(if ($exitCode -eq 0) { 'PASS' } else { 'FAIL' })
+
+        if ($VerboseBuffer -or $env:ARIA_VERBOSE -eq '1') {
+            if ($stdout) { Write-Host $stdout -ForegroundColor DarkGray }
+            if ($stderr) { Write-Host $stderr -ForegroundColor DarkGray }
+        }
+
+        $receipt = New-AriaTransmissionReceipt `
+            -Label $Name `
+            -Mode $Mode `
+            -ExitCode $exitCode `
+            -StartedAt $startedAt `
+            -CompletedAt ([datetime]::UtcNow) `
+            -Stdout $stdout `
+            -Stderr $stderr
+
+        Write-AriaTransmissionReceipt -Receipt $receipt
+
+        if ($exitCode -ne 0) {
+            throw $stderr.Trim()
+        }
+
+        [pscustomobject][ordered]@{
+            name = $Name
+            output = $stdout
+            receipt = $receipt
+        }
+    }
+    finally {
+        [void]($state.active = $false)
+    }
+}
+
+function Invoke-AriaBufferedSequence {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][object[]]$Items,
+        [switch]$VerboseBuffer
+    )
+
+    $results = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($item in $Items) {
+        if ($null -eq $item.name -or $null -eq $item.action) {
+            throw 'Each buffered sequence item requires name and action.'
+        }
+
+        $mode = if ($null -ne $item.mode) { [string]$item.mode } else { 'local' }
+        $result = Invoke-AriaBufferedItem `
+            -Name ([string]$item.name) `
+            -Action ([scriptblock]$item.action) `
+            -Mode $mode `
+            -VerboseBuffer:$VerboseBuffer
+
+        [void]$results.Add($result)
+    }
+
+    return @($results.ToArray())
+}
 Export-ModuleMember -Function `
     New-AriaTransmissionBuffer, `
     Get-AriaTransmissionPhase, `
@@ -663,3 +827,10 @@ Export-ModuleMember -Function `
     Write-AriaTransmissionFrame, `
     Complete-AriaTransmissionBuffer, `
     Invoke-AriaBufferedProcess
+# Alpha.14 Signalflow surface.
+Export-ModuleMember -Function `
+    New-AriaTransmissionReceipt, `
+    Format-AriaTransmissionReceipt, `
+    Write-AriaTransmissionReceipt, `
+    Invoke-AriaBufferedItem, `
+    Invoke-AriaBufferedSequence

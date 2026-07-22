@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 67 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 71 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -854,6 +854,89 @@ Test-Case 'bufferflow process returns one typed result' {
 
     Assert-Equal '1' ([string]$result.Count) 'Buffered process emitted more than one pipeline object.'
     Assert-Equal '0' ([string][int]$result[0].exitCode) 'Buffered process exit code mismatch.'
+}
+Test-Case 'signal receipt reports duration bytes and coherence' {
+    $start = [datetime]'2026-01-01T00:00:00Z'
+    $end = $start.AddMilliseconds(125)
+    $receipt = New-AriaTransmissionReceipt `
+        -Label probe `
+        -Mode remote `
+        -ExitCode 0 `
+        -StartedAt $start `
+        -CompletedAt $end `
+        -Stdout 'abc' `
+        -Stderr ''
+
+    Assert-Equal 'aligned' ([string]$receipt.coherence) 'Receipt coherence mismatch.'
+    Assert-Equal '125' ([string][int]$receipt.durationMs) 'Receipt duration mismatch.'
+    Assert-Equal '3' ([string][int]$receipt.totalBytes) 'Receipt byte count mismatch.'
+}
+
+Test-Case 'signal receipt formats as a subordinate line' {
+    $start = [datetime]'2026-01-01T00:00:00Z'
+    $receipt = New-AriaTransmissionReceipt `
+        -Label probe `
+        -Mode verification `
+        -ExitCode 0 `
+        -StartedAt $start `
+        -CompletedAt $start `
+        -Stdout '' `
+        -Stderr ''
+
+    $line = Format-AriaTransmissionReceipt -Receipt $receipt
+    Assert-True ($line -match '^└─ ∿ verifier · aligned') 'Receipt is not subordinate transmission feedback.'
+}
+
+Test-Case 'buffered sequence activates every item' {
+    $prior = $env:CI
+    try {
+        $env:CI = 'true'
+        $items = @(
+            [pscustomobject]@{ name = 'one'; mode = 'local'; action = { 'a' } },
+            [pscustomobject]@{ name = 'two'; mode = 'verification'; action = { 'b' } }
+        )
+
+        $results = @(Invoke-AriaBufferedSequence -Items $items)
+        Assert-Equal '2' ([string]$results.Count) 'Buffered sequence skipped an item.'
+        Assert-Equal 'one' ([string]$results[0].name) 'First buffered item identity mismatch.'
+        Assert-Equal 'two' ([string]$results[1].name) 'Second buffered item identity mismatch.'
+    }
+    finally {
+        $env:CI = $prior
+    }
+}
+
+Test-Case 'buffered process carries transmission receipt' {
+    $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $git) {
+        $git = Get-Command git.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+
+    $path = $null
+    foreach ($propertyName in @('Path','Source','Definition','Name')) {
+        $property = $git.PSObject.Properties[$propertyName]
+        if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+            $path = [string]$property.Value
+            break
+        }
+    }
+
+    $prior = $env:CI
+    try {
+        $env:CI = 'true'
+        $result = Invoke-AriaBufferedProcess `
+            -FilePath $path `
+            -ArgumentList @('--version') `
+            -WorkingDirectory $root `
+            -Label 'probe.git' `
+            -Mode verification
+
+        Assert-True ($null -ne $result.receipt) 'Buffered process receipt missing.'
+        Assert-Equal 'aligned' ([string]$result.receipt.coherence) 'Buffered process receipt coherence mismatch.'
+    }
+    finally {
+        $env:CI = $prior
+    }
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

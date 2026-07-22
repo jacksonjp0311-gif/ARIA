@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 105 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 120 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -55,6 +55,8 @@ Import-Module (Join-Path $root 'src/Aria.GraphCore.psm1') -Force -DisableNameChe
 Import-Module (Join-Path $root 'src/Aria.TypedCore.psm1') -Force -DisableNameChecking
 
 Import-Module (Join-Path $root 'src/Aria.GraphReplay.psm1') -Force -DisableNameChecking
+
+Import-Module (Join-Path $root 'src/Aria.CapabilityAuthority.psm1') -Force -DisableNameChecking
 
 Test-Case 'opcode registry is machine-readable and complete' {
     $registry = Get-AriaOpcodeRegistry
@@ -1351,6 +1353,295 @@ Test-Case 'historical graph state reconstructs committed transition' {
     $state = Get-AriaGraphStateAt -InitialGraph $input.graph -Transitions @($result.transition) -Sequence 1
     Assert-True ([bool]$state.valid) 'Committed graph state reconstruction failed.'
     Assert-Equal ([string]$result.transition.afterDigest) ([string]$state.digest) 'Historical graph state digest mismatch.'
+}
+function Get-TestAuthorityInputs {
+    [pscustomobject]@{
+        root = Get-Content (Join-Path $root 'tests/fixtures/capability-authority/root-graph-write.cap.json') -Raw | ConvertFrom-Json
+        delegated = Get-Content (Join-Path $root 'tests/fixtures/capability-authority/delegated-graph-write.cap.json') -Raw | ConvertFrom-Json
+        policy = New-AriaIssuerTrustPolicy -TrustedIssuers @('operator:jackson') -MaxDelegationDepth 2
+        ledger = New-AriaRevocationLedger
+        decisionTime = '2026-06-01T00:00:00Z'
+    }
+}
+
+Test-Case 'capability identity is deterministic' {
+    $input = Get-TestAuthorityInputs
+    $first = Test-AriaCapabilityTokenIdentity $input.root
+    $second = Test-AriaCapabilityTokenIdentity $input.root
+
+    Assert-True ([bool]$first.valid) 'Valid root capability identity was rejected.'
+    Assert-Equal ([string]$first.expectedId) ([string]$second.expectedId) 'Capability identity was not deterministic.'
+}
+
+Test-Case 'capability rejects tampered identity' {
+    $input = Get-TestAuthorityInputs
+    $input.root.subject = 'agent:tampered'
+    $result = Test-AriaCapabilityTokenIdentity $input.root
+
+    Assert-True (-not [bool]$result.valid) 'Tampered capability identity was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_IDENTITY') 'Capability identity rejection code missing.'
+}
+
+Test-Case 'capability rejects unknown root issuer' {
+    $input = Get-TestAuthorityInputs
+    $token = New-AriaCapabilityToken `
+        -Issuer 'operator:unknown' `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:production' `
+        -Effects @('graph.write') `
+        -NotBefore '2026-01-01T00:00:00Z' `
+        -ExpiresAt '2027-01-01T00:00:00Z' `
+        -Nonce 'unknown-issuer'
+
+    $result = Test-AriaCapabilityChain `
+        -Token $token `
+        -Policy $input.policy `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger
+
+    Assert-True (-not [bool]$result.valid) 'Unknown capability issuer was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_ISSUER_UNTRUSTED') 'Untrusted issuer rejection missing.'
+}
+
+Test-Case 'capability rejects subject mismatch' {
+    $input = Get-TestAuthorityInputs
+    $result = Test-AriaCapabilityChain `
+        -Token $input.root `
+        -Policy $input.policy `
+        -Subject 'agent:intruder' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger
+
+    Assert-True (-not [bool]$result.valid) 'Capability subject mismatch was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_SUBJECT') 'Subject rejection missing.'
+}
+
+Test-Case 'capability rejects resource mismatch' {
+    $input = Get-TestAuthorityInputs
+    $result = Test-AriaCapabilityChain `
+        -Token $input.root `
+        -Policy $input.policy `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:staging' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger
+
+    Assert-True (-not [bool]$result.valid) 'Capability resource mismatch was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_RESOURCE') 'Resource rejection missing.'
+}
+
+Test-Case 'capability rejects missing effect' {
+    $input = Get-TestAuthorityInputs
+    $result = Test-AriaCapabilityChain `
+        -Token $input.root `
+        -Policy $input.policy `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('network.send') `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger
+
+    Assert-True (-not [bool]$result.valid) 'Missing capability effect was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_EFFECT') 'Effect rejection missing.'
+}
+
+Test-Case 'capability rejects not-yet-active authority' {
+    $input = Get-TestAuthorityInputs
+    $result = Test-AriaCapabilityChain `
+        -Token $input.root `
+        -Policy $input.policy `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime '2025-12-31T23:59:59Z' `
+        -RevocationLedger $input.ledger
+
+    Assert-True (-not [bool]$result.valid) 'Not-yet-active capability was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_NOT_ACTIVE') 'Activation rejection missing.'
+}
+
+Test-Case 'capability rejects expired authority' {
+    $input = Get-TestAuthorityInputs
+    $result = Test-AriaCapabilityChain `
+        -Token $input.root `
+        -Policy $input.policy `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime '2027-01-01T00:00:00Z' `
+        -RevocationLedger $input.ledger
+
+    Assert-True (-not [bool]$result.valid) 'Expired capability was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_EXPIRED') 'Expiration rejection missing.'
+}
+
+Test-Case 'capability accepts attenuated delegation' {
+    $input = Get-TestAuthorityInputs
+    $result = Test-AriaCapabilityChain `
+        -Token $input.delegated `
+        -KnownTokens @($input.root) `
+        -Policy $input.policy `
+        -Subject 'agent:worker' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger
+
+    Assert-True ([bool]$result.valid) 'Valid attenuated delegation was rejected.'
+    Assert-Equal '2' ([string]@($result.chain).Count) 'Delegation chain depth mismatch.'
+}
+
+Test-Case 'capability rejects delegated authority broadening' {
+    $input = Get-TestAuthorityInputs
+    $result = New-AriaDelegatedCapabilityToken `
+        -ParentToken $input.root `
+        -Subject 'agent:worker' `
+        -Effects @('graph.write','network.send') `
+        -NotBefore '2026-02-01T00:00:00Z' `
+        -ExpiresAt '2026-12-01T00:00:00Z' `
+        -Nonce 'broadened' `
+        -MaxDelegationDepth 2
+
+    Assert-True (-not [bool]$result.issued) 'Broadened delegated authority was issued.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_DELEGATION_BROADEN') 'Delegation broadening rejection missing.'
+}
+
+Test-Case 'capability rejects excessive delegation depth' {
+    $input = Get-TestAuthorityInputs
+    $policy = New-AriaIssuerTrustPolicy -TrustedIssuers @('operator:jackson') -MaxDelegationDepth 0
+    $result = Test-AriaCapabilityChain `
+        -Token $input.delegated `
+        -KnownTokens @($input.root) `
+        -Policy $policy `
+        -Subject 'agent:worker' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger
+
+    Assert-True (-not [bool]$result.valid) 'Excessive delegation depth was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_DELEGATION_DEPTH') 'Delegation depth rejection missing.'
+}
+
+Test-Case 'capability rejects unknown parent' {
+    $input = Get-TestAuthorityInputs
+    $token = New-AriaCapabilityToken `
+        -Issuer 'agent:hermes' `
+        -Subject 'agent:worker' `
+        -Resource 'graph:production' `
+        -Effects @('graph.write') `
+        -NotBefore '2026-02-01T00:00:00Z' `
+        -ExpiresAt '2026-12-01T00:00:00Z' `
+        -Nonce 'unknown-parent' `
+        -DelegationDepth 1 `
+        -Parent ('sha256:' + ('9' * 64))
+
+    $result = Test-AriaCapabilityChain `
+        -Token $token `
+        -Policy $input.policy `
+        -Subject 'agent:worker' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger
+
+    Assert-True (-not [bool]$result.valid) 'Unknown delegation parent was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_PARENT_UNKNOWN') 'Unknown parent rejection missing.'
+}
+
+Test-Case 'capability rejects reused single-use nonce' {
+    $input = Get-TestAuthorityInputs
+    $token = New-AriaCapabilityToken `
+        -Issuer 'operator:jackson' `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:production' `
+        -Effects @('graph.write') `
+        -NotBefore '2026-01-01T00:00:00Z' `
+        -ExpiresAt '2027-01-01T00:00:00Z' `
+        -Nonce 'single-use-proof' `
+        -SingleUse
+
+    $result = Test-AriaCapabilityChain `
+        -Token $token `
+        -Policy $input.policy `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger `
+        -UsedNonces @('single-use-proof')
+
+    Assert-True (-not [bool]$result.valid) 'Reused single-use nonce was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_CAP_NONCE_REUSED') 'Nonce reuse rejection missing.'
+}
+
+Test-Case 'capability preserves historical revocation semantics' {
+    $input = Get-TestAuthorityInputs
+    $ledger = Add-AriaCapabilityRevocation `
+        -Ledger $input.ledger `
+        -CapabilityId $input.root.id `
+        -RevokedAt '2026-07-01T00:00:00Z' `
+        -Reason 'operator revocation'
+
+    $before = Test-AriaCapabilityChain `
+        -Token $input.root `
+        -Policy $input.policy `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime '2026-06-01T00:00:00Z' `
+        -RevocationLedger $ledger
+
+    $after = Test-AriaCapabilityChain `
+        -Token $input.root `
+        -Policy $input.policy `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:production' `
+        -RequestedEffects @('graph.write') `
+        -DecisionTime '2026-08-01T00:00:00Z' `
+        -RevocationLedger $ledger
+
+    Assert-True ([bool]$before.valid) 'Authority before revocation was invalidated historically.'
+    Assert-True (-not [bool]$after.valid) 'Authority after revocation was accepted.'
+    Assert-True (@($after.errors.code) -contains 'E_CAP_REVOKED') 'Revocation rejection missing.'
+}
+
+Test-Case 'graph rewrite requires verified capability authority' {
+    $input = Get-TestAuthorityInputs
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-replay/initial-access-graph.json') -Raw | ConvertFrom-Json
+    $rule = Get-Content (Join-Path $root 'tests/fixtures/graph-replay/grant-access-rule.json') -Raw | ConvertFrom-Json
+
+    $approved = Invoke-AriaAuthorizedGraphRewrite `
+        -Graph $graph `
+        -Rule $rule `
+        -Token $input.root `
+        -Policy $input.policy `
+        -Subject 'agent:hermes' `
+        -Resource 'graph:production' `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger
+
+    $rejected = Invoke-AriaAuthorizedGraphRewrite `
+        -Graph $graph `
+        -Rule $rule `
+        -Token $input.root `
+        -Policy $input.policy `
+        -Subject 'agent:intruder' `
+        -Resource 'graph:production' `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger
+
+    Assert-True ([bool]$approved.committed) 'Verified graph authority did not permit rewrite.'
+    Assert-Equal 'approved' ([string]$approved.authorityDecision.outcome) 'Approved authority decision missing.'
+    Assert-True ([bool]$rejected.rejected) 'Invalid graph authority did not reject rewrite.'
+    Assert-Equal 'authority-rejected' ([string]$rejected.reason) 'Authority rejection reason mismatch.'
+    Assert-Equal ([string]$rejected.beforeDigest) ([string]$rejected.afterDigest) 'Rejected authority changed graph identity.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

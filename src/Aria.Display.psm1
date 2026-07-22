@@ -1,4 +1,5 @@
-﻿Set-StrictMode -Version 2.0
+﻿Import-Module (Join-Path $PSScriptRoot 'Aria.Etherflow.psm1') -Force -DisableNameChecking
+Set-StrictMode -Version 2.0
 
 $script:Esc = [char]27
 $script:SupportsAnsi = $false
@@ -191,3 +192,14 @@ function Write-AriaStream {
 }
 
 Export-ModuleMember -Function Write-AriaPaint, Write-AriaBanner, Write-AriaStage, Write-AriaTreeStage, Write-AriaTreeText, Write-AriaTrunk, Write-AriaKeyValue, Write-AriaSummary, Write-AriaStream, Format-AriaDuration
+
+function Invoke-AriaEtherPreview {
+    param([Parameter(Mandatory=$true)]$Transmission)
+
+    $events = Get-AriaTriadicEventsFromTransmission -Transmission $Transmission
+    foreach ($event in $events) {
+        Write-AriaTriadicTransmission -Event $event
+    }
+}
+
+Export-ModuleMember -Function Invoke-AriaEtherPreview

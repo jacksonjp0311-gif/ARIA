@@ -149,3 +149,15 @@ The default policy permits console output, ARIA memory, graph inspection, reposi
 Every release must preserve deterministic output, strict version locks, deny-by-default policy, bytecode verification, container integrity, Windows PowerShell 5.1 compatibility, and an auditable manifest. Read [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and [`docs/README.md`](docs/README.md) before changing the language core.
 
 ARIA is licensed under Apache-2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+
+
+## Alpha.7: Etherflow
+
+ARIA now adds an Etherflow surface on top of Operatorflow:
+
+- a triadic CLI renderer aligned to three lanes: 🜂 energy, ∿ information, and 🜄 coherence;
+- adaptive rendering across `operator`, `compact`, `ci`, and `ether` profiles;
+- event-to-surface wiring for typed provider transmissions so visuals reflect real runtime data;
+- a future-facing preview bridge that renders transmission events as a compressed, high-signal field instead of plain logs.
+
+Etherflow is a display membrane only. It does not change compiler semantics, bytecode verification, policy enforcement, or the underlying transmission schema.

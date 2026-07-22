@@ -161,13 +161,24 @@ function Test-AriaPatternPredicate {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]$Value,
-        [hashtable]$Predicate = @{}
+        [object]$Predicate = $null
     )
 
-    foreach($key in @($Predicate.Keys)){
-        $property = $Value.PSObject.Properties[[string]$key]
+    if($null-eq$Predicate){return $true}
+
+    if($Predicate-is[Collections.IDictionary]){
+        foreach($key in @($Predicate.Keys)){
+            $property = $Value.PSObject.Properties[[string]$key]
+            if($null-eq$property){return $false}
+            if([string]$property.Value -cne [string]$Predicate[$key]){return $false}
+        }
+        return $true
+    }
+
+    foreach($predicateProperty in @($Predicate.PSObject.Properties)){
+        $property = $Value.PSObject.Properties[[string]$predicateProperty.Name]
         if($null-eq$property){return $false}
-        if([string]$property.Value -cne [string]$Predicate[$key]){return $false}
+        if([string]$property.Value -cne [string]$predicateProperty.Value){return $false}
     }
 
     return $true

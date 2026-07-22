@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 93 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 105 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -53,6 +53,8 @@ $denied = Join-Path $root 'examples/denied-write.aria'
 
 Import-Module (Join-Path $root 'src/Aria.GraphCore.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.TypedCore.psm1') -Force -DisableNameChecking
+
+Import-Module (Join-Path $root 'src/Aria.GraphReplay.psm1') -Force -DisableNameChecking
 
 Test-Case 'opcode registry is machine-readable and complete' {
     $registry = Get-AriaOpcodeRegistry
@@ -1177,6 +1179,178 @@ Test-Case 'graph rewrite event is content addressed' {
     $result = Invoke-AriaGraphRewrite -Graph $graph -Rule (New-TestGraphRule) -GrantedCapabilities @('cap:graph.write')
     Assert-True ([string]$result.event.transaction -match '^sha256:[a-f0-9]{64}$') 'Graph transaction event is not content addressed.'
     Assert-Equal 'aria.graph.rewrite.committed' ([string]$result.event.type) 'Graph event type mismatch.'
+}
+function Get-TestReplayInputs {
+    [pscustomobject]@{
+        graph = Get-Content (Join-Path $root 'tests/fixtures/graph-replay/initial-access-graph.json') -Raw | ConvertFrom-Json
+        rule = Get-Content (Join-Path $root 'tests/fixtures/graph-replay/grant-access-rule.json') -Raw | ConvertFrom-Json
+    }
+}
+
+Test-Case 'semantic diff reports removed and added edges' {
+    $input = Get-TestReplayInputs
+    $rewrite = Invoke-AriaGraphRewrite -Graph $input.graph -Rule $input.rule -GrantedCapabilities @('cap:graph.write')
+    $diff = Compare-AriaGraphSemantic -Before $input.graph -After $rewrite.graph
+
+    Assert-True ([bool]$diff.valid) 'Semantic graph diff was invalid.'
+    Assert-Equal '1' ([string]@($diff.edges.removed).Count) 'Removed edge was not reported.'
+    Assert-Equal '1' ([string]@($diff.edges.added).Count) 'Added edge was not reported.'
+}
+
+Test-Case 'semantic diff is stable for identical graphs' {
+    $input = Get-TestReplayInputs
+    $diff = Compare-AriaGraphSemantic -Before $input.graph -After (Copy-AriaGraph $input.graph)
+
+    Assert-True (-not [bool]$diff.changed) 'Identical graphs produced a semantic change.'
+    Assert-Equal ([string]$diff.beforeDigest) ([string]$diff.afterDigest) 'Identical graph digests diverged.'
+}
+
+Test-Case 'graph transition is content addressed' {
+    $input = Get-TestReplayInputs
+    $before = Get-AriaGraphDigest $input.graph
+    $result = New-AriaGraphTransition `
+        -Sequence 1 `
+        -Parent ("sha256:$before") `
+        -BeforeGraph $input.graph `
+        -Rule $input.rule `
+        -GrantedCapabilities @('cap:graph.write')
+
+    Assert-True ([bool]$result.committed) 'Graph transition did not commit.'
+    Assert-True ([string]$result.transition.id -match '^sha256:[a-f0-9]{64}$') 'Transition identity is not content addressed.'
+}
+
+Test-Case 'graph transition records capability authority' {
+    $input = Get-TestReplayInputs
+    $before = Get-AriaGraphDigest $input.graph
+    $result = New-AriaGraphTransition `
+        -Sequence 1 `
+        -Parent ("sha256:$before") `
+        -BeforeGraph $input.graph `
+        -Rule $input.rule `
+        -GrantedCapabilities @('cap:graph.write')
+
+    Assert-Equal 'cap:graph.write' ([string]$result.transition.grantedCapabilities[0]) 'Granted graph authority was not recorded.'
+}
+
+Test-Case 'graph transition rejects tampered identity' {
+    $input = Get-TestReplayInputs
+    $before = Get-AriaGraphDigest $input.graph
+    $result = New-AriaGraphTransition `
+        -Sequence 1 `
+        -Parent ("sha256:$before") `
+        -BeforeGraph $input.graph `
+        -Rule $input.rule `
+        -GrantedCapabilities @('cap:graph.write')
+
+    $result.transition.id = 'sha256:' + ('0' * 64)
+    $validation = Test-AriaGraphTransition $result.transition
+    Assert-True (-not [bool]$validation.valid) 'Tampered transition identity was accepted.'
+    Assert-Equal 'E_REPLAY_IDENTITY' ([string]$validation.errors[0].code) 'Transition identity rejection mismatch.'
+}
+
+Test-Case 'transition chain accepts coherent history' {
+    $input = Get-TestReplayInputs
+    $before = Get-AriaGraphDigest $input.graph
+    $result = New-AriaGraphTransition `
+        -Sequence 1 `
+        -Parent ("sha256:$before") `
+        -BeforeGraph $input.graph `
+        -Rule $input.rule `
+        -GrantedCapabilities @('cap:graph.write')
+
+    $chain = Test-AriaGraphTransitionChain -InitialGraphDigest $before -Transitions @($result.transition)
+    Assert-True ([bool]$chain.valid) 'Coherent transition chain was rejected.'
+    Assert-Equal ([string]$result.transition.afterDigest) ([string]$chain.finalDigest) 'Transition chain final digest mismatch.'
+}
+
+Test-Case 'transition chain rejects parent fracture' {
+    $input = Get-TestReplayInputs
+    $before = Get-AriaGraphDigest $input.graph
+    $result = New-AriaGraphTransition `
+        -Sequence 1 `
+        -Parent ("sha256:$before") `
+        -BeforeGraph $input.graph `
+        -Rule $input.rule `
+        -GrantedCapabilities @('cap:graph.write')
+
+    $result.transition.parent = 'sha256:' + ('1' * 64)
+    $chain = Test-AriaGraphTransitionChain -InitialGraphDigest $before -Transitions @($result.transition)
+    Assert-True (-not [bool]$chain.valid) 'Broken transition parent was accepted.'
+}
+
+Test-Case 'transition chain rejects sequence fracture' {
+    $input = Get-TestReplayInputs
+    $before = Get-AriaGraphDigest $input.graph
+    $result = New-AriaGraphTransition `
+        -Sequence 1 `
+        -Parent ("sha256:$before") `
+        -BeforeGraph $input.graph `
+        -Rule $input.rule `
+        -GrantedCapabilities @('cap:graph.write')
+
+    $result.transition.sequence = 2
+    $chain = Test-AriaGraphTransitionChain -InitialGraphDigest $before -Transitions @($result.transition)
+    Assert-True (-not [bool]$chain.valid) 'Broken transition sequence was accepted.'
+}
+
+Test-Case 'graph replay reproduces recorded digest' {
+    $input = Get-TestReplayInputs
+    $before = Get-AriaGraphDigest $input.graph
+    $result = New-AriaGraphTransition `
+        -Sequence 1 `
+        -Parent ("sha256:$before") `
+        -BeforeGraph $input.graph `
+        -Rule $input.rule `
+        -GrantedCapabilities @('cap:graph.write')
+
+    $replay = Invoke-AriaGraphReplay -InitialGraph $input.graph -Transitions @($result.transition)
+    Assert-True ([bool]$replay.valid) 'Deterministic graph replay failed.'
+    Assert-Equal ([string]$result.transition.afterDigest) ([string]$replay.digest) 'Replay digest did not reproduce recorded state.'
+}
+
+Test-Case 'graph replay rejects digest divergence' {
+    $input = Get-TestReplayInputs
+    $before = Get-AriaGraphDigest $input.graph
+    $result = New-AriaGraphTransition `
+        -Sequence 1 `
+        -Parent ("sha256:$before") `
+        -BeforeGraph $input.graph `
+        -Rule $input.rule `
+        -GrantedCapabilities @('cap:graph.write')
+
+    $result.transition.afterDigest = ('f' * 64)
+    $replay = Invoke-AriaGraphReplay -InitialGraph $input.graph -Transitions @($result.transition)
+    Assert-True (-not [bool]$replay.valid) 'Replay digest divergence was accepted.'
+}
+
+Test-Case 'historical graph state reconstructs sequence zero' {
+    $input = Get-TestReplayInputs
+    $before = Get-AriaGraphDigest $input.graph
+    $result = New-AriaGraphTransition `
+        -Sequence 1 `
+        -Parent ("sha256:$before") `
+        -BeforeGraph $input.graph `
+        -Rule $input.rule `
+        -GrantedCapabilities @('cap:graph.write')
+
+    $state = Get-AriaGraphStateAt -InitialGraph $input.graph -Transitions @($result.transition) -Sequence 0
+    Assert-True ([bool]$state.valid) 'Sequence-zero graph reconstruction failed.'
+    Assert-Equal $before ([string]$state.digest) 'Sequence-zero graph identity mismatch.'
+}
+
+Test-Case 'historical graph state reconstructs committed transition' {
+    $input = Get-TestReplayInputs
+    $before = Get-AriaGraphDigest $input.graph
+    $result = New-AriaGraphTransition `
+        -Sequence 1 `
+        -Parent ("sha256:$before") `
+        -BeforeGraph $input.graph `
+        -Rule $input.rule `
+        -GrantedCapabilities @('cap:graph.write')
+
+    $state = Get-AriaGraphStateAt -InitialGraph $input.graph -Transitions @($result.transition) -Sequence 1
+    Assert-True ([bool]$state.valid) 'Committed graph state reconstruction failed.'
+    Assert-Equal ([string]$result.transition.afterDigest) ([string]$state.digest) 'Historical graph state digest mismatch.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

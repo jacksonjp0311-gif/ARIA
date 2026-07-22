@@ -322,8 +322,9 @@ function ConvertTo-AriaStableJson {
         }
 
         $ordered=[ordered]@{}
-        foreach($property in @($InputValue.PSObject.Properties.Name | Sort-Object)){
-            $ordered[$property]=Normalize $InputValue.$property
+        foreach($property in @($InputValue.PSObject.Properties | Sort-Object Name)){
+            $propertyName=[string]$property.Name
+            $ordered[$propertyName]=Normalize $property.Value
         }
         return $ordered
     }

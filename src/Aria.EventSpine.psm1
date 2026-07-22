@@ -51,7 +51,24 @@ function Get-AriaEventDigest {
         information = [string]$Event.information
         coherence = [string]$Event.coherence
         source = [string]$Event.source
-        occurredAt = [string]$Event.occurredAt
+        occurredAt = if ($Event.occurredAt -is [datetime]) {
+            ([datetime]$Event.occurredAt).ToUniversalTime().ToString('o',[Globalization.CultureInfo]::InvariantCulture)
+        }
+        else {
+            $rawOccurredAt = [string]$Event.occurredAt
+            $parsedOccurredAt = [datetime]::MinValue
+            if ([datetime]::TryParse(
+                $rawOccurredAt,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [Globalization.DateTimeStyles]::RoundtripKind,
+                [ref]$parsedOccurredAt
+            )) {
+                $parsedOccurredAt.ToUniversalTime().ToString('o',[Globalization.CultureInfo]::InvariantCulture)
+            }
+            else {
+                $rawOccurredAt
+            }
+        }
         data = $Event.data
     }
     $json = ConvertTo-AriaJson -Value $body

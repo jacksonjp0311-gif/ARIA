@@ -23,6 +23,7 @@ Import-Module (Join-Path $root 'src/Aria.Etherflow.psm1') -Force -DisableNameChe
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Transmission.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.EventSpine.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Gitflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Semantics.psm1') -Force -DisableNameChecking
@@ -42,6 +43,7 @@ function Show-AriaHelp {
   aria profile
   aria transmit <provider.json>
   aria events
+  aria pull|push|sync
   aria gate|check <program.aria> [-Workspace <repository>] [-Strict]
   aria compile|build <program.aria> [-Out <program.ariac>] [-Workspace <repository>] [-Strict]
   aria run|start|trace <program.aria> [-Out <program.ariac>] [-Workspace <repository>] [-Strict]
@@ -68,7 +70,15 @@ function Assert-AriaRepositoryManifest {
 
 try {
     switch ($Command.ToLowerInvariant()) {
-        'profile' {
+        'pull' {
+            $null = Invoke-AriaGitPull -RepositoryRoot $root -Render -VerboseBuffer:$script:VerboseOutput
+        }
+        'push' {
+            $null = Invoke-AriaGitPush -RepositoryRoot $root -Render -VerboseBuffer:$script:VerboseOutput
+        }
+        'sync' {
+            $null = Invoke-AriaGitSync -RepositoryRoot $root -Render -VerboseBuffer:$script:VerboseOutput
+        }        'profile' {
             $profile = Get-AriaRuntimeProfile
             if ($profile.mode -eq 'machine') {
                 Write-Output (ConvertTo-AriaJson -Value $profile)

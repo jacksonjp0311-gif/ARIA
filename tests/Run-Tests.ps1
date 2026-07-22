@@ -14,6 +14,7 @@ Import-Module (Join-Path $root 'src/Aria.Etherflow.psm1') -Force -DisableNameChe
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Transmission.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.EventSpine.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Gitflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Semantics.psm1') -Force -DisableNameChecking
@@ -25,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 54 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 59 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -689,6 +690,72 @@ Test-Case 'runtime spine connection lifecycle is ordered' {
     Assert-Equal 'proposal' $events[1].phase 'Connection proposal order mismatch.'
     Assert-Equal 'consent' $events[2].phase 'Connection consent order mismatch.'
     Assert-Equal 'closure' $events[3].phase 'Connection closure order mismatch.'
+}
+Test-Case 'event digest survives JSON date materialization' {
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    $event = New-AriaEvent `
+        -Domain runtime `
+        -Phase portability `
+        -State PASS `
+        -Energy verification `
+        -Information timestamp `
+        -Coherence invariant `
+        -OccurredAt ([datetime]'2026-01-01T00:00:00Z')
+
+    $reloaded = $event | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+    $verification = Test-AriaEvent -Event $reloaded
+    Assert-True $verification.valid 'Event digest changed after JSON date materialization.'
+}
+Test-Case 'gitflow process captures native output' {
+    $result = Invoke-AriaGitProcess -Arguments @('--version') -RepositoryRoot $root
+    Assert-Equal 0 $result.exitCode 'Git version command failed.'
+    Assert-True ($result.stdout -match '^git version') 'Git output was not captured.'
+}
+
+Test-Case 'gitflow resolves local head deterministically' {
+    $one = Get-AriaGitHead -RepositoryRoot $root
+    $two = Get-AriaGitHead -RepositoryRoot $root
+    Assert-Equal $one $two 'Local HEAD changed during deterministic probe.'
+    Assert-True ($one -match '^[a-f0-9]{40}$') 'Local HEAD format mismatch.'
+}
+
+Test-Case 'gitflow clean-tree verifier uses isolated repository' {
+    $repo = Join-Path $tempRoot ('aria-gitflow-' + [guid]::NewGuid().ToString('N'))
+    try {
+        New-Item -ItemType Directory -Path $repo -Force | Out-Null
+
+        $init = Invoke-AriaGitProcess -Arguments @('init') -RepositoryRoot $repo
+        Assert-Equal 0 $init.exitCode 'Temporary Git initialization failed.'
+
+        [IO.File]::WriteAllText(
+            (Join-Path $repo 'probe.txt'),
+            'ARIA Gitflow probe',
+            [Text.UTF8Encoding]::new($false)
+        )
+
+        $add = Invoke-AriaGitProcess -Arguments @('add','probe.txt') -RepositoryRoot $repo
+        Assert-Equal 0 $add.exitCode 'Temporary Git add failed.'
+
+        $commit = Invoke-AriaGitProcess `
+            -Arguments @(
+                '-c','user.name=ARIA',
+                '-c','user.email=aria@local.invalid',
+                'commit','-m','initial'
+            ) `
+            -RepositoryRoot $repo
+        Assert-Equal 0 $commit.exitCode 'Temporary Git commit failed.'
+
+        $clean = Assert-AriaGitClean -RepositoryRoot $repo
+        Assert-True $clean 'Clean-tree verification rejected an isolated clean repository.'
+    }
+    finally {
+        Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Test-Case 'gitflow verification event is single-frame capable' {
+    $command = Get-Command Write-AriaGitVerification -ErrorAction Stop
+    Assert-Equal 'Function' ([string]$command.CommandType) 'Gitflow verification renderer is not exported.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

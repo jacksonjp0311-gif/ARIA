@@ -4,6 +4,10 @@ param([switch]$VerboseOutput)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$tempRoot = [System.IO.Path]::GetTempPath()
+if ([string]::IsNullOrWhiteSpace($tempRoot)) {
+    throw 'ARIA could not resolve the platform temporary directory.'
+}
 
 Import-Module (Join-Path $root 'src/Aria.Display.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
@@ -112,7 +116,7 @@ Test-Case 'container corruption is detected' {
 }
 
 Test-Case 'locked spec rejects incompatible source' {
-    $temp = Join-Path $env:TEMP ('aria-spec-' + [guid]::NewGuid().ToString('N') + '.aria')
+    $temp = Join-Path $tempRoot ('aria-spec-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
 aria 9.9.9
@@ -180,7 +184,7 @@ Test-Case 'container rejects header length mismatch' {
 
 
 Test-Case 'custom workspace receives build and memory state' {
-    $workspace = Join-Path $env:TEMP ('aria-workspace-' + [guid]::NewGuid().ToString('N'))
+    $workspace = Join-Path $tempRoot ('aria-workspace-' + [guid]::NewGuid().ToString('N'))
     try {
         New-Item -ItemType Directory -Path $workspace -Force | Out-Null
         $compiled = Invoke-AriaCompile -SourcePath $hello -PolicyPath $policy -WorkspaceRoot $workspace -Quiet
@@ -193,7 +197,7 @@ Test-Case 'custom workspace receives build and memory state' {
 }
 
 Test-Case 'glyph mismatch is rejected semantically' {
-    $temp = Join-Path $env:TEMP ('aria-glyph-' + [guid]::NewGuid().ToString('N') + '.aria')
+    $temp = Join-Path $tempRoot ('aria-glyph-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
 aria 0.4.0
@@ -215,7 +219,7 @@ flow Main {
 }
 
 Test-Case 'runtime rechecks capability policy' {
-    $workspace = Join-Path $env:TEMP ('aria-runtime-policy-' + [guid]::NewGuid().ToString('N'))
+    $workspace = Join-Path $tempRoot ('aria-runtime-policy-' + [guid]::NewGuid().ToString('N'))
     $denyPolicy = Join-Path $workspace 'deny.policy.json'
     try {
         New-Item -ItemType Directory -Path $workspace -Force | Out-Null
@@ -233,7 +237,7 @@ Test-Case 'runtime rechecks capability policy' {
 }
 
 Test-Case 'read-only execution does not persist memory state' {
-    $workspace = Join-Path $env:TEMP ('aria-readonly-' + [guid]::NewGuid().ToString('N'))
+    $workspace = Join-Path $tempRoot ('aria-readonly-' + [guid]::NewGuid().ToString('N'))
     try {
         New-Item -ItemType Directory -Path $workspace -Force | Out-Null
         Write-AriaUtf8NoBom -Path (Join-Path $workspace 'README.md') -Text "read-only fixture`n"
@@ -318,7 +322,7 @@ Test-Case 'agent dispatch emits deterministic event' {
 }
 
 Test-Case 'typed binding rejects incompatible value' {
-    $temp = Join-Path $env:TEMP ('aria-type-' + [guid]::NewGuid().ToString('N') + '.aria')
+    $temp = Join-Path $tempRoot ('aria-type-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
 aria 0.4.0
@@ -338,7 +342,7 @@ flow Main {
 }
 
 Test-Case 'repeat rejects unsafe literal bound' {
-    $temp = Join-Path $env:TEMP ('aria-repeat-' + [guid]::NewGuid().ToString('N') + '.aria')
+    $temp = Join-Path $tempRoot ('aria-repeat-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
 aria 0.4.0
@@ -367,7 +371,7 @@ Test-Case 'module identity survives bytecode container' {
 }
 
 Test-Case 'persisted memory type is revalidated' {
-    $workspace = Join-Path $env:TEMP ('aria-memory-type-' + [guid]::NewGuid().ToString('N'))
+    $workspace = Join-Path $tempRoot ('aria-memory-type-' + [guid]::NewGuid().ToString('N'))
     try {
         New-Item -ItemType Directory -Path (Join-Path $workspace '.aria/state') -Force | Out-Null
         $compiled = Invoke-AriaCompile -SourcePath (Join-Path $root 'examples/coreflow.aria') -PolicyPath $policy -WorkspaceRoot $workspace -Quiet
@@ -411,7 +415,7 @@ Test-Case 'bytecode verifier rejects non-text agent task' {
 }
 
 Test-Case 'Null-returning function remains a typed expression' {
-    $temp = Join-Path $env:TEMP ('aria-null-call-' + [guid]::NewGuid().ToString('N') + '.aria')
+    $temp = Join-Path $tempRoot ('aria-null-call-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
 aria 0.4.0
@@ -465,7 +469,7 @@ Test-Case 'VM emits deterministic connection lifecycle' {
 }
 
 Test-Case 'withheld consent closes without authority' {
-    $temp = Join-Path $env:TEMP ('aria-consent-' + [guid]::NewGuid().ToString('N') + '.aria')
+    $temp = Join-Path $tempRoot ('aria-consent-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
 aria 0.4.0
@@ -497,7 +501,7 @@ flow Main {
 }
 
 Test-Case 'semantics rejects unknown connection' {
-    $temp = Join-Path $env:TEMP ('aria-unknown-connection-' + [guid]::NewGuid().ToString('N') + '.aria')
+    $temp = Join-Path $tempRoot ('aria-unknown-connection-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
 aria 0.4.0
@@ -517,7 +521,7 @@ flow Main {
 }
 
 Test-Case 'connection rejects unknown agent identity' {
-    $temp = Join-Path $env:TEMP ('aria-unknown-agent-connection-' + [guid]::NewGuid().ToString('N') + '.aria')
+    $temp = Join-Path $tempRoot ('aria-unknown-agent-connection-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
 aria 0.4.0

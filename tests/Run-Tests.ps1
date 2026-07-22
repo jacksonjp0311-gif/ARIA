@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 59 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 60 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -756,6 +756,17 @@ Test-Case 'gitflow clean-tree verifier uses isolated repository' {
 Test-Case 'gitflow verification event is single-frame capable' {
     $command = Get-Command Write-AriaGitVerification -ErrorAction Stop
     Assert-Equal 'Function' ([string]$command.CommandType) 'Gitflow verification renderer is not exported.'
+}
+Test-Case 'gitflow process rejects function shadowing' {
+    function git { param([string[]]$Arguments) throw 'shadow function should never execute' }
+    try {
+        $result = Invoke-AriaGitProcess -Arguments @('--version') -RepositoryRoot $root
+        Assert-Equal 0 $result.exitCode 'Git application invocation failed.'
+        Assert-True ($result.stdout -match '^git version') 'Git application output was not captured.'
+    }
+    finally {
+        Remove-Item Function:\git -ErrorAction SilentlyContinue
+    }
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

@@ -9,11 +9,34 @@ function Invoke-AriaGitProcess {
         [switch]$VerboseBuffer
     )
 
+    $gitCommand = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $gitCommand) {
+        $gitCommand = Get-Command git.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+    if (-not $gitCommand) {
+        throw 'ARIA Gitflow could not locate a Git application.'
+    }
+
+    $gitPath = $null
+    foreach ($propertyName in @('Path','Source','Definition','Name')) {
+        $property = $gitCommand.PSObject.Properties[$propertyName]
+        if ($null -ne $property) {
+            $candidate = [string]$property.Value
+            if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+                $gitPath = $candidate
+                break
+            }
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($gitPath)) {
+        throw 'ARIA Gitflow resolved Git without a usable launch path.'
+    }
+
     $stdout = [IO.Path]::GetTempFileName()
     $stderr = [IO.Path]::GetTempFileName()
     try {
         $process = Start-Process `
-            -FilePath 'git.exe' `
+            -FilePath $gitPath `
             -ArgumentList $Arguments `
             -WorkingDirectory $RepositoryRoot `
             -Wait `
@@ -41,7 +64,6 @@ function Invoke-AriaGitProcess {
         Remove-Item -LiteralPath $stdout,$stderr -Force -ErrorAction SilentlyContinue
     }
 }
-
 function Assert-AriaGitResult {
     param(
         [Parameter(Mandatory=$true)]$Result,

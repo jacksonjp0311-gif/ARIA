@@ -32,6 +32,11 @@ function ConvertTo-AriaInstructionSequence {
             'read'{Add-AriaExpressionInstructions $statement.path $instructions $Constants $ConstantIndex $FunctionMap $statement.line;$instructions.Add([pscustomobject][ordered]@{op='FS_READ';arg=[string]$statement.name;type='Text';line=$statement.line})}
             'write'{Add-AriaExpressionInstructions $statement.path $instructions $Constants $ConstantIndex $FunctionMap $statement.line;Add-AriaExpressionInstructions $statement.expression $instructions $Constants $ConstantIndex $FunctionMap $statement.line;$instructions.Add([pscustomobject][ordered]@{op='FS_WRITE';line=$statement.line})}
             'dispatch'{Add-AriaExpressionInstructions $statement.expression $instructions $Constants $ConstantIndex $FunctionMap $statement.line;$instructions.Add([pscustomobject][ordered]@{op='AGENT_DISPATCH';agent=[string]$statement.agent;line=$statement.line})}
+            'connect'{$instructions.Add([pscustomobject][ordered]@{op='CONNECT_OPEN';connection=[string]$statement.connection;line=$statement.line})}
+            'intent'{Add-AriaExpressionInstructions $statement.expression $instructions $Constants $ConstantIndex $FunctionMap $statement.line;$instructions.Add([pscustomobject][ordered]@{op='CONNECT_INTENT';connection=[string]$statement.connection;line=$statement.line})}
+            'propose'{Add-AriaExpressionInstructions $statement.expression $instructions $Constants $ConstantIndex $FunctionMap $statement.line;$instructions.Add([pscustomobject][ordered]@{op='CONNECT_PROPOSE';connection=[string]$statement.connection;line=$statement.line})}
+            'consent'{Add-AriaExpressionInstructions $statement.expression $instructions $Constants $ConstantIndex $FunctionMap $statement.line;$instructions.Add([pscustomobject][ordered]@{op='CONNECT_CONSENT';connection=[string]$statement.connection;line=$statement.line})}
+            'disconnect'{$instructions.Add([pscustomobject][ordered]@{op='CONNECT_CLOSE';connection=[string]$statement.connection;line=$statement.line})}
             'if'{Add-AriaExpressionInstructions $statement.condition $instructions $Constants $ConstantIndex $FunctionMap $statement.line;$thenCode=ConvertTo-AriaInstructionSequence @($statement.then) $Constants $ConstantIndex $FunctionMap -FunctionBody:$FunctionBody;$elseCode=ConvertTo-AriaInstructionSequence @($statement.else) $Constants $ConstantIndex $FunctionMap -FunctionBody:$FunctionBody;$instructions.Add([pscustomobject][ordered]@{op='IF';then=@($thenCode);else=@($elseCode);line=$statement.line})}
             'repeat'{Add-AriaExpressionInstructions $statement.count $instructions $Constants $ConstantIndex $FunctionMap $statement.line;$body=ConvertTo-AriaInstructionSequence @($statement.body) $Constants $ConstantIndex $FunctionMap -FunctionBody:$FunctionBody;$instructions.Add([pscustomobject][ordered]@{op='REPEAT';iterator=[string]$statement.iterator;body=@($body);max=10000;line=$statement.line})}
             'return'{if($null-ne$statement.expression){Add-AriaExpressionInstructions $statement.expression $instructions $Constants $ConstantIndex $FunctionMap $statement.line};$instructions.Add([pscustomobject][ordered]@{op='RETURN';hasValue=($null-ne$statement.expression);line=$statement.line})}
@@ -52,8 +57,8 @@ function ConvertTo-AriaBytecodeModel {
     $memories=New-Object System.Collections.Generic.List[object]
     foreach($memory in $model.memories){$values=[ordered]@{};$types=[ordered]@{};foreach($entryValue in $memory.values){$values[$entryValue.key]=$entryValue.expression.value;$types[$entryValue.key]=[string]$entryValue.inferredType};$memories.Add([pscustomobject][ordered]@{name=$memory.name;values=[pscustomobject]$values;types=[pscustomobject]$types})}
     $sourceHash=Get-AriaSha256Text $SourceText
-    $ir=[pscustomobject][ordered]@{format=$model.format;specVersion=$model.specVersion;moduleName=$model.moduleName;moduleVersion=$model.moduleVersion;programName=$model.programName;programVersion=$model.programVersion;entry=$model.entry;memories=$model.memories;capabilities=$model.capabilities;agents=$model.agents;graphs=$model.graphs;functions=$model.functions;flows=$model.flows}
-    return [pscustomobject][ordered]@{format='aria.bytecode';containerVersion=1;compilerVersion=Get-AriaCompilerVersion;specVersion=$model.specVersion;moduleName=$model.moduleName;moduleVersion=$model.moduleVersion;programName=$model.programName;programVersion=$model.programVersion;sourceHash=$sourceHash;irHash=(Get-AriaSha256Text (ConvertTo-AriaJson $ir));entry=$model.entry;constants=$constants.ToArray();memories=$memories.ToArray();capabilities=$model.capabilities;agents=$model.agents;graphs=$model.graphs;functions=$functions.ToArray();instructions=$instructions}
+    $ir=[pscustomobject][ordered]@{format=$model.format;specVersion=$model.specVersion;moduleName=$model.moduleName;moduleVersion=$model.moduleVersion;programName=$model.programName;programVersion=$model.programVersion;entry=$model.entry;memories=$model.memories;capabilities=$model.capabilities;agents=$model.agents;connections=$model.connections;graphs=$model.graphs;functions=$model.functions;flows=$model.flows}
+    return [pscustomobject][ordered]@{format='aria.bytecode';containerVersion=1;compilerVersion=Get-AriaCompilerVersion;specVersion=$model.specVersion;moduleName=$model.moduleName;moduleVersion=$model.moduleVersion;programName=$model.programName;programVersion=$model.programVersion;sourceHash=$sourceHash;irHash=(Get-AriaSha256Text (ConvertTo-AriaJson $ir));entry=$model.entry;constants=$constants.ToArray();memories=$memories.ToArray();capabilities=$model.capabilities;agents=$model.agents;connections=$model.connections;graphs=$model.graphs;functions=$functions.ToArray();instructions=$instructions}
 }
 
 function Test-AriaBytecodeIdentifier { param($Value) return (($Value-is[string])-and([string]$Value-match'^[A-Za-z_][A-Za-z0-9_.-]*$')) }
@@ -74,6 +79,7 @@ function Test-AriaInstructionSequence {
         [hashtable]$MemoryTypes,
         [hashtable]$CapabilityMap,
         [hashtable]$AgentMap,
+        [hashtable]$ConnectionMap,
         [object[]]$Constants,
         $Errors,
         [string]$ReturnType,
@@ -196,6 +202,17 @@ function Test-AriaInstructionSequence {
                     if (-not $AgentMap.ContainsKey([string]$instruction.agent)) { $Errors.Add("AGENT_DISPATCH at $index references unknown agent '$($instruction.agent)'.") }
                 }
             }
+            { $_ -in @('CONNECT_OPEN','CONNECT_CLOSE') } {
+                $name = [string]$instruction.connection
+                if (-not $ConnectionMap.ContainsKey($name)) { $Errors.Add("$op at $index references unknown connection '$name'.") }
+            }
+            { $_ -in @('CONNECT_INTENT','CONNECT_PROPOSE','CONNECT_CONSENT') } {
+                $value = Pop-AriaVerifierType $stack $Errors "$op instruction $index"
+                $name = [string]$instruction.connection
+                if (-not $ConnectionMap.ContainsKey($name)) { $Errors.Add("$op at $index references unknown connection '$name'.") }
+                $expected = if ($op -eq 'CONNECT_CONSENT') { 'Bool' } else { 'Text' }
+                if (-not (Test-AriaTypeAssignable $expected $value)) { $Errors.Add("$op at $index requires $expected, received $value.") }
+            }
             'MEM_SET' {
                 $actual = Pop-AriaVerifierType $stack $Errors "MEM_SET instruction $index"
                 $memory = [string]$instruction.memory
@@ -263,8 +280,8 @@ function Test-AriaInstructionSequence {
             'IF' {
                 $condition = Pop-AriaVerifierType $stack $Errors "IF instruction $index"
                 if (-not (Test-AriaTypeAssignable 'Bool' $condition)) { $Errors.Add("IF at $index requires Bool, received $condition.") }
-                $thenResult = Test-AriaInstructionSequence @($instruction.then) (Copy-AriaVerifierTable $Variables) (Copy-AriaVerifierTable $Effects) $Functions $MemoryTypes $CapabilityMap $AgentMap $Constants $Errors $ReturnType $IsFunction $false
-                $elseResult = Test-AriaInstructionSequence @($instruction.else) (Copy-AriaVerifierTable $Variables) (Copy-AriaVerifierTable $Effects) $Functions $MemoryTypes $CapabilityMap $AgentMap $Constants $Errors $ReturnType $IsFunction $false
+                $thenResult = Test-AriaInstructionSequence @($instruction.then) (Copy-AriaVerifierTable $Variables) (Copy-AriaVerifierTable $Effects) $Functions $MemoryTypes $CapabilityMap $AgentMap $ConnectionMap $Constants $Errors $ReturnType $IsFunction $false
+                $elseResult = Test-AriaInstructionSequence @($instruction.else) (Copy-AriaVerifierTable $Variables) (Copy-AriaVerifierTable $Effects) $Functions $MemoryTypes $CapabilityMap $AgentMap $ConnectionMap $Constants $Errors $ReturnType $IsFunction $false
                 $maximum = [math]::Max($maximum, [math]::Max($thenResult.maxStack, $elseResult.maxStack))
                 if ($thenResult.terminated -and $elseResult.terminated) { $terminated = $true }
             }
@@ -273,7 +290,7 @@ function Test-AriaInstructionSequence {
                 if (-not (Test-AriaTypeAssignable 'Number' $countType)) { $Errors.Add("REPEAT at $index requires Number, received $countType.") }
                 $child = Copy-AriaVerifierTable $Variables
                 $child[[string]$instruction.iterator] = 'Number'
-                $bodyResult = Test-AriaInstructionSequence @($instruction.body) $child (Copy-AriaVerifierTable $Effects) $Functions $MemoryTypes $CapabilityMap $AgentMap $Constants $Errors $ReturnType $IsFunction $false
+                $bodyResult = Test-AriaInstructionSequence @($instruction.body) $child (Copy-AriaVerifierTable $Effects) $Functions $MemoryTypes $CapabilityMap $AgentMap $ConnectionMap $Constants $Errors $ReturnType $IsFunction $false
                 $maximum = [math]::Max($maximum, $bodyResult.maxStack)
             }
             'RETURN' {
@@ -304,9 +321,10 @@ function Test-AriaBytecodeModel {
     $memoryTypes=@{};foreach($memory in @($BytecodeModel.memories)){$fields=@{};foreach($property in $memory.types.PSObject.Properties){$fields[$property.Name]=[string]$property.Value};$memoryTypes[[string]$memory.name]=$fields}
     $capabilityMap=@{};foreach($cap in @($BytecodeModel.capabilities)){$capabilityMap[[string]$cap.name]=$cap}
     $agentMap=@{};foreach($agent in @($BytecodeModel.agents)){$agentMap[[string]$agent.name]=$agent}
+    $connectionMap=@{};foreach($connection in @($BytecodeModel.connections)){if($connectionMap.ContainsKey([string]$connection.name)){$errors.Add("Duplicate bytecode connection '$($connection.name)'.")}else{$connectionMap[[string]$connection.name]=$connection}}
     $functions=@{};foreach($fn in @($BytecodeModel.functions)){if($functions.ContainsKey([string]$fn.name)){$errors.Add("Duplicate bytecode function '$($fn.name)'.")}else{$functions[[string]$fn.name]=$fn}}
-    $max=0;foreach($fn in @($BytecodeModel.functions)){$vars=@{};foreach($param in @($fn.parameters)){$vars[[string]$param.name]=[string]$param.type};$result=Test-AriaInstructionSequence @($fn.instructions) $vars @{} $functions $memoryTypes $capabilityMap $agentMap $constants $errors ([string]$fn.returnType) $true $false;$max=[math]::Max($max,$result.maxStack);if(-not$result.terminated){$errors.Add("Function '$($fn.name)' does not terminate with RETURN.")}}
-    $entryResult=Test-AriaInstructionSequence @($BytecodeModel.instructions) @{} @{} $functions $memoryTypes $capabilityMap $agentMap $constants $errors 'Null' $false $true;$max=[math]::Max($max,$entryResult.maxStack);if(-not$entryResult.terminated){$errors.Add('Entry instruction stream does not terminate with HALT.')}
+    $max=0;foreach($fn in @($BytecodeModel.functions)){$vars=@{};foreach($param in @($fn.parameters)){$vars[[string]$param.name]=[string]$param.type};$result=Test-AriaInstructionSequence @($fn.instructions) $vars @{} $functions $memoryTypes $capabilityMap $agentMap $connectionMap $constants $errors ([string]$fn.returnType) $true $false;$max=[math]::Max($max,$result.maxStack);if(-not$result.terminated){$errors.Add("Function '$($fn.name)' does not terminate with RETURN.")}}
+    $entryResult=Test-AriaInstructionSequence @($BytecodeModel.instructions) @{} @{} $functions $memoryTypes $capabilityMap $agentMap $connectionMap $constants $errors 'Null' $false $true;$max=[math]::Max($max,$entryResult.maxStack);if(-not$entryResult.terminated){$errors.Add('Entry instruction stream does not terminate with HALT.')}
     return [pscustomobject][ordered]@{valid=($errors.Count-eq0);errors=$errors.ToArray();maxStack=$max}
 }
 

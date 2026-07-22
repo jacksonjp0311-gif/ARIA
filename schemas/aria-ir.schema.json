@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://aria-lang.dev/schema/aria-ir-0.3.json",
+  "$id": "https://aria-lang.dev/schema/aria-ir-0.4.json",
   "title": "ARIA semantic intermediate representation",
   "type": "object",
   "required": [
@@ -12,6 +12,7 @@
     "memories",
     "capabilities",
     "agents",
+    "connections",
     "graphs",
     "functions",
     "flows"
@@ -60,6 +61,9 @@
       ]
     },
     "functions": {
+      "type": "array"
+    },
+    "connections": {
       "type": "array"
     }
   }

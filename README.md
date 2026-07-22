@@ -14,30 +14,27 @@ ARIA is an experimental local language with deterministic compilation, typed sem
 
 | Component | Current release |
 |---|---|
-| Compiler | `0.1.0-alpha.4` PowerShell bootstrap |
-| Language specification | `0.3.0` |
+| Compiler | `0.1.0-alpha.5` PowerShell bootstrap |
+| Language specification | `0.4.0` |
 | Container | `.ariac` version `1`, bounded gzip + SHA-256 |
 | Hosts | Windows PowerShell 5.1 and PowerShell 7 |
 | Default authority | Deny by default |
 | Production sandbox | No—experimental alpha |
 
-## Alpha.4: Coreflow
+## Alpha.5: Connectflow
 
-ARIA now supports:
+ARIA now adds a verified connection ontology on top of Coreflow:
 
-- typed values: `Text`, `Number`, `Bool`, `Null`, and `Any`;
-- expression precedence, arithmetic, comparisons, and Boolean operators;
-- typed `let` bindings and `set` mutation;
-- functions with typed parameters and return contracts;
-- `if` / `else` lexical blocks;
-- bounded `repeat` loops with an iterator;
-- module identity metadata;
-- typed persistent memory fields;
-- deterministic `dispatch Agent <- "task"` events;
-- Traceflow rendering driven by VM events;
-- independent structured-bytecode verification.
+- declared `connection` contracts linking an operator identity, an agent identity, and a protocol;
+- deterministic `connect`, `intent`, `propose`, `consent`, and `disconnect` statements;
+- explicit human consent as a typed `Bool`, including safe refusal;
+- lifecycle enforcement in the local VM before any future provider bridge;
+- structured connection events and a dedicated `aria connect` operator experience;
+- a `REJECT` renderer state for expected denial or withheld authority;
+- quiet compiler probes so conformance output reserves red `FAIL` for unexpected breakage;
+- 42 deterministic conformance gates.
 
-ARIA does **not** yet contact an AI provider. Agent dispatch is a deterministic local event that a future provider-neutral bridge can consume after policy and operator approval.
+ARIA still does **not** contact an AI provider. Connectflow establishes the shared protocol first: human intent, agent proposal, explicit consent, and deterministic closure. A future provider-neutral bridge can attach only after this contract remains intact.
 
 ## Quick start
 
@@ -46,43 +43,43 @@ Open PowerShell in this repository:
 ```powershell
 .\aria.cmd doctor -Strict
 .\aria.cmd test
-.\aria.cmd trace .\examples\coreflow.aria -Strict
+.\aria.cmd connect .\examples\connection.aria -Strict
 ```
 
-Normal output uses ARIA's operator stream: `◈` active, `◆` pass, `⬖` warning, `⬗` failure, and `∿` program transmission. Add `-VerboseOutput` or set `ARIA_VERBOSE=1` for raw diagnostics.
+Normal output uses ARIA's operator stream: `◈` active, `◆` pass or expected rejection, `⬖` warning, `⬗` unexpected failure, and `∿` program transmission. Add `-VerboseOutput` or set `ARIA_VERBOSE=1` for raw diagnostics.
 
-## Coreflow example
+## Connectflow example
 
 ```aria
-aria 0.3.0
-module Arithmetic version 0.1.0
-program FunctionDemo version 0.1.0
+aria 0.4.0
+module Connection version 0.1.0
+program ConnectionDemo version 0.1.0
 entry Main
 
-function Add(left: Number, right: Number) -> Number {
-  return left + right
+agent Architect {
+}
+
+connection HumanAI {
+  operator = "human"
+  agent = "Architect"
+  protocol = "intent-proposal-consent"
 }
 
 flow Main {
-  let total: Number = Add(2, 3)
-  if total == 5 {
-    signal pass "typed function online"
-  } else {
-    signal fail "unexpected result"
-  }
-  repeat 3 as index {
-    emit index
-  }
-  halt
+  connect HumanAI
+  intent HumanAI <- "Evolve ARIA and its CLI together."
+  propose HumanAI <- "Compile a verified local change."
+  consent HumanAI <- true
+  disconnect HumanAI
 }
 ```
 
 Compile and execute:
 
 ```powershell
-.\aria.cmd gate .\examples\functions.aria -Strict
-.\aria.cmd build .\examples\functions.aria -Strict
-.\aria.cmd trace .\examples\functions.aria -Strict
+.\aria.cmd gate .\examples\connection.aria -Strict
+.\aria.cmd build .\examples\connection.aria -Strict
+.\aria.cmd connect .\examples\connection.aria -Strict
 ```
 
 Artifacts are written to `.aria/build/<Program>-<Version>.ariac` with a provenance record.
@@ -116,6 +113,7 @@ policy-gated local ARIA VM + Traceflow
 | `aria gate|check <file.aria>` | Parse, type-check, policy-check, compile twice, and verify reproducibility. |
 | `aria compile|build <file.aria>` | Produce a compressed `.ariac` artifact and provenance. |
 | `aria run|start|trace <file.aria>` | Gate, compile, verify, and execute locally. |
+| `aria connect [file.aria]` | Run a verified human-agent intent/proposal/consent session. |
 | `aria exec <file.ariac>` | Verify and execute an existing artifact. |
 | `aria inspect <file.ariac>` | Verify and disassemble structured bytecode. |
 | `aria graph <file.aria|file.ariac>` | Render declared glyphic topology. |

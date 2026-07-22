@@ -87,7 +87,7 @@ function Write-AriaBanner {
 function Write-AriaStage {
     param(
         [Parameter(Mandatory=$true)][string]$Name,
-        [Parameter(Mandatory=$true)][ValidateSet('Pulse','Pass','Fail','Warn','Info')][string]$State,
+        [Parameter(Mandatory=$true)][ValidateSet('Pulse','Pass','Reject','Fail','Warn','Info')][string]$State,
         [string]$Detail = '',
         $Duration,
         [string]$Prefix = ''
@@ -99,6 +99,7 @@ function Write-AriaStage {
     switch ($State) {
         'Pulse' { $glyph = '◈'; $color = 'Magenta'; $label = 'ACTIVE'; $pulse = $true }
         'Pass'  { $glyph = '◆'; $color = 'Green'; $label = 'PASS' }
+        'Reject'{ $glyph = '◆'; $color = 'Green'; $label = 'REJECT' }
         'Fail'  { $glyph = '⬗'; $color = 'Red'; $label = 'FAIL' }
         'Warn'  { $glyph = '⬖'; $color = 'Yellow'; $label = 'WARN' }
         'Info'  { $glyph = '◇'; $color = 'Cyan'; $label = 'INFO' }
@@ -136,7 +137,7 @@ function Get-AriaTreePrefix {
 function Write-AriaTreeStage {
     param(
         [Parameter(Mandatory=$true)][string]$Name,
-        [Parameter(Mandatory=$true)][ValidateSet('Pulse','Pass','Fail','Warn','Info')][string]$State,
+        [Parameter(Mandatory=$true)][ValidateSet('Pulse','Pass','Reject','Fail','Warn','Info')][string]$State,
         [string]$Detail = '',
         $Duration,
         [int]$Depth = 0,

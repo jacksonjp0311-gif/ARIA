@@ -4,7 +4,7 @@ ARIA is an experimental language runtime with local execution authority. Treat s
 
 ## Bootstrap threat model
 
-The specification 0.3.0 VM supports typed local execution, functions, bounded structured control flow, console output, explicit memory, graph metadata, deterministic agent-dispatch events, assertions, and policy-gated filesystem access. It deliberately does **not** implement network access, subprocess execution, dynamic module loading, native calls, or arbitrary PowerShell evaluation.
+The specification 0.4.0 VM supports typed local execution, functions, bounded structured control flow, console output, explicit memory, graph metadata, deterministic agent-dispatch events, verified connection lifecycles, assertions, and policy-gated filesystem access. It deliberately does **not** implement network access, subprocess execution, dynamic module loading, native calls, or arbitrary PowerShell evaluation.
 
 ## Security invariants
 

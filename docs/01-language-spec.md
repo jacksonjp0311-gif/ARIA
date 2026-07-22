@@ -1,21 +1,21 @@
-# ARIA Language Specification 0.3.0
+﻿# ARIA Language Specification 0.4.0
 
-This document is normative for the ARIA `0.1.0-alpha.4` bootstrap implementation. Where prose and the machine-readable grammar disagree, `grammar/aria.ebnf`, `grammar/opcodes.json`, and the conformance suite define the executable contract for this alpha.
+This document is normative for the ARIA `0.1.0-alpha.5` bootstrap implementation. Where prose and the machine-readable grammar disagree, `grammar/aria.ebnf`, `grammar/opcodes.json`, and the conformance suite define the executable contract for this alpha.
 
 ## 1. Source form
 
 ARIA source is UTF-8, normalized to LF line endings. `#` begins a comment outside a quoted string. Textual identifiers use the restricted ASCII profile defined in `grammar/aria.ebnf`; glyphs are Unicode aliases validated through `grammar/glyphs.json`.
 
-Every program declares a locked language version, program identity, semantic version, and entry flow. A module declaration is optional metadata in 0.3.0.
+Every program declares a locked language version, program identity, semantic version, and entry flow. A module declaration is optional metadata in 0.4.0.
 
 ```aria
-aria 0.3.0
+aria 0.4.0
 module Example.Core version 0.1.0
 program Example version 0.1.0
 entry Main
 ```
 
-Module identity is stored in bytecode and provenance. External imports are not part of 0.3.0.
+Module identity is stored in bytecode and provenance. External imports are not part of 0.4.0.
 
 ## 2. Scalar types
 
@@ -142,7 +142,31 @@ flow Main {
 
 An agent is a declared principal. `dispatch` requires a `Text` task and emits a deterministic structured event after policy validation. It does not call a model, spawn a process, or grant authority. Provider integration belongs to the future ARIA Bridge.
 
-## 11. Graphs and glyphs
+
+
+## 11. Connection contracts
+
+A connection is a declared ontology linking a human operator identity, a declared agent identity, and a protocol.
+
+```aria
+connection HumanAI {
+  operator = "human"
+  agent = "Architect"
+  protocol = "intent-proposal-consent"
+}
+```
+
+Specification 0.4.0 defines one protocol, `intent-proposal-consent`. Its runtime lifecycle is:
+
+1. `connect ConnectionName`
+2. `intent ConnectionName <- Text`
+3. `propose ConnectionName <- Text`
+4. `consent ConnectionName <- Bool`
+5. `disconnect ConnectionName`
+
+The VM enforces this order. `false` consent is a valid, safe outcome and grants no authority. Connection events remain local structured events; they do not contact a model, network, or subprocess.
+
+## 12. Graphs and glyphs
 
 ```aria
 graph System {
@@ -156,9 +180,9 @@ graph System {
 
 Glyphs are semantic aliases. The stable identity is the registered node kind and identifier, not font rendering. Graph declarations are preserved as bytecode metadata and can be rendered by the CLI.
 
-## 12. Executable statements
+## 13. Executable statements
 
-Specification 0.3.0 supports:
+Specification 0.4.0 supports:
 
 - `emit expression`
 - `signal pulse|pass|warn|fail|info expression`
@@ -171,6 +195,11 @@ Specification 0.3.0 supports:
 - `read pathExpression -> name`
 - `write pathExpression <- expression`
 - `dispatch Agent <- expression`
+- `connect Connection`
+- `intent Connection <- expression`
+- `propose Connection <- expression`
+- `consent Connection <- expression`
+- `disconnect Connection`
 - `if expression { ... } else { ... }`
 - `repeat expression as iterator { ... }`
 - `return [expression]`
@@ -178,6 +207,6 @@ Specification 0.3.0 supports:
 
 If an entry flow omits a final `halt`, the compiler appends one deterministically.
 
-## 13. Required rejection behavior
+## 14. Required rejection behavior
 
 A conforming implementation must reject malformed syntax, duplicate declarations, unresolved symbols, invalid glyph aliases, incompatible types, unsafe repeat bounds, missing returns, unverified bytecode, policy-denied effects, unauthorized paths, incompatible locked versions, corrupted containers, and persisted memory that violates its declared type.

@@ -41,3 +41,5 @@ The [`adr/`](adr/) folder records why ARIA uses a PowerShell bootstrap, a determ
 - [`algorithms/structured-control-verification.md`](algorithms/structured-control-verification.md) — nested branch and loop verification.
 - [`research/coreflow-discoveries.md`](research/coreflow-discoveries.md) — cross-domain findings behind Coreflow.
 - [`adr/0005-structured-control-bytecode.md`](adr/0005-structured-control-bytecode.md) — rationale for structured control bytecode.
+
+- [`16-connectflow.md`](16-connectflow.md) — human intent, agent proposal, explicit consent, and deterministic connection closure.

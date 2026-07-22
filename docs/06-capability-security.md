@@ -10,7 +10,7 @@ This creates three separate checks:
 2. **Policy:** the operator/repository permits the authority.
 3. **Activation:** the execution path explicitly crosses the boundary.
 
-The default policy denies filesystem writes, process execution, and networking. Specification 0.3.0 includes no process or network opcode, so policy changes alone cannot activate nonexistent machinery.
+The default policy denies filesystem writes, process execution, and networking. Specification 0.4.0 includes no process or network opcode, so policy changes alone cannot activate nonexistent machinery.
 
 Path confinement canonicalizes the workspace, capability scope, and requested path, then rejects lexical traversal outside either boundary.
 

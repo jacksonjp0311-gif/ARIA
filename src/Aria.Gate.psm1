@@ -34,7 +34,9 @@ function Invoke-AriaGate {
     $syntaxPassed = $parseErrors.Count -eq 0
     if (-not $Quiet) { Write-AriaGateLine -Name 'syntax' -Passed $syntaxPassed }
     if (-not $syntaxPassed) {
-        foreach ($error in $parseErrors) { Write-AriaTreeStage -Depth 1 -Name ("line {0} · {1}" -f $error.line, $error.code) -State Fail -Detail $error.message }
+        if (-not $Quiet) {
+            foreach ($error in $parseErrors) { Write-AriaTreeStage -Depth 1 -Name ("line {0} · {1}" -f $error.line, $error.code) -State Fail -Detail $error.message }
+        }
         throw "ARIA syntax gate rejected '$resolvedSource'."
     }
 
@@ -51,7 +53,9 @@ function Invoke-AriaGate {
     $semanticsPassed = $errors.Count -eq 0
     if (-not $Quiet) { Write-AriaGateLine -Name 'semantics' -Passed $semanticsPassed }
     if (-not $semanticsPassed) {
-        foreach ($error in $errors) { Write-AriaTreeStage -Depth 1 -Name ("line {0} · {1}" -f $error.line, $error.code) -State Fail -Detail $error.message }
+        if (-not $Quiet) {
+            foreach ($error in $errors) { Write-AriaTreeStage -Depth 1 -Name ("line {0} · {1}" -f $error.line, $error.code) -State Fail -Detail $error.message }
+        }
         throw "ARIA gate rejected '$resolvedSource'."
     }
 

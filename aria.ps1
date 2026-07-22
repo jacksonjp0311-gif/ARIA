@@ -37,12 +37,13 @@ function Show-AriaHelp {
   aria gate|check <program.aria> [-Workspace <repository>] [-Strict]
   aria compile|build <program.aria> [-Out <program.ariac>] [-Workspace <repository>] [-Strict]
   aria run|start|trace <program.aria> [-Out <program.ariac>] [-Workspace <repository>] [-Strict]
+  aria connect [program.aria] [-Workspace <repository>] [-Strict]
   aria exec <program.ariac> [-Workspace <repository>] [-Strict]
   aria inspect <program.ariac>
   aria graph <program.aria|program.ariac>
   aria init <ProgramName>
 
-  ARIA 0.3 adds typed expressions, functions, if/else, bounded repeat, modules, and agent dispatch.
+  ARIA 0.4 adds verified human-agent connection contracts: intent, proposal, consent, and closure.
   aria version
 
   Add -VerboseOutput, or set ARIA_VERBOSE=1, to expose raw diagnostic detail.
@@ -76,7 +77,7 @@ try {
                     format = 'aria.bytecode'; containerVersion = 1; compilerVersion = Get-AriaCompilerVersion
                     specVersion = (Get-AriaLock).specVersion; programName = 'DoctorProbe'; programVersion = '0.0.0'
                     sourceHash = ('0' * 64); irHash = ('0' * 64); moduleName = 'Doctor'; moduleVersion = '0.0.0'; entry = 'Main'; constants = @(); memories = @()
-                    capabilities = @(); agents = @(); graphs = @(); functions = @(); instructions = @([pscustomobject][ordered]@{ op = 'HALT'; line = 0 })
+                    capabilities = @(); agents = @(); connections = @(); graphs = @(); functions = @(); instructions = @([pscustomobject][ordered]@{ op = 'HALT'; line = 0 })
                 }
                 Write-AriaContainer -Bytes (ConvertTo-AriaContainerBytes -BytecodeModel $sample) -Path $probe
                 $container = Read-AriaContainer -Path $probe
@@ -135,6 +136,18 @@ try {
             $clock.Stop()
             Write-AriaSummary -Title 'EXECUTION COMPLETE' -Passed $true -Detail $compiled.gate.bytecode.programName -Duration $clock.Elapsed
         }
+        'connect' {
+            if (-not $Path) { $Path = Join-Path $root 'examples/connection.aria' }
+            $clock = [Diagnostics.Stopwatch]::StartNew()
+            Write-AriaBanner -Title 'ARIA / CONNECTION' -Subtitle 'human intent · agent proposal · explicit consent · deterministic closure'
+            Write-AriaTreeStage -Name 'connection compiler' -State Pulse -Detail $Path
+            $compiled = Invoke-AriaCompile -SourcePath $Path -PolicyPath $Policy -OutputPath $Out -WorkspaceRoot $workspaceRoot -StrictRepository:$Strict
+            Write-AriaTreeStage -Name 'connection artifact' -State Pass -Detail $compiled.artifactPath
+            Write-AriaTreeStage -Name 'connection protocol' -State Pulse -Detail 'local verified session'
+            $null = Invoke-AriaArtifact -Path $compiled.artifactPath -PolicyPath $Policy -WorkspaceRoot $workspaceRoot
+            $clock.Stop()
+            Write-AriaSummary -Title 'CONNECTION COMPLETE' -Passed $true -Detail $compiled.gate.bytecode.programName -Duration $clock.Elapsed
+        }
         'exec' {
             if (-not $Path) { throw 'exec requires an .ariac artifact path.' }
             $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -187,13 +200,22 @@ try {
             $target = Join-Path (Get-Location) ($Path + '.aria')
             if (Test-Path -LiteralPath $target) { throw "File already exists: $target" }
             $template = @"
-aria 0.3.0
+aria 0.4.0
 module $Path version 0.1.0
 program $Path version 0.1.0
 entry Main
 
 memory Project {
   status: Text = "new"
+}
+
+agent architect {
+}
+
+connection HumanAI {
+  operator = "human"
+  agent = "architect"
+  protocol = "intent-proposal-consent"
 }
 
 graph System {
@@ -203,6 +225,12 @@ graph System {
 }
 
 flow Main {
+  connect HumanAI
+  intent HumanAI <- "Create $Path through shared understanding."
+  propose HumanAI <- "Compile a verified local program before any external effect."
+  consent HumanAI <- true
+  disconnect HumanAI
+
   signal pulse "language core"
   emit "$Path online."
   remember Project.status = "active"

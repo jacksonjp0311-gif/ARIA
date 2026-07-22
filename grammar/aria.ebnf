@@ -1,10 +1,10 @@
-(* ARIA 0.3 bootstrap grammar. UTF-8 source; comments begin with #. *)
+(* ARIA 0.4 bootstrap grammar. UTF-8 source; comments begin with #. *)
 program          = header, [ module-decl ], program-decl, { top-level }, entry-decl, { top-level } ;
 header           = "aria", whitespace, semver, newline ;
 module-decl      = "module", whitespace, identifier, whitespace, "version", whitespace, semver, newline ;
 program-decl     = "program", whitespace, identifier, whitespace, "version", whitespace, semver, newline ;
 entry-decl       = "entry", whitespace, identifier, newline ;
-top-level        = memory-block | capability-block | agent-block | graph-block | function-block | flow-block | newline ;
+top-level        = memory-block | capability-block | agent-block | connection-block | graph-block | function-block | flow-block | newline ;
 
 memory-block     = "memory", whitespace, identifier, whitespace?, "{", newline,
                    { typed-assignment }, "}", newline ;
@@ -12,6 +12,8 @@ capability-block = "capability", whitespace, identifier, whitespace?, "{", newli
                    capability-effect, capability-scope, "}", newline ;
 agent-block      = "agent", whitespace, identifier, whitespace?, "{", newline,
                    { grant }, "}", newline ;
+connection-block = "connection", whitespace, identifier, whitespace?, "{", newline,
+                   connection-operator, connection-agent, connection-protocol, "}", newline ;
 graph-block      = "graph", whitespace, identifier, whitespace?, "{", newline,
                    { node | link }, "}", newline ;
 function-block   = "function", whitespace, identifier, "(", [ parameters ], ")", whitespace,
@@ -26,12 +28,15 @@ typed-assignment = identifier, [ whitespace?, ":", whitespace?, type ], whitespa
 capability-effect= "effect", whitespace?, "=", whitespace?, string, newline ;
 capability-scope = "scope", whitespace?, "=", whitespace?, string, newline ;
 grant            = "grant", whitespace, identifier, newline ;
+connection-operator = "operator", whitespace?, "=", whitespace?, string, newline ;
+connection-agent    = "agent", whitespace?, "=", whitespace?, string, newline ;
+connection-protocol = "protocol", whitespace?, "=", whitespace?, string, newline ;
 node             = "node", whitespace, glyph, whitespace, node-kind, whitespace, identifier, newline ;
 link             = "link", whitespace, identifier, whitespace?, "->", whitespace?, identifier,
                    whitespace, "as", whitespace, identifier, newline ;
 
 statement        = emit | signal | let | set | remember | recall | require | assert | read | write |
-                   dispatch | if-block | repeat-block | return | halt ;
+                   dispatch | connect | intent | propose | consent | disconnect | if-block | repeat-block | return | halt ;
 emit             = "emit", whitespace, expression, newline ;
 signal           = "signal", whitespace, signal-state, whitespace, expression, newline ;
 let              = "let", whitespace, identifier, [ whitespace?, ":", whitespace?, type ], whitespace?, "=", whitespace?, expression, newline ;
@@ -44,6 +49,11 @@ assert           = "assert", whitespace, expression, newline ;
 read             = "read", whitespace, expression, whitespace, "->", whitespace, identifier, newline ;
 write            = "write", whitespace, expression, whitespace, "<-", whitespace, expression, newline ;
 dispatch         = "dispatch", whitespace, identifier, whitespace?, "<-", whitespace?, expression, newline ;
+connect          = "connect", whitespace, identifier, newline ;
+intent           = "intent", whitespace, identifier, whitespace?, "<-", whitespace?, expression, newline ;
+propose          = "propose", whitespace, identifier, whitespace?, "<-", whitespace?, expression, newline ;
+consent          = "consent", whitespace, identifier, whitespace?, "<-", whitespace?, expression, newline ;
+disconnect       = "disconnect", whitespace, identifier, newline ;
 if-block         = "if", whitespace, expression, whitespace?, "{", newline, { statement }, "}",
                    [ whitespace, "else", whitespace?, "{", newline, { statement }, "}" ], newline ;
 repeat-block     = "repeat", whitespace, expression, [ whitespace, "as", whitespace, identifier ], whitespace?, "{", newline,

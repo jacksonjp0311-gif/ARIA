@@ -1,6 +1,17 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
+
+## 0.1.0-alpha.5 — Connectflow
+
+- Advanced the language lock to specification `0.4.0`.
+- Added first-class connection declarations with operator, agent, and protocol identities.
+- Added `connect`, `intent`, `propose`, `consent`, and `disconnect` statements.
+- Added five verified connection opcodes and VM lifecycle enforcement.
+- Added deterministic connection events and the `aria connect` CLI command.
+- Added `REJECT` as a successful operator outcome for withheld consent or expected denial.
+- Fixed quiet compiler gates so negative conformance probes do not render as failed tests.
+- Expanded conformance to 42 deterministic gates.
 
 ## 0.1.0-alpha.4 — Coreflow
 

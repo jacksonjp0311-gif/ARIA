@@ -1,6 +1,6 @@
-# Bytecode and `.ariac` Container
+﻿# Bytecode and `.ariac` Container
 
-ARIA 0.3.0 lowers typed source into structured stack bytecode. The bytecode is independently verified before it can execute.
+ARIA 0.4.0 lowers typed source into structured stack bytecode. The bytecode is independently verified before it can execute.
 
 ## Instruction families
 
@@ -59,3 +59,7 @@ offset  size  field
 Both compressed and uncompressed sizes are bounded. Decoding verifies the fixed header, exact encoded length, declared decompressed length, UTF-8 validity, SHA-256 digest, JSON structure, and bytecode model before execution.
 
 The canonical JSON payload keeps the alpha format inspectable. A later container version may introduce a denser binary instruction section without changing ARIA source semantics.
+
+## Connectflow opcodes
+
+`CONNECT_OPEN`, `CONNECT_INTENT`, `CONNECT_PROPOSE`, `CONNECT_CONSENT`, and `CONNECT_CLOSE` encode the local intent/proposal/consent lifecycle. The verifier checks declaration references and operand types; the VM enforces protocol order and deterministic closure.

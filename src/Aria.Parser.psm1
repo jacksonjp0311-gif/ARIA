@@ -59,6 +59,11 @@ function Read-AriaStatementSequence {
             if ($text -match '^read\s+(.+?)\s*->\s*([A-Za-z_][A-Za-z0-9_.]*)(?:\s*:\s*Text)?$') { $statements.Add([pscustomobject][ordered]@{ op='read'; path=(ConvertFrom-AriaExpression $matches[1] $number); name=$matches[2]; line=$number }); $State.index++; continue }
             if ($text -match '^write\s+(.+?)\s*<-\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='write'; path=(ConvertFrom-AriaExpression $matches[1] $number); expression=(ConvertFrom-AriaExpression $matches[2] $number); line=$number }); $State.index++; continue }
             if ($text -match '^dispatch\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*<-\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='dispatch'; agent=$matches[1]; expression=(ConvertFrom-AriaExpression $matches[2] $number); line=$number }); $State.index++; continue }
+            if ($text -match '^connect\s+([A-Za-z_][A-Za-z0-9_.-]*)$') { $statements.Add([pscustomobject][ordered]@{ op='connect'; connection=$matches[1]; line=$number }); $State.index++; continue }
+            if ($text -match '^intent\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*<-\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='intent'; connection=$matches[1]; expression=(ConvertFrom-AriaExpression $matches[2] $number); line=$number }); $State.index++; continue }
+            if ($text -match '^propose\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*<-\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='propose'; connection=$matches[1]; expression=(ConvertFrom-AriaExpression $matches[2] $number); line=$number }); $State.index++; continue }
+            if ($text -match '^consent\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*<-\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='consent'; connection=$matches[1]; expression=(ConvertFrom-AriaExpression $matches[2] $number); line=$number }); $State.index++; continue }
+            if ($text -match '^disconnect\s+([A-Za-z_][A-Za-z0-9_.-]*)$') { $statements.Add([pscustomobject][ordered]@{ op='disconnect'; connection=$matches[1]; line=$number }); $State.index++; continue }
             if ($text -match '^return(?:\s+(.+))?$') { $expr = if ($matches[1]) { ConvertFrom-AriaExpression $matches[1] $number } else { $null }; $statements.Add([pscustomobject][ordered]@{ op='return'; expression=$expr; line=$number }); $State.index++; continue }
             if ($text -eq 'halt') { $statements.Add([pscustomobject][ordered]@{ op='halt'; line=$number }); $State.index++; continue }
             throw "Invalid executable statement: $text"
@@ -74,7 +79,7 @@ function Read-AriaStatementSequence {
 function Parse-AriaSource {
     param([Parameter(Mandatory=$true)][string]$Source,[string]$SourceName='<memory>')
     $diagnostics = New-Object System.Collections.Generic.List[object]
-    $model = [ordered]@{ format='aria.ir'; sourceName=$SourceName; specVersion=$null; moduleName=$null; moduleVersion=$null; programName=$null; programVersion=$null; entry=$null; memories=@(); capabilities=@(); agents=@(); graphs=@(); functions=@(); flows=@() }
+    $model = [ordered]@{ format='aria.ir'; sourceName=$SourceName; specVersion=$null; moduleName=$null; moduleVersion=$null; programName=$null; programVersion=$null; entry=$null; memories=@(); capabilities=@(); agents=@(); connections=@(); graphs=@(); functions=@(); flows=@() }
     [object[]]$lines = @(Get-AriaLexedLines -Source $Source)
     if ($lines.Count -gt 0 -and $lines[0].text -notmatch '^aria\s+') { $diagnostics.Add((New-AriaDiagnostic error 'ARIA1006' 'The first declaration must be the aria language header.' $lines[0].number)) }
     $index = 0
@@ -89,7 +94,7 @@ function Parse-AriaSource {
                 $name=$matches[1]; $parameters=ConvertFrom-AriaParameterList $matches[2] $number; $returnType=$matches[3]; $state=[pscustomobject]@{index=($index+1)}; $body=Read-AriaStatementSequence -Lines $lines -State $state -Diagnostics $diagnostics; $index=$state.index; if($body.terminator-ne'close'){throw "Unterminated function '$name'."}; $model.functions += ,[pscustomobject][ordered]@{name=$name;line=$number;parameters=@($parameters);returnType=$returnType;statements=@($body.statements)}; continue
             }
             if ($text -match '^flow\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{$') { $name=$matches[1]; $state=[pscustomobject]@{index=($index+1)}; $body=Read-AriaStatementSequence -Lines $lines -State $state -Diagnostics $diagnostics; $index=$state.index; if($body.terminator-ne'close'){throw "Unterminated flow '$name'."}; $model.flows += ,[pscustomobject][ordered]@{name=$name;line=$number;statements=@($body.statements)}; continue }
-            if ($text -match '^(memory|capability|agent|graph)\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{$') {
+            if ($text -match '^(memory|capability|agent|connection|graph)\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{$') {
                 $kind=$matches[1]; $name=$matches[2]; $index++; $entries=New-Object System.Collections.Generic.List[object]
                 while ($index -lt $lines.Count -and $lines[$index].text -ne '}') {
                     $inner=$lines[$index]; $innerText=[string]$inner.text; $innerLine=[int]$inner.number
@@ -98,6 +103,7 @@ function Parse-AriaSource {
                             'memory' { if($innerText-notmatch '^([A-Za-z_][A-Za-z0-9_.-]*)(?:\s*:\s*(Any|Text|Number|Bool|Null))?\s*=\s*(.+)$'){throw "Invalid memory entry: $innerText"}; $entries.Add([pscustomobject][ordered]@{key=$matches[1];declaredType=$(if($matches[2]){$matches[2]}else{$null});expression=(ConvertFrom-AriaExpression $matches[3] $innerLine);line=$innerLine}) }
                             'capability' { if($innerText-notmatch '^(effect|scope)\s*=\s*(.+)$'){throw "Invalid capability property: $innerText"}; $expr=ConvertFrom-AriaExpression $matches[2] $innerLine; if($expr.kind-ne'literal'-or-not($expr.value-is[string])){throw 'Capability effect and scope must be strings.'}; $entries.Add([pscustomobject][ordered]@{key=$matches[1];expression=$expr;line=$innerLine}) }
                             'agent' { if($innerText-notmatch '^grant\s+([A-Za-z_][A-Za-z0-9_.-]*)$'){throw "Invalid agent statement: $innerText"}; $entries.Add([pscustomobject][ordered]@{capability=$matches[1];line=$innerLine}) }
+                            'connection' { if($innerText-notmatch '^(operator|agent|protocol)\s*=\s*(.+)$'){throw "Invalid connection property: $innerText"}; $expr=ConvertFrom-AriaExpression $matches[2] $innerLine; if($expr.kind-ne'literal'-or-not($expr.value-is[string])){throw 'Connection operator, agent, and protocol must be Text literals.'}; $entries.Add([pscustomobject][ordered]@{key=$matches[1];value=[string]$expr.value;line=$innerLine}) }
                             'graph' { if($innerText-match '^node\s+(\S+)\s+(operator|agent|repository|service|surface|memory|artifact|policy|stream|system)\s+([A-Za-z_][A-Za-z0-9_.-]*)$'){ $entries.Add([pscustomobject][ordered]@{statement='node';glyph=$matches[1];nodeKind=$matches[2];name=$matches[3];line=$innerLine}) } elseif($innerText-match '^link\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*->\s*([A-Za-z_][A-Za-z0-9_.-]*)\s+as\s+([A-Za-z_][A-Za-z0-9_.-]*)$'){ $entries.Add([pscustomobject][ordered]@{statement='link';source=$matches[1];target=$matches[2];relation=$matches[3];line=$innerLine}) } else { throw "Invalid graph statement: $innerText" } }
                         }
                     } catch { $diagnostics.Add((New-AriaDiagnostic error 'ARIA1001' $_.Exception.Message $innerLine)) }
@@ -108,6 +114,7 @@ function Parse-AriaSource {
                     'memory'{$model.memories += ,[pscustomobject][ordered]@{name=$name;line=$number;values=@($entries.ToArray())}}
                     'capability'{$effect=@($entries|Where-Object{$_.key-eq'effect'});$scope=@($entries|Where-Object{$_.key-eq'scope'});$model.capabilities += ,[pscustomobject][ordered]@{name=$name;line=$number;effect=$(if($effect.Count-eq1){$effect[0].expression.value}else{$null});scope=$(if($scope.Count-eq1){$scope[0].expression.value}else{$null})}}
                     'agent'{$model.agents += ,[pscustomobject][ordered]@{name=$name;line=$number;grants=@($entries.ToArray())}}
+                    'connection'{$operator=@($entries|Where-Object{$_.key-eq'operator'});$agent=@($entries|Where-Object{$_.key-eq'agent'});$protocol=@($entries|Where-Object{$_.key-eq'protocol'});$model.connections += ,[pscustomobject][ordered]@{name=$name;line=$number;operator=$(if($operator.Count-eq1){$operator[0].value}else{$null});agent=$(if($agent.Count-eq1){$agent[0].value}else{$null});protocol=$(if($protocol.Count-eq1){$protocol[0].value}else{$null})}}
                     'graph'{$model.graphs += ,[pscustomobject][ordered]@{name=$name;line=$number;nodes=@($entries|Where-Object{$_.statement-eq'node'});links=@($entries|Where-Object{$_.statement-eq'link'})}}
                 }
                 continue

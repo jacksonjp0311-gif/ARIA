@@ -18,7 +18,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Write-AriaTreeStage -Name 'test lattice' -State Pulse -Detail '34 deterministic gates'
+Write-AriaTreeStage -Name 'test lattice' -State Pulse -Detail '42 deterministic gates'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -44,7 +44,7 @@ $denied = Join-Path $root 'examples/denied-write.aria'
 
 Test-Case 'opcode registry is machine-readable and complete' {
     $registry = Get-AriaOpcodeRegistry
-    Assert-Equal 32 $registry.Count 'Opcode registry size mismatch.'
+    Assert-Equal 37 $registry.Count 'Opcode registry size mismatch.'
     Assert-Equal 1 $registry['EMIT'].pops 'EMIT stack contract mismatch.'
 }
 
@@ -196,7 +196,7 @@ Test-Case 'glyph mismatch is rejected semantically' {
     $temp = Join-Path $env:TEMP ('aria-glyph-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
-aria 0.3.0
+aria 0.4.0
 program WrongGlyph version 0.1.0
 entry Main
 graph Invalid {
@@ -249,7 +249,7 @@ Test-Case 'read-only execution does not persist memory state' {
 
 Test-Case 'parser recognizes structured signals' {
     $source = @'
-aria 0.3.0
+aria 0.4.0
 program SignalProbe version 0.1.0
 entry Main
 flow Main {
@@ -321,7 +321,7 @@ Test-Case 'typed binding rejects incompatible value' {
     $temp = Join-Path $env:TEMP ('aria-type-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
-aria 0.3.0
+aria 0.4.0
 program WrongType version 0.1.0
 entry Main
 flow Main {
@@ -341,7 +341,7 @@ Test-Case 'repeat rejects unsafe literal bound' {
     $temp = Join-Path $env:TEMP ('aria-repeat-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
-aria 0.3.0
+aria 0.4.0
 program UnsafeLoop version 0.1.0
 entry Main
 flow Main {
@@ -414,7 +414,7 @@ Test-Case 'Null-returning function remains a typed expression' {
     $temp = Join-Path $env:TEMP ('aria-null-call-' + [guid]::NewGuid().ToString('N') + '.aria')
     try {
         Write-AriaUtf8NoBom -Path $temp -Text @'
-aria 0.3.0
+aria 0.4.0
 module NullCalls version 0.1.0
 program NullCall version 0.1.0
 entry Main
@@ -432,6 +432,141 @@ flow Main {
         Assert-True ($null -eq $result.variables.result) 'Null function result was not retained as a typed value.'
     }
     finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+}
+
+
+Test-Case 'parser recognizes connection ontology and lifecycle' {
+    $source = Get-AriaSourceText -Path (Join-Path $root 'examples/connection.aria')
+    $parsed = Parse-AriaSource -Source $source -SourceName '<connection>'
+    Assert-Equal 0 (Get-AriaErrorDiagnostics -Diagnostics $parsed.diagnostics).Count 'Connection parser emitted errors.'
+    Assert-Equal 1 $parsed.model.connections.Count 'Connection declaration count mismatch.'
+    Assert-Equal 'HumanAI' $parsed.model.connections[0].name 'Connection name mismatch.'
+    Assert-Equal 'connect' $parsed.model.flows[0].statements[0].op 'Connection open statement mismatch.'
+    Assert-Equal 'consent' $parsed.model.flows[0].statements[3].op 'Connection consent statement mismatch.'
+}
+
+Test-Case 'connection ontology survives bytecode container' {
+    $gate = Invoke-AriaGate -SourcePath (Join-Path $root 'examples/connection.aria') -PolicyPath $policy -WorkspaceRoot $root -Quiet
+    $container = Read-AriaContainerBytes -Bytes $gate.bytes
+    Assert-Equal 1 $container.bytecode.connections.Count 'Connection declaration did not survive compilation.'
+    Assert-Equal 'intent-proposal-consent' $container.bytecode.connections[0].protocol 'Connection protocol mismatch.'
+}
+
+Test-Case 'VM emits deterministic connection lifecycle' {
+    $compiled = Invoke-AriaCompile -SourcePath (Join-Path $root 'examples/connection.aria') -PolicyPath $policy -WorkspaceRoot $root -Quiet
+    $result = Invoke-AriaArtifact -Path $compiled.artifactPath -PolicyPath $policy -WorkspaceRoot $root -PassThru
+    $events = @($result.events | Where-Object { $_.kind -eq 'connection' })
+    Assert-Equal 5 $events.Count 'Connection event count mismatch.'
+    Assert-Equal 'open' $events[0].state 'Connection open event mismatch.'
+    Assert-Equal 'intent' $events[1].state 'Connection intent event mismatch.'
+    Assert-Equal 'proposal' $events[2].state 'Connection proposal event mismatch.'
+    Assert-Equal $true $events[3].approved 'Connection consent was not recorded.'
+    Assert-Equal 'closed' $events[4].state 'Connection close event mismatch.'
+}
+
+Test-Case 'withheld consent closes without authority' {
+    $temp = Join-Path $env:TEMP ('aria-consent-' + [guid]::NewGuid().ToString('N') + '.aria')
+    try {
+        Write-AriaUtf8NoBom -Path $temp -Text @'
+aria 0.4.0
+program WithheldConsent version 0.1.0
+entry Main
+agent Architect {
+}
+connection HumanAI {
+  operator = "human"
+  agent = "Architect"
+  protocol = "intent-proposal-consent"
+}
+flow Main {
+  connect HumanAI
+  intent HumanAI <- "inspect"
+  propose HumanAI <- "change"
+  consent HumanAI <- false
+  disconnect HumanAI
+  halt
+}
+'@
+        $compiled = Invoke-AriaCompile -SourcePath $temp -PolicyPath $policy -WorkspaceRoot $root -Quiet
+        $result = Invoke-AriaArtifact -Path $compiled.artifactPath -PolicyPath $policy -WorkspaceRoot $root -PassThru
+        $consent = @($result.events | Where-Object { $_.kind -eq 'connection' -and $_.state -eq 'consent' })[0]
+        Assert-Equal $false $consent.approved 'Withheld consent was not preserved.'
+        Assert-Equal 'closed' $result.connections['HumanAI'].phase 'Withheld connection did not close safely.'
+    }
+    finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+}
+
+Test-Case 'semantics rejects unknown connection' {
+    $temp = Join-Path $env:TEMP ('aria-unknown-connection-' + [guid]::NewGuid().ToString('N') + '.aria')
+    try {
+        Write-AriaUtf8NoBom -Path $temp -Text @'
+aria 0.4.0
+program UnknownConnection version 0.1.0
+entry Main
+flow Main {
+  connect Missing
+  halt
+}
+'@
+        $rejected = $false
+        try { $null = Invoke-AriaGate -SourcePath $temp -PolicyPath $policy -WorkspaceRoot $root -Quiet }
+        catch { $rejected = $true }
+        Assert-True $rejected 'Unknown connection unexpectedly passed.'
+    }
+    finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+}
+
+Test-Case 'connection rejects unknown agent identity' {
+    $temp = Join-Path $env:TEMP ('aria-unknown-agent-connection-' + [guid]::NewGuid().ToString('N') + '.aria')
+    try {
+        Write-AriaUtf8NoBom -Path $temp -Text @'
+aria 0.4.0
+program UnknownConnectionAgent version 0.1.0
+entry Main
+connection HumanAI {
+  operator = "human"
+  agent = "Missing"
+  protocol = "intent-proposal-consent"
+}
+flow Main {
+  halt
+}
+'@
+        $rejected = $false
+        try { $null = Invoke-AriaGate -SourcePath $temp -PolicyPath $policy -WorkspaceRoot $root -Quiet }
+        catch { $rejected = $true }
+        Assert-True $rejected 'Connection with unknown agent unexpectedly passed.'
+    }
+    finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+}
+
+Test-Case 'bytecode verifier rejects non-text connection intent' {
+    $gate = Invoke-AriaGate -SourcePath (Join-Path $root 'examples/connection.aria') -PolicyPath $policy -WorkspaceRoot $root -Quiet
+    $mutated = $gate.bytecode | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+    $mutated.constants = @(42)
+    $mutated.instructions = @(
+        [pscustomobject][ordered]@{ op = 'PUSH_CONST'; arg = 0; type = 'Number'; line = 1 },
+        [pscustomobject][ordered]@{ op = 'CONNECT_INTENT'; connection = 'HumanAI'; line = 1 },
+        [pscustomobject][ordered]@{ op = 'HALT'; line = 2 }
+    )
+    $verification = Test-AriaBytecodeModel -BytecodeModel $mutated
+    Assert-True (-not $verification.valid) 'Numeric connection intent unexpectedly passed verification.'
+}
+
+Test-Case 'VM rejects connection message before open' {
+    $gate = Invoke-AriaGate -SourcePath (Join-Path $root 'examples/connection.aria') -PolicyPath $policy -WorkspaceRoot $root -Quiet
+    $mutated = $gate.bytecode | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+    $mutated.constants = @('premature')
+    $mutated.instructions = @(
+        [pscustomobject][ordered]@{ op = 'PUSH_CONST'; arg = 0; type = 'Text'; line = 1 },
+        [pscustomobject][ordered]@{ op = 'CONNECT_INTENT'; connection = 'HumanAI'; line = 1 },
+        [pscustomobject][ordered]@{ op = 'HALT'; line = 2 }
+    )
+    $container = Read-AriaContainerBytes -Bytes (ConvertTo-AriaContainerBytes -BytecodeModel $mutated)
+    $rejected = $false
+    try { $null = Invoke-AriaContainer -Container $container -PolicyPath $policy -WorkspaceRoot $root -PassThru }
+    catch { $rejected = $true }
+    Assert-True $rejected 'Connection intent before open unexpectedly executed.'
 }
 
 $script:SuiteClock.Stop()

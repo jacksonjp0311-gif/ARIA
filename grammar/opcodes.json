@@ -1,6 +1,6 @@
 {
   "format": "aria.opcode-registry",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "opcodes": [
     {
       "id": "PUSH_CONST",
@@ -193,6 +193,36 @@
       "pops": 0,
       "pushes": 0,
       "effect": "control.halt"
+    },
+    {
+      "id": "CONNECT_OPEN",
+      "pops": 0,
+      "pushes": 0,
+      "effect": "connection.lifecycle"
+    },
+    {
+      "id": "CONNECT_INTENT",
+      "pops": 1,
+      "pushes": 0,
+      "effect": "connection.intent"
+    },
+    {
+      "id": "CONNECT_PROPOSE",
+      "pops": 1,
+      "pushes": 0,
+      "effect": "connection.proposal"
+    },
+    {
+      "id": "CONNECT_CONSENT",
+      "pops": 1,
+      "pushes": 0,
+      "effect": "connection.consent"
+    },
+    {
+      "id": "CONNECT_CLOSE",
+      "pops": 0,
+      "pushes": 0,
+      "effect": "connection.lifecycle"
     }
   ]
 }

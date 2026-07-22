@@ -1,7 +1,7 @@
 {
   "format": "aria.lock",
-  "compilerVersion": "0.1.0-alpha.4",
-  "specVersion": "0.3.0",
+  "compilerVersion": "0.1.0-alpha.5",
+  "specVersion": "0.4.0",
   "containerVersion": 1,
   "bootstrap": "Windows PowerShell 5.1+",
   "canonicalEncoding": "UTF-8",

@@ -19,14 +19,18 @@ $workspaceRoot = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Works
 $script:VerboseOutput = $VerboseOutput -or $env:ARIA_VERBOSE -eq '1'
 
 Import-Module (Join-Path $root 'src/Aria.Display.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Etherflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Transmission.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.EventSpine.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Semantics.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Bytecode.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Gate.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.VM.psm1') -Force -DisableNameChecking
+
+$null = Initialize-AriaEventSpine -WorkspaceRoot $workspaceRoot -Profile (Get-AriaOperatorProfile) -Persist
 
 function Show-AriaHelp {
     Write-AriaBanner -Title 'ARIA / LANGUAGE LABORATORY'
@@ -37,6 +41,7 @@ function Show-AriaHelp {
   aria test
   aria profile
   aria transmit <provider.json>
+  aria events
   aria gate|check <program.aria> [-Workspace <repository>] [-Strict]
   aria compile|build <program.aria> [-Out <program.ariac>] [-Workspace <repository>] [-Strict]
   aria run|start|trace <program.aria> [-Out <program.ariac>] [-Workspace <repository>] [-Strict]
@@ -88,10 +93,24 @@ try {
             $artifact = Join-Path $folder ($record.digest + '.ariat')
             [IO.File]::WriteAllBytes($artifact,$bytes)
             $verified = Read-AriaTransmissionBytes -Bytes ([IO.File]::ReadAllBytes($artifact))
-            Write-AriaTransmissionView -Transmission $verified -Profile $profile
+            $null = Send-AriaEvent -Domain transmission -Phase normalize -State ACTIVE -Energy handshake -Information $verified.channel -Coherence 'provider normalized' -Source 'aria.transmit' -Data $verified -Render
+            $null = Send-AriaEvent -Domain transmission -Phase artifact -State PASS -Energy compression -Information ([IO.Path]::GetFileName($artifact)) -Coherence 'payload sealed' -Source 'aria.transmit' -Data ([pscustomobject][ordered]@{path=$artifact;bytes=$bytes.Length}) -Render
+            $null = Send-AriaEvent -Domain transmission -Phase provenance -State PASS -Energy verification -Information $verified.digest -Coherence 'integrity confirmed' -Source 'aria.transmit' -Data $verified -Render
+            if ($profile.mode -eq 'machine') { Write-AriaTransmissionView -Transmission $verified -Profile $profile }
             if ($script:VerboseOutput -and $profile.mode -ne 'machine') {
                 Write-AriaKeyValue -Key 'artifact' -Value $artifact
                 Write-AriaKeyValue -Key 'compressed bytes' -Value ([string]$bytes.Length)
+            }
+        }        'events' {
+            $events = @(Read-AriaEventLedger -WorkspaceRoot $workspaceRoot)
+            if ($events.Count -eq 0) {
+                $null = Send-AriaEvent -Domain spine -Phase ledger -State INFO -Energy dormant -Information 'no persisted events' -Coherence 'ledger empty' -Source 'aria.events' -Render
+            }
+            else {
+                $start = [Math]::Max(0,$events.Count - 20)
+                for($i=$start;$i-lt$events.Count;$i++){
+                    Publish-AriaEvent -Event $events[$i] -Render
+                }
             }
         }        'doctor' {
             $clock = [Diagnostics.Stopwatch]::StartNew()

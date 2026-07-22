@@ -10,8 +10,10 @@ if ([string]::IsNullOrWhiteSpace($tempRoot)) {
 }
 
 Import-Module (Join-Path $root 'src/Aria.Display.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Etherflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Transmission.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.EventSpine.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Semantics.psm1') -Force -DisableNameChecking
@@ -23,7 +25,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Write-AriaTreeStage -Name 'test lattice' -State Pulse -Detail '46 deterministic gates'
+Write-AriaTreeStage -Name 'test lattice' -State Pulse -Detail '50 deterministic gates'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -612,6 +614,44 @@ Test-Case 'transmission container rejects tampering' {
     $rejected = $false
     try { $null = Read-AriaTransmissionBytes -Bytes $bytes } catch { $rejected = $true }
     Assert-True $rejected 'Tampered transmission unexpectedly passed verification.'
+}
+Test-Case 'event digest is deterministic for fixed time' {
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    $time = [datetime]'2026-01-01T00:00:00Z'
+    $one = New-AriaEvent -Domain runtime -Phase probe -State PASS -Energy verify -Information stable -Coherence sealed -OccurredAt $time
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    $two = New-AriaEvent -Domain runtime -Phase probe -State PASS -Energy verify -Information stable -Coherence sealed -OccurredAt $time
+    Assert-Equal $one.digest $two.digest 'Event digest changed for identical content.'
+}
+
+Test-Case 'event spine publishes to subscriber and buffer' {
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    $script:ObservedEvent = $null
+    $null = Register-AriaEventSubscriber -Handler { param($event) $script:ObservedEvent = $event }
+    $published = Send-AriaEvent -Domain runtime -Phase subscriber -State PASS -Energy dispatch -Information event -Coherence observed -PassThru
+    Assert-Equal $published.digest $script:ObservedEvent.digest 'Subscriber did not receive published event.'
+    Assert-Equal 1 @(Get-AriaEventBuffer).Count 'Event buffer count mismatch.'
+}
+
+Test-Case 'event verifier rejects tampering' {
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    $event = New-AriaEvent -Domain runtime -Phase tamper -State PASS -Energy verify -Information original -Coherence sealed
+    $event.information = 'mutated'
+    $verification = Test-AriaEvent -Event $event
+    Assert-True (-not $verification.valid) 'Tampered event unexpectedly passed.'
+}
+
+Test-Case 'event ledger persists and replays verified events' {
+    $workspace = Join-Path $tempRoot ('aria-event-ledger-' + [guid]::NewGuid().ToString('N'))
+    try {
+        New-Item -ItemType Directory -Path $workspace -Force | Out-Null
+        $null = Initialize-AriaEventSpine -WorkspaceRoot $workspace -Profile compact -Persist
+        $null = Send-AriaEvent -Domain transmission -Phase replay -State PASS -Energy persist -Information ledger -Coherence verified
+        $events = @(Read-AriaEventLedger -WorkspaceRoot $workspace)
+        Assert-Equal 1 $events.Count 'Event ledger replay count mismatch.'
+        Assert-Equal 'transmission' $events[0].domain 'Event ledger domain mismatch.'
+    }
+    finally { Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue }
 }
 $script:SuiteClock.Stop()
 Write-AriaSummary -Title 'CONFORMANCE COMPLETE' -Passed ($script:Failed -eq 0) -Detail ("{0} passed · {1} failed" -f $script:Passed, $script:Failed) -Duration $script:SuiteClock.Elapsed

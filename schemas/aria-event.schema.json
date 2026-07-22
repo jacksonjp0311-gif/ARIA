@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aria.local/schemas/aria-event.schema.json",
+  "title": "ARIA Runtime Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format", "version", "sequence", "domain", "phase", "state",
+    "energy", "information", "coherence", "source", "occurredAt",
+    "data", "digest"
+  ],
+  "properties": {
+    "format": { "const": "aria.event" },
+    "version": { "const": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "domain": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$" },
+    "phase": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$" },
+    "state": { "enum": ["ACTIVE", "PASS", "REJECT", "WARN", "FAIL", "INFO"] },
+    "energy": { "type": "string", "minLength": 1 },
+    "information": { "type": "string", "minLength": 1 },
+    "coherence": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "data": {},
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

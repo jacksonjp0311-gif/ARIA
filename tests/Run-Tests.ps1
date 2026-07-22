@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 71 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 81 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -49,6 +49,8 @@ function Assert-Equal { param($Expected, $Actual, [string]$Message) if ((Convert
 $policy = Join-Path $root 'aria.policy.json'
 $hello = Join-Path $root 'examples/hello.aria'
 $denied = Join-Path $root 'examples/denied-write.aria'
+
+Import-Module (Join-Path $root 'src/Aria.TypedCore.psm1') -Force -DisableNameChecking
 
 Test-Case 'opcode registry is machine-readable and complete' {
     $registry = Get-AriaOpcodeRegistry
@@ -937,6 +939,113 @@ Test-Case 'buffered process carries transmission receipt' {
     finally {
         $env:CI = $prior
     }
+}
+Test-Case 'typed core canonicalizes generic and record types' {
+    $int = New-AriaType -Kind Int
+    $text = New-AriaType -Kind Text
+    $result = New-AriaType -Kind Result -Arguments @($int,$text)
+    $record = New-AriaType -Kind Record -Fields @{ z=$text; a=$result }
+
+    Assert-Equal 'Result<Int,Text>' (ConvertTo-AriaCanonicalType $result) 'Result type canonicalization failed.'
+    Assert-Equal 'Record{a:Result<Int,Text>,z:Text}' (ConvertTo-AriaCanonicalType $record) 'Record fields are not canonicalized.'
+}
+
+Test-Case 'typed core rejects immutable reassignment' {
+    $scope = New-AriaScope
+    $int = New-AriaType -Kind Int
+    $null = Add-AriaBinding -Scope $scope -Name value -Type $int -Value 1
+    $error = Set-AriaBindingValue -Scope $scope -Name value -Type $int -Value 2
+
+    Assert-Equal 'E_BIND_IMMUTABLE' ([string]$error.code) 'Immutable binding was not rejected.'
+}
+
+Test-Case 'typed core rejects wrong function argument types' {
+    $int = New-AriaType -Kind Int
+    $text = New-AriaType -Kind Text
+    $signature = New-AriaFunctionSignature `
+        -Name addOne `
+        -Parameters @([pscustomobject]@{name='value';type=$int}) `
+        -ReturnType $int
+
+    $result = Test-AriaFunctionCall -Signature $signature -ArgumentTypes @($text)
+    Assert-True (-not [bool]$result.valid) 'Wrong function argument type was accepted.'
+    Assert-Equal 'E_CALL_TYPE' ([string]$result.errors[0].code) 'Wrong function error code.'
+}
+
+Test-Case 'typed core rejects missing function capabilities' {
+    $unit = New-AriaType -Kind Unit
+    $signature = New-AriaFunctionSignature `
+        -Name send `
+        -ReturnType $unit `
+        -Effects @('network.send') `
+        -Capabilities @('cap:network')
+
+    $result = Test-AriaFunctionCall -Signature $signature -GrantedCapabilities @()
+    Assert-True (-not [bool]$result.valid) 'Missing capability was accepted.'
+    Assert-Equal 'E_CAPABILITY_MISSING' ([string]$result.errors[0].code) 'Capability error code mismatch.'
+}
+
+Test-Case 'typed core detects non-exhaustive branches' {
+    $result = Test-AriaExhaustiveBranch `
+        -Variants @('ok','error') `
+        -Cases @('ok')
+
+    Assert-True (-not [bool]$result.exhaustive) 'Non-exhaustive branch was accepted.'
+    Assert-Equal 'error' ([string]$result.missing[0]) 'Missing variant was not reported.'
+}
+
+Test-Case 'typed core validates effect authority' {
+    $denied = Test-AriaEffectAuthority -Effects @('memory.write') -Capabilities @()
+    $allowed = Test-AriaEffectAuthority -Effects @('memory.write') -Capabilities @('cap:memory.write')
+
+    Assert-True (-not [bool]$denied.valid) 'Unauthorized effect was accepted.'
+    Assert-True ([bool]$allowed.valid) 'Authorized effect was rejected.'
+}
+
+Test-Case 'typed IR accepts valid golden fixture' {
+    $path = Join-Path $root 'tests/fixtures/typed-core/valid-function.ariair.json'
+    $result = Test-AriaTypedIrFile -Path $path
+
+    Assert-True ([bool]$result.valid) 'Valid typed IR fixture was rejected.'
+    Assert-Equal '64' ([string]$result.digest.Length) 'Typed IR digest length mismatch.'
+}
+
+Test-Case 'typed IR rejects missing capability fixture' {
+    $path = Join-Path $root 'tests/fixtures/typed-core/invalid-capability.ariair.json'
+    $result = Test-AriaTypedIrFile -Path $path
+
+    Assert-True (-not [bool]$result.valid) 'Capability-invalid typed IR was accepted.'
+    Assert-Equal 'E_EFFECT_AUTHORITY' ([string]$result.errors[0].code) 'Typed IR authority rejection mismatch.'
+}
+
+Test-Case 'typed IR digest is deterministic' {
+    $path = Join-Path $root 'tests/fixtures/typed-core/valid-function.ariair.json'
+    $first = Test-AriaTypedIrFile -Path $path
+    $second = Test-AriaTypedIrFile -Path $path
+
+    Assert-Equal ([string]$first.digest) ([string]$second.digest) 'Typed IR digest changed across verification.'
+    Assert-Equal ([string]$first.canonical) ([string]$second.canonical) 'Typed IR canonical form changed.'
+}
+
+Test-Case 'typed IR rejects unknown opcode' {
+    $document = [pscustomobject]@{
+        schema = 'aria.typed-ir/0.2'
+        entry = 'main'
+        functions = @(
+            [pscustomobject]@{
+                name = 'main'
+                parameters = @()
+                returnType = 'Unit'
+                effects = @()
+                capabilities = @()
+                instructions = @([pscustomobject]@{op='teleport'})
+            }
+        )
+    }
+
+    $result = Test-AriaTypedIr -Document $document
+    Assert-True (-not [bool]$result.valid) 'Unknown opcode was accepted.'
+    Assert-Equal 'E_IR_OPCODE' ([string]$result.errors[0].code) 'Unknown opcode error code mismatch.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

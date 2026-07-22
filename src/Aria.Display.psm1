@@ -191,7 +191,107 @@ function Write-AriaStream {
     Write-AriaPaint -Text ('  ' + $Text) -Color White
 }
 
-Export-ModuleMember -Function Write-AriaPaint, Write-AriaBanner, Write-AriaStage, Write-AriaTreeStage, Write-AriaTreeText, Write-AriaTrunk, Write-AriaKeyValue, Write-AriaSummary, Write-AriaStream, Format-AriaDuration
+
+$script:AriaEnumeration = $null
+
+function Start-AriaEnumerator {
+    param(
+        [Parameter(Mandatory=$true)][string]$Name,
+        [int]$Expected = 0,
+        [string]$Domain = 'runtime'
+    )
+
+    $script:AriaEnumeration = [pscustomobject][ordered]@{
+        Name = $Name
+        Domain = $Domain
+        Expected = $Expected
+        Passed = 0
+        Failed = 0
+        Started = [Diagnostics.Stopwatch]::StartNew()
+        Items = New-Object System.Collections.Generic.List[object]
+    }
+
+    Write-AriaPaint -Text '◈' -Color Magenta -Bold -NoNewline
+    Write-AriaPaint -Text ("  {0}" -f $Name) -Color White -NoNewline
+    if($Expected -gt 0){ Write-AriaPaint -Text ("  ×{0}" -f $Expected) -Color Gray }
+    else { Write-Host '' }
+}
+
+function Add-AriaEnumerationItem {
+    param(
+        [Parameter(Mandatory=$true)][string]$Name,
+        [Parameter(Mandatory=$true)][ValidateSet('Pass','Fail','Warn','Info')][string]$State,
+        [string]$Detail = '',
+        $Duration
+    )
+
+    if($null -eq $script:AriaEnumeration){ throw 'ARIA enumerator is not active.' }
+
+    $item=[pscustomobject][ordered]@{
+        Name=$Name
+        State=$State
+        Detail=$Detail
+        Duration=$Duration
+    }
+    $script:AriaEnumeration.Items.Add($item)
+
+    if($State -eq 'Pass'){
+        $script:AriaEnumeration.Passed++
+        if($env:ARIA_VERBOSE -eq '1'){
+            Write-AriaStage -Name $Name -State Pass -Detail $Detail -Duration $Duration -Prefix '│  '
+        }
+        return
+    }
+
+    if($State -eq 'Fail'){ $script:AriaEnumeration.Failed++ }
+    Write-AriaStage -Name $Name -State $State -Detail $Detail -Duration $Duration -Prefix '│  '
+}
+
+function Complete-AriaEnumerator {
+    param([string]$Detail='')
+
+    if($null -eq $script:AriaEnumeration){ throw 'ARIA enumerator is not active.' }
+
+    $script:AriaEnumeration.Started.Stop()
+    $total=$script:AriaEnumeration.Items.Count
+    $passed=$script:AriaEnumeration.Passed
+    $failed=$script:AriaEnumeration.Failed
+    $state=if($failed -eq 0){'Pass'}else{'Fail'}
+    $duration=Format-AriaDuration -Duration $script:AriaEnumeration.Started.Elapsed
+    $coherence=if($failed -eq 0){'coherent'}else{"$failed fracture(s)"}
+    $summary="{0}/{1} · {2} · {3}" -f $passed,$total,$duration,$coherence
+    if($Detail){$summary+=" · $Detail"}
+
+    Write-AriaStage -Name $script:AriaEnumeration.Name -State $state -Detail $summary
+    $result=$script:AriaEnumeration
+    $script:AriaEnumeration=$null
+    $result
+}
+
+function Write-AriaCausalFrame {
+    param(
+        [Parameter(Mandatory=$true)][string]$Domain,
+        [Parameter(Mandatory=$true)][string]$Phase,
+        [Parameter(Mandatory=$true)][string]$State,
+        [Parameter(Mandatory=$true)][string]$Information,
+        [string]$Cause='',
+        [string]$Effect='',
+        $Duration
+    )
+
+    $glyph=if($State -eq 'PASS'){'◆'}elseif($State -eq 'FAIL'){'⬗'}else{'◈'}
+    $color=if($State -eq 'PASS'){'Green'}elseif($State -eq 'FAIL'){'Red'}else{'Magenta'}
+    $time=Format-AriaDuration -Duration $Duration
+    $causal=''
+    if($Cause -or $Effect){$causal=("  {0}→{1}" -f $Cause,$Effect)}
+    if($time){$causal+="  @$time"}
+
+    Write-AriaPaint -Text $glyph -Color $color -Bold -NoNewline
+    Write-AriaPaint -Text ("  {0}.{1}" -f $Domain,$Phase) -Color Cyan -NoNewline
+    Write-AriaPaint -Text ("  ∿ {0}" -f $Information) -Color White -NoNewline
+    Write-AriaPaint -Text $causal -Color Gray
+}
+Export-ModuleMember -Function Write-AriaPaint, Write-AriaBanner, Write-AriaStage, Write-AriaTreeStage, Write-AriaTreeText, Write-AriaTrunk, Write-AriaKeyValue, Write-AriaSummary, Write-AriaStream, Format-AriaDuration, Start-AriaEnumerator, Add-AriaEnumerationItem, Complete-AriaEnumerator, Write-AriaCausalFrame
 
 function Invoke-AriaEtherPreview {
     param([Parameter(Mandatory=$true)]$Transmission)

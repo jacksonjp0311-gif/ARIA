@@ -25,19 +25,19 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Write-AriaTreeStage -Name 'test lattice' -State Pulse -Detail '54 deterministic gates'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 54 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
     try {
         & $Body
         $clock.Stop()
-        Write-AriaTreeStage -Name $Name -State Pass -Duration $clock.Elapsed
+        Add-AriaEnumerationItem -Name $Name -State Pass -Duration $clock.Elapsed
         $script:Passed++
     }
     catch {
         $clock.Stop()
-        Write-AriaTreeStage -Name $Name -State Fail -Detail $_.Exception.Message -Duration $clock.Elapsed
+        Add-AriaEnumerationItem -Name $Name -State Fail -Detail $_.Exception.Message -Duration $clock.Elapsed
         if ($VerboseOutput) { Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray }
         $script:Failed++
     }
@@ -691,5 +691,5 @@ Test-Case 'runtime spine connection lifecycle is ordered' {
     Assert-Equal 'closure' $events[3].phase 'Connection closure order mismatch.'
 }
 $script:SuiteClock.Stop()
-Write-AriaSummary -Title 'CONFORMANCE COMPLETE' -Passed ($script:Failed -eq 0) -Detail ("{0} passed · {1} failed" -f $script:Passed, $script:Failed) -Duration $script:SuiteClock.Elapsed
+$null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)
 if ($script:Failed -gt 0) { throw "ARIA test suite failed: $script:Failed failure(s)." }

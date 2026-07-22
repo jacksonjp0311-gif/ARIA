@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+env:
+  ARIA_ANIMATION: '0'
+
 permissions:
   contents: read
 

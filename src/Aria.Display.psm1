@@ -104,7 +104,7 @@ function Write-AriaStage {
         'Warn'  { $glyph = '⬖'; $color = 'Yellow'; $label = 'WARN' }
         'Info'  { $glyph = '◇'; $color = 'Cyan'; $label = 'INFO' }
     }
-    if ($State -eq 'Pulse' -and $env:ARIA_ANIMATION -ne '0' -and [Environment]::UserInteractive) {
+    if ($State -eq 'Pulse' -and $env:ARIA_ANIMATION -ne '0' -and $env:CI -ne 'true' -and [Environment]::UserInteractive) {
         foreach ($frame in @('◇','◈','◆','◈')) {
             Write-Host "`r" -NoNewline
             if ($Prefix) { Write-AriaPaint -Text $Prefix -Color Gray -NoNewline }

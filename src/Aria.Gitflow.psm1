@@ -32,57 +32,16 @@ function Invoke-AriaGitProcess {
         throw 'ARIA Gitflow resolved Git without a usable launch path.'
     }
 
-    $stdout = [IO.Path]::GetTempFileName()
-    $stderr = [IO.Path]::GetTempFileName()
-    try {
-        $process = Start-Process `
-            -FilePath $gitPath `
-            -ArgumentList $Arguments `
-            -WorkingDirectory $RepositoryRoot `
-            -PassThru `
-            -NoNewWindow `
-            -RedirectStandardOutput $stdout `
-            -RedirectStandardError $stderr
+    $operation = if ($Arguments.Count -gt 0) { [string]$Arguments[0] } else { 'transport' }
+    $mode = if ($operation -in @('push','fetch','ls-remote')) { 'remote' } else { 'verification' }
 
-        $operation = if ($Arguments.Count -gt 0) { [string]$Arguments[0] } else { 'transport' }
-        $buffer = New-AriaBufferState -Label ("github.{0}" -f $operation)
-        try {
-            while (-not $process.HasExited) {
-                Write-AriaBufferFrame -State $buffer
-                Start-Sleep -Milliseconds ([int]$buffer.intervalMs)
-                $null = Step-AriaBuffer -State $buffer
-                $process.Refresh()
-            }
-            $process.WaitForExit()
-            $process.Refresh()
-        }
-        finally {
-            Stop-AriaBuffer -State $buffer
-        }
-
-        if (-not $process.HasExited) {
-            throw 'ARIA Gitflow process did not reach a terminal state.'
-        }
-
-        $exitCode = [int]$process.ExitCode
-        $outText = [IO.File]::ReadAllText($stdout)
-        $errText = [IO.File]::ReadAllText($stderr)
-
-        if ($VerboseBuffer -or $env:ARIA_VERBOSE -eq '1') {
-            if ($outText) { Write-Host $outText.TrimEnd() -ForegroundColor DarkGray }
-            if ($errText) { Write-Host $errText.TrimEnd() -ForegroundColor DarkGray }
-        }
-
-        [pscustomobject][ordered]@{
-            exitCode = $exitCode
-            stdout = $outText
-            stderr = $errText
-            arguments = @($Arguments)
-        }
-    }
-    finally {
-        Remove-Item -LiteralPath $stdout,$stderr -Force -ErrorAction SilentlyContinue
-    }
+    Invoke-AriaBufferedProcess `
+        -FilePath $gitPath `
+        -ArgumentList $Arguments `
+        -WorkingDirectory $RepositoryRoot `
+        -Label ("github.{0}" -f $operation) `
+        -Mode $mode `
+        -VerboseBuffer:$VerboseBuffer
 }
 function Assert-AriaGitResult {
     param(

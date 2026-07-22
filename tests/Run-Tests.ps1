@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 63 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 67 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -797,6 +797,63 @@ Test-Case 'oscillator suppresses animation in CI' {
     finally {
         $env:CI = $prior
     }
+}
+Test-Case 'bufferflow cycles transmission phases' {
+    $state = New-AriaTransmissionBuffer -Label probe -Width 12
+    $phases = New-Object 'System.Collections.Generic.HashSet[string]'
+    for ($index = 0; $index -lt 16; $index++) {
+        [void]$phases.Add((Get-AriaTransmissionPhase -State $state))
+        $null = Step-AriaTransmissionBuffer -State $state
+    }
+
+    Assert-True ($phases.Contains('mesh')) 'Bufferflow mesh phase missing.'
+    Assert-True ($phases.Contains('transmit')) 'Bufferflow transmit phase missing.'
+    Assert-True ($phases.Contains('align')) 'Bufferflow align phase missing.'
+    Assert-True ($phases.Contains('verify')) 'Bufferflow verify phase missing.'
+}
+
+Test-Case 'bufferflow geometry converges during alignment' {
+    $state = New-AriaTransmissionBuffer -Label probe -Width 12
+    $state.tick = 9
+    $state.position = 0
+    $before = [math]::Abs($state.position - 5)
+    $null = Step-AriaTransmissionBuffer -State $state
+    $after = [math]::Abs($state.position - 5)
+    Assert-True ($after -lt $before) 'Alignment phase did not converge toward center geometry.'
+}
+
+Test-Case 'bufferflow completion frame locks geometry' {
+    $state = New-AriaTransmissionBuffer -Label probe -Width 12
+    $state.interactive = $false
+    $frame = Get-AriaTransmissionFrame -State $state
+    Assert-True ($frame -match '⟦.{12}⟧') 'Transmission frame width changed.'
+    Assert-True ($frame -match 'mesh') 'Transmission phase label missing.'
+}
+
+Test-Case 'bufferflow process returns one typed result' {
+    $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $git) {
+        $git = Get-Command git.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+
+    $path = $null
+    foreach ($propertyName in @('Path','Source','Definition','Name')) {
+        $property = $git.PSObject.Properties[$propertyName]
+        if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+            $path = [string]$property.Value
+            break
+        }
+    }
+
+    $result = @(Invoke-AriaBufferedProcess `
+        -FilePath $path `
+        -ArgumentList @('--version') `
+        -WorkingDirectory $root `
+        -Label 'probe.git' `
+        -Mode verification)
+
+    Assert-Equal '1' ([string]$result.Count) 'Buffered process emitted more than one pipeline object.'
+    Assert-Equal '0' ([string][int]$result[0].exitCode) 'Buffered process exit code mismatch.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

@@ -409,6 +409,243 @@ function Stop-AriaBuffer {
 }
 Export-ModuleMember -Function Invoke-AriaEtherPreview
 # Alpha.12 universal buffering surface.
+function New-AriaTransmissionBuffer {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$Label,
+        [ValidateSet('local','remote','verification','runtime')][string]$Mode = 'local',
+        [ValidateRange(10,36)][int]$Width = 18,
+        [ValidateRange(45,500)][int]$IntervalMs = 85
+    )
+
+    [pscustomobject][ordered]@{
+        label = $Label
+        mode = $Mode
+        width = $Width
+        intervalMs = $IntervalMs
+        tick = 0
+        position = 0
+        direction = 1
+        active = $true
+        interactive = [bool](Test-AriaInteractiveBuffer)
+        lastLength = 0
+        startedAt = [datetime]::UtcNow
+    }
+}
+
+function Get-AriaTransmissionPhase {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$State)
+
+    $cycle = [int]$State.tick % 16
+    if ($cycle -lt 4) { return 'mesh' }
+    if ($cycle -lt 9) { return 'transmit' }
+    if ($cycle -lt 13) { return 'align' }
+    return 'verify'
+}
+
+function Get-AriaGearGlyphs {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$State)
+
+    $left = @('⚙','◈','⚙','◇')[[int]$State.tick % 4]
+    $right = @('◇','⚙','◈','⚙')[[int]$State.tick % 4]
+    [pscustomobject][ordered]@{
+        left = $left
+        right = $right
+    }
+}
+
+function Get-AriaTransmissionFrame {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$State)
+
+    $phase = Get-AriaTransmissionPhase -State $State
+    $gears = Get-AriaGearGlyphs -State $State
+    $cells = New-Object 'System.Collections.Generic.List[string]'
+
+    for ($index = 0; $index -lt [int]$State.width; $index++) {
+        $distance = [math]::Abs($index - [int]$State.position)
+
+        if ($phase -eq 'mesh') {
+            if ($distance -eq 0) { [void]$cells.Add('◆') }
+            elseif ($distance -eq 1) { [void]$cells.Add('◇') }
+            else { [void]$cells.Add('·') }
+        }
+        elseif ($phase -eq 'transmit') {
+            if ($distance -eq 0) { [void]$cells.Add('⬢') }
+            elseif (($index + [int]$State.tick) % 3 -eq 0) { [void]$cells.Add('∙') }
+            else { [void]$cells.Add('·') }
+        }
+        elseif ($phase -eq 'align') {
+            $centerLeft = [math]::Floor(([int]$State.width - 1) / 2)
+            $centerRight = [math]::Ceiling(([int]$State.width - 1) / 2)
+            if ($index -eq $centerLeft -or $index -eq $centerRight) { [void]$cells.Add('◈') }
+            elseif ($distance -eq 0) { [void]$cells.Add('◇') }
+            else { [void]$cells.Add('·') }
+        }
+        else {
+            if ($index -eq [math]::Floor(([int]$State.width - 1) / 2)) { [void]$cells.Add('◆') }
+            elseif ($index % 2 -eq 0) { [void]$cells.Add('─') }
+            else { [void]$cells.Add('·') }
+        }
+    }
+
+    $elapsed = [math]::Max(0,([datetime]::UtcNow - [datetime]$State.startedAt).TotalSeconds)
+    "{0}{1} {2,-9} {3} ⟦{4}⟧ {5,4:N1}s" -f `
+        $gears.left, `
+        $gears.right, `
+        $phase, `
+        [string]$State.label, `
+        ($cells -join ''), `
+        $elapsed
+}
+
+function Step-AriaTransmissionBuffer {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$State)
+
+    if (-not [bool]$State.active) { return $State }
+
+    $phase = Get-AriaTransmissionPhase -State $State
+    if ($phase -eq 'align' -or $phase -eq 'verify') {
+        $target = [int][math]::Floor(([int]$State.width - 1) / 2)
+        if ([int]$State.position -lt $target) {
+            [void]($State.position = [int]$State.position + 1)
+        }
+        elseif ([int]$State.position -gt $target) {
+            [void]($State.position = [int]$State.position - 1)
+        }
+    }
+    else {
+        $next = [int]$State.position + [int]$State.direction
+        if ($next -ge ([int]$State.width - 1)) {
+            $next = [int]$State.width - 1
+            [void]($State.direction = -1)
+        }
+        elseif ($next -le 0) {
+            $next = 0
+            [void]($State.direction = 1)
+        }
+        [void]($State.position = $next)
+    }
+
+    [void]($State.tick = [int]$State.tick + 1)
+    return $State
+}
+
+function Write-AriaTransmissionFrame {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$State)
+
+    if (-not [bool]$State.interactive) { return }
+
+    $frame = Get-AriaTransmissionFrame -State $State
+    $padding = ''
+    if ([int]$State.lastLength -gt $frame.Length) {
+        $padding = ' ' * ([int]$State.lastLength - $frame.Length)
+    }
+
+    Write-Host ("`r" + $frame + $padding) -NoNewline -ForegroundColor Cyan
+    [void]($State.lastLength = $frame.Length)
+}
+
+function Complete-AriaTransmissionBuffer {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]$State,
+        [ValidateSet('PASS','REJECT','WARN','FAIL')][string]$Outcome = 'PASS'
+    )
+
+    [void]($State.active = $false)
+    if (-not [bool]$State.interactive) { return }
+
+    $center = [int][math]::Floor(([int]$State.width - 1) / 2)
+    $cells = New-Object 'System.Collections.Generic.List[string]'
+    for ($index = 0; $index -lt [int]$State.width; $index++) {
+        if ($index -eq $center) { [void]$cells.Add('◆') }
+        elseif ([math]::Abs($index - $center) -eq 1) { [void]$cells.Add('◈') }
+        else { [void]$cells.Add('─') }
+    }
+
+    $glyph = if ($Outcome -eq 'PASS') { '◆' } elseif ($Outcome -eq 'REJECT') { '◇' } elseif ($Outcome -eq 'WARN') { '⬖' } else { '⬗' }
+    $frame = "{0}  aligned   {1} ⟦{2}⟧" -f $glyph,[string]$State.label,($cells -join '')
+    $padding = ''
+    if ([int]$State.lastLength -gt $frame.Length) {
+        $padding = ' ' * ([int]$State.lastLength - $frame.Length)
+    }
+
+    Write-Host ("`r" + $frame + $padding) -NoNewline -ForegroundColor Green
+    Start-Sleep -Milliseconds 110
+    Write-Host ("`r" + (' ' * [math]::Max([int]$State.lastLength,$frame.Length)) + "`r") -NoNewline
+}
+
+function Invoke-AriaBufferedProcess {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$FilePath,
+        [string[]]$ArgumentList = @(),
+        [Parameter(Mandatory=$true)][string]$WorkingDirectory,
+        [Parameter(Mandatory=$true)][string]$Label,
+        [ValidateSet('local','remote','verification','runtime')][string]$Mode = 'local',
+        [switch]$VerboseBuffer
+    )
+
+    $stdout = [IO.Path]::GetTempFileName()
+    $stderr = [IO.Path]::GetTempFileName()
+    $buffer = New-AriaTransmissionBuffer -Label $Label -Mode $Mode
+
+    try {
+        $process = Start-Process `
+            -FilePath $FilePath `
+            -ArgumentList $ArgumentList `
+            -WorkingDirectory $WorkingDirectory `
+            -PassThru `
+            -NoNewWindow `
+            -RedirectStandardOutput $stdout `
+            -RedirectStandardError $stderr
+
+        try {
+            while (-not $process.HasExited) {
+                Write-AriaTransmissionFrame -State $buffer
+                Start-Sleep -Milliseconds ([int]$buffer.intervalMs)
+                $null = Step-AriaTransmissionBuffer -State $buffer
+                $process.Refresh()
+            }
+
+            $process.WaitForExit()
+            $process.Refresh()
+        }
+        catch {
+            Complete-AriaTransmissionBuffer -State $buffer -Outcome FAIL
+            throw
+        }
+
+        $exitCode = [int]$process.ExitCode
+        $outText = [IO.File]::ReadAllText($stdout)
+        $errText = [IO.File]::ReadAllText($stderr)
+
+        if ($VerboseBuffer -or $env:ARIA_VERBOSE -eq '1') {
+            if ($outText) { Write-Host $outText.TrimEnd() -ForegroundColor DarkGray }
+            if ($errText) { Write-Host $errText.TrimEnd() -ForegroundColor DarkGray }
+        }
+
+        Complete-AriaTransmissionBuffer -State $buffer -Outcome $(if ($exitCode -eq 0) { 'PASS' } else { 'FAIL' })
+
+        [pscustomobject][ordered]@{
+            exitCode = $exitCode
+            stdout = $outText
+            stderr = $errText
+            filePath = $FilePath
+            arguments = @($ArgumentList)
+            label = $Label
+            mode = $Mode
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $stdout,$stderr -Force -ErrorAction SilentlyContinue
+    }
+}
 Export-ModuleMember -Function `
     Test-AriaInteractiveBuffer, `
     New-AriaBufferState, `
@@ -416,3 +653,13 @@ Export-ModuleMember -Function `
     Step-AriaBuffer, `
     Write-AriaBufferFrame, `
     Stop-AriaBuffer
+# Alpha.13 Bufferflow surface.
+Export-ModuleMember -Function `
+    New-AriaTransmissionBuffer, `
+    Get-AriaTransmissionPhase, `
+    Get-AriaGearGlyphs, `
+    Get-AriaTransmissionFrame, `
+    Step-AriaTransmissionBuffer, `
+    Write-AriaTransmissionFrame, `
+    Complete-AriaTransmissionBuffer, `
+    Invoke-AriaBufferedProcess

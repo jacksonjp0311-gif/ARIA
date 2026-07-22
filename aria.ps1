@@ -160,55 +160,57 @@ try {
             if (-not $Path) { throw 'gate requires a .aria source path.' }
             $clock = [Diagnostics.Stopwatch]::StartNew()
             Write-AriaBanner -Title 'ARIA / GATE'
-            Write-AriaTreeStage -Name 'semantic pipeline' -State Pulse -Detail $Path
+            $null = Send-AriaEvent -Domain compiler -Phase gate -State ACTIVE -Energy analysis -Information $Path -Coherence 'semantic gate open' -Source 'aria.gate' -Render
             $result = Invoke-AriaGate -SourcePath $Path -PolicyPath $Policy -WorkspaceRoot $workspaceRoot -StrictRepository:$Strict
+            $null = Send-AriaEvent -Domain verifier -Phase semantics -State PASS -Energy validation -Information $result.bytecode.programName -Coherence 'source accepted' -Source 'aria.gate' -Data ([pscustomobject][ordered]@{buildHash=$result.buildHash}) -Render
             $clock.Stop()
-            Write-AriaSummary -Title 'SOURCE ACCEPTED' -Passed $true -Detail $result.bytecode.programName -Duration $clock.Elapsed
             if ($script:VerboseOutput) { Write-AriaKeyValue -Key 'build hash' -Value $result.buildHash }
         }
         { $_ -in @('compile','build') } {
             if (-not $Path) { throw 'compile requires a .aria source path.' }
             $clock = [Diagnostics.Stopwatch]::StartNew()
             Write-AriaBanner -Title 'ARIA / COMPILE'
-            Write-AriaTreeStage -Name 'compiler pipeline' -State Pulse -Detail $Path
+            $null = Send-AriaEvent -Domain compiler -Phase compile -State ACTIVE -Energy translation -Information $Path -Coherence 'compiler engaged' -Source 'aria.compile' -Render
             $result = Invoke-AriaCompile -SourcePath $Path -PolicyPath $Policy -OutputPath $Out -WorkspaceRoot $workspaceRoot -StrictRepository:$Strict
+            $null = Send-AriaEvent -Domain compiler -Phase artifact -State PASS -Energy compression -Information ([IO.Path]::GetFileName($result.artifactPath)) -Coherence 'bytecode sealed' -Source 'aria.compile' -Data ([pscustomobject][ordered]@{path=$result.artifactPath;program=$result.gate.bytecode.programName}) -Render
             $clock.Stop()
-            Write-AriaTreeStage -Name 'artifact' -State Pass -Detail $result.artifactPath
-            Write-AriaSummary -Title 'BUILD COMPLETE' -Passed $true -Detail $result.gate.bytecode.programName -Duration $clock.Elapsed
         }
         { $_ -in @('run','start','trace') } {
             if (-not $Path) { $Path = Join-Path $root 'examples/hello.aria' }
             $clock = [Diagnostics.Stopwatch]::StartNew()
             Write-AriaBanner -Title 'ARIA / RUN'
-            Write-AriaTreeStage -Name 'compiler pipeline' -State Pulse -Detail $Path
+            $null = Send-AriaEvent -Domain compiler -Phase compile -State ACTIVE -Energy translation -Information $Path -Coherence 'runtime build open' -Source 'aria.run' -Render
             $compiled = Invoke-AriaCompile -SourcePath $Path -PolicyPath $Policy -OutputPath $Out -WorkspaceRoot $workspaceRoot -StrictRepository:$Strict
-            Write-AriaTreeStage -Name 'artifact' -State Pass -Detail $compiled.artifactPath
-            Write-AriaTreeStage -Name 'virtual machine' -State Pulse -Detail 'local execution'
+            $null = Send-AriaEvent -Domain verifier -Phase artifact -State PASS -Energy verification -Information ([IO.Path]::GetFileName($compiled.artifactPath)) -Coherence 'bytecode accepted' -Source 'aria.run' -Data ([pscustomobject][ordered]@{path=$compiled.artifactPath}) -Render
+            $null = Send-AriaEvent -Domain policy -Phase authority -State ACTIVE -Energy authorization -Information ([IO.Path]::GetFileName($Policy)) -Coherence 'runtime policy engaged' -Source 'aria.run' -Render
+            $null = Send-AriaEvent -Domain vm -Phase execute -State ACTIVE -Energy execution -Information $compiled.gate.bytecode.programName -Coherence 'local VM active' -Source 'aria.run' -Render
             $null = Invoke-AriaArtifact -Path $compiled.artifactPath -PolicyPath $Policy -WorkspaceRoot $workspaceRoot
+            $null = Send-AriaEvent -Domain vm -Phase halt -State PASS -Energy completion -Information $compiled.gate.bytecode.programName -Coherence 'deterministic halt' -Source 'aria.run' -Render
             $clock.Stop()
-            Write-AriaSummary -Title 'EXECUTION COMPLETE' -Passed $true -Detail $compiled.gate.bytecode.programName -Duration $clock.Elapsed
         }
         'connect' {
             if (-not $Path) { $Path = Join-Path $root 'examples/connection.aria' }
             $clock = [Diagnostics.Stopwatch]::StartNew()
             Write-AriaBanner -Title 'ARIA / CONNECTION' -Subtitle 'human intent · agent proposal · explicit consent · deterministic closure'
-            Write-AriaTreeStage -Name 'connection compiler' -State Pulse -Detail $Path
+            $null = Send-AriaEvent -Domain connection -Phase intent -State ACTIVE -Energy intention -Information $Path -Coherence 'human intent received' -Source 'aria.connect' -Render
             $compiled = Invoke-AriaCompile -SourcePath $Path -PolicyPath $Policy -OutputPath $Out -WorkspaceRoot $workspaceRoot -StrictRepository:$Strict
-            Write-AriaTreeStage -Name 'connection artifact' -State Pass -Detail $compiled.artifactPath
-            Write-AriaTreeStage -Name 'connection protocol' -State Pulse -Detail 'local verified session'
+            $null = Send-AriaEvent -Domain connection -Phase proposal -State PASS -Energy negotiation -Information $compiled.gate.bytecode.programName -Coherence 'verified proposal formed' -Source 'aria.connect' -Data ([pscustomobject][ordered]@{artifact=$compiled.artifactPath}) -Render
+            $null = Send-AriaEvent -Domain connection -Phase consent -State ACTIVE -Energy authorization -Information 'explicit contract' -Coherence 'consent evaluated by runtime' -Source 'aria.connect' -Render
             $null = Invoke-AriaArtifact -Path $compiled.artifactPath -PolicyPath $Policy -WorkspaceRoot $workspaceRoot
+            $null = Send-AriaEvent -Domain connection -Phase closure -State PASS -Energy completion -Information $compiled.gate.bytecode.programName -Coherence 'deterministic closure' -Source 'aria.connect' -Render
             $clock.Stop()
-            Write-AriaSummary -Title 'CONNECTION COMPLETE' -Passed $true -Detail $compiled.gate.bytecode.programName -Duration $clock.Elapsed
         }
         'exec' {
             if (-not $Path) { throw 'exec requires an .ariac artifact path.' }
             $clock = [Diagnostics.Stopwatch]::StartNew()
             Write-AriaBanner -Title 'ARIA / EXECUTE'
             if ($Strict) { $null = Assert-AriaRepositoryManifest }
-            Write-AriaTreeStage -Name 'artifact verification' -State Pulse -Detail $Path
+            $null = Send-AriaEvent -Domain verifier -Phase artifact -State ACTIVE -Energy verification -Information $Path -Coherence 'artifact inspection open' -Source 'aria.exec' -Render
+            $null = Send-AriaEvent -Domain policy -Phase authority -State ACTIVE -Energy authorization -Information ([IO.Path]::GetFileName($Policy)) -Coherence 'execution policy engaged' -Source 'aria.exec' -Render
+            $null = Send-AriaEvent -Domain vm -Phase execute -State ACTIVE -Energy execution -Information ([IO.Path]::GetFileName($Path)) -Coherence 'artifact entered VM' -Source 'aria.exec' -Render
             $null = Invoke-AriaArtifact -Path $Path -PolicyPath $Policy -WorkspaceRoot $workspaceRoot
+            $null = Send-AriaEvent -Domain vm -Phase halt -State PASS -Energy completion -Information ([IO.Path]::GetFileName($Path)) -Coherence 'deterministic halt' -Source 'aria.exec' -Render
             $clock.Stop()
-            Write-AriaSummary -Title 'EXECUTION COMPLETE' -Passed $true -Duration $clock.Elapsed
         }
         'inspect' {
             if (-not $Path) { throw 'inspect requires an .ariac artifact path.' }

@@ -25,7 +25,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Write-AriaTreeStage -Name 'test lattice' -State Pulse -Detail '50 deterministic gates'
+Write-AriaTreeStage -Name 'test lattice' -State Pulse -Detail '54 deterministic gates'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -652,6 +652,43 @@ Test-Case 'event ledger persists and replays verified events' {
         Assert-Equal 'transmission' $events[0].domain 'Event ledger domain mismatch.'
     }
     finally { Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue }
+}
+Test-Case 'runtime spine maps compiler event to Etherflow' {
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    $event = New-AriaEvent -Domain compiler -Phase compile -State ACTIVE -Energy translation -Information hello.aria -Coherence engaged
+    $ether = ConvertTo-AriaEtherEvent -Event $event
+    Assert-Equal 'compiler.compile' $ether.phase 'Compiler event phase mismatch.'
+    Assert-Equal 'translation' $ether.energy 'Compiler energy mismatch.'
+}
+
+Test-Case 'runtime spine preserves verifier authority boundary' {
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    $event = New-AriaEvent -Domain verifier -Phase artifact -State PASS -Energy verification -Information hello.ariac -Coherence accepted
+    $verification = Test-AriaEvent -Event $event
+    Assert-True $verification.valid 'Verifier event failed event verification.'
+    Assert-Equal 'verifier' $event.domain 'Verifier domain mismatch.'
+}
+
+Test-Case 'runtime spine records VM activation and halt order' {
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    $null = Send-AriaEvent -Domain vm -Phase execute -State ACTIVE -Energy execution -Information HelloARIA -Coherence active
+    $null = Send-AriaEvent -Domain vm -Phase halt -State PASS -Energy completion -Information HelloARIA -Coherence halted
+    $events = @(Get-AriaEventBuffer)
+    Assert-Equal 2 $events.Count 'VM event count mismatch.'
+    Assert-Equal 'execute' $events[0].phase 'VM activation order mismatch.'
+    Assert-Equal 'halt' $events[1].phase 'VM halt order mismatch.'
+}
+
+Test-Case 'runtime spine connection lifecycle is ordered' {
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    foreach($phase in @('intent','proposal','consent','closure')){
+        $null = Send-AriaEvent -Domain connection -Phase $phase -State PASS -Energy lifecycle -Information $phase -Coherence verified
+    }
+    $events = @(Get-AriaEventBuffer)
+    Assert-Equal 'intent' $events[0].phase 'Connection intent order mismatch.'
+    Assert-Equal 'proposal' $events[1].phase 'Connection proposal order mismatch.'
+    Assert-Equal 'consent' $events[2].phase 'Connection consent order mismatch.'
+    Assert-Equal 'closure' $events[3].phase 'Connection closure order mismatch.'
 }
 $script:SuiteClock.Stop()
 Write-AriaSummary -Title 'CONFORMANCE COMPLETE' -Passed ($script:Failed -eq 0) -Detail ("{0} passed · {1} failed" -f $script:Passed, $script:Failed) -Duration $script:SuiteClock.Elapsed

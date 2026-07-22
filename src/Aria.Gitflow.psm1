@@ -39,12 +39,32 @@ function Invoke-AriaGitProcess {
             -FilePath $gitPath `
             -ArgumentList $Arguments `
             -WorkingDirectory $RepositoryRoot `
-            -Wait `
             -PassThru `
             -NoNewWindow `
             -RedirectStandardOutput $stdout `
             -RedirectStandardError $stderr
 
+        $operation = if ($Arguments.Count -gt 0) { [string]$Arguments[0] } else { 'transport' }
+        $buffer = New-AriaBufferState -Label ("github.{0}" -f $operation)
+        try {
+            while (-not $process.HasExited) {
+                Write-AriaBufferFrame -State $buffer
+                Start-Sleep -Milliseconds ([int]$buffer.intervalMs)
+                $null = Step-AriaBuffer -State $buffer
+                $process.Refresh()
+            }
+            $process.WaitForExit()
+            $process.Refresh()
+        }
+        finally {
+            Stop-AriaBuffer -State $buffer
+        }
+
+        if (-not $process.HasExited) {
+            throw 'ARIA Gitflow process did not reach a terminal state.'
+        }
+
+        $exitCode = [int]$process.ExitCode
         $outText = [IO.File]::ReadAllText($stdout)
         $errText = [IO.File]::ReadAllText($stderr)
 
@@ -54,7 +74,7 @@ function Invoke-AriaGitProcess {
         }
 
         [pscustomobject][ordered]@{
-            exitCode = $process.ExitCode
+            exitCode = $exitCode
             stdout = $outText
             stderr = $errText
             arguments = @($Arguments)

@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 60 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 63 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -766,6 +766,36 @@ Test-Case 'gitflow process rejects function shadowing' {
     }
     finally {
         Remove-Item Function:\git -ErrorAction SilentlyContinue
+    }
+}
+Test-Case 'oscillator frame preserves rectangular width' {
+    $state = New-AriaBufferState -Label probe -Width 12
+    $frame = Get-AriaBufferFrame -State $state
+    Assert-True ($frame -match '⟦.{12}⟧$') 'Oscillator rectangle width changed.'
+    Assert-Equal 1 ([regex]::Matches($frame,'◆').Count) 'Oscillator must contain one moving pulse.'
+}
+
+Test-Case 'oscillator reverses at both boundaries' {
+    $state = New-AriaBufferState -Label probe -Width 8
+    $state.position = 7
+    $state.direction = 1
+    $null = Step-AriaBuffer -State $state
+    Assert-Equal '-1' ([string][int]$state.direction) 'Oscillator did not reverse at the right boundary.'
+
+    $state.position = 0
+    $state.direction = -1
+    $null = Step-AriaBuffer -State $state
+    Assert-Equal '1' ([string][int]$state.direction) 'Oscillator did not reverse at the left boundary.'
+}
+
+Test-Case 'oscillator suppresses animation in CI' {
+    $prior = $env:CI
+    try {
+        $env:CI = 'true'
+        Assert-True (-not (Test-AriaInteractiveBuffer)) 'CI animation suppression failed.'
+    }
+    finally {
+        $env:CI = $prior
     }
 }
 $script:SuiteClock.Stop()

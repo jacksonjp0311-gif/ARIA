@@ -302,4 +302,117 @@ function Invoke-AriaEtherPreview {
     }
 }
 
+function Test-AriaInteractiveBuffer {
+    [CmdletBinding()]
+    param()
+
+    if ($env:CI -or $env:GITHUB_ACTIONS -eq 'true' -or $env:ARIA_NO_ANIMATION -eq '1') {
+        return $false
+    }
+
+    try {
+        return -not [Console]::IsOutputRedirected
+    }
+    catch {
+        return $Host.Name -eq 'ConsoleHost'
+    }
+}
+
+function New-AriaBufferState {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$Label,
+        [ValidateRange(8,48)][int]$Width = 18,
+        [ValidateRange(40,1000)][int]$IntervalMs = 90
+    )
+
+    [pscustomobject][ordered]@{
+        label = $Label
+        width = $Width
+        intervalMs = $IntervalMs
+        position = 0
+        direction = 1
+        tick = 0
+        active = $true
+        interactive = [bool](Test-AriaInteractiveBuffer)
+        lastLength = 0
+    }
+}
+
+function Get-AriaBufferFrame {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$State)
+
+    $cells = New-Object 'System.Collections.Generic.List[string]'
+    for ($index = 0; $index -lt [int]$State.width; $index++) {
+        if ($index -eq [int]$State.position) {
+            [void]$cells.Add('◆')
+        }
+        elseif ([math]::Abs($index - [int]$State.position) -eq 1) {
+            [void]$cells.Add('·')
+        }
+        else {
+            [void]$cells.Add('∙')
+        }
+    }
+
+    $phase = @('∿','⌁','∿','⌁')[[int]$State.tick % 4]
+    "{0}  {1}  ⟦{2}⟧" -f $phase,[string]$State.label,($cells -join '')
+}
+
+function Step-AriaBuffer {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$State)
+
+    if (-not [bool]$State.active) { return $State }
+
+    $next = [int]$State.position + [int]$State.direction
+    if ($next -ge ([int]$State.width - 1)) {
+        $next = [int]$State.width - 1
+        [void]($State.direction = -1)
+    }
+    elseif ($next -le 0) {
+        $next = 0
+        [void]($State.direction = 1)
+    }
+
+    [void]($State.position = $next)
+    [void]($State.tick = [int]$State.tick + 1)
+    return $State
+}
+
+function Write-AriaBufferFrame {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$State)
+
+    if (-not [bool]$State.interactive) { return }
+
+    $frame = Get-AriaBufferFrame -State $State
+    $padding = ''
+    if ([int]$State.lastLength -gt $frame.Length) {
+        $padding = ' ' * ([int]$State.lastLength - $frame.Length)
+    }
+
+    Write-Host ("`r" + $frame + $padding) -NoNewline -ForegroundColor Cyan
+    [void]($State.lastLength = $frame.Length)
+}
+
+function Stop-AriaBuffer {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$State)
+
+    [void]($State.active = $false)
+    if ([bool]$State.interactive) {
+        $clearWidth = [math]::Max([int]$State.lastLength,1)
+        Write-Host ("`r" + (' ' * $clearWidth) + "`r") -NoNewline
+    }
+}
 Export-ModuleMember -Function Invoke-AriaEtherPreview
+# Alpha.12 universal buffering surface.
+Export-ModuleMember -Function `
+    Test-AriaInteractiveBuffer, `
+    New-AriaBufferState, `
+    Get-AriaBufferFrame, `
+    Step-AriaBuffer, `
+    Write-AriaBufferFrame, `
+    Stop-AriaBuffer

@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 81 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 93 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -50,6 +50,8 @@ $policy = Join-Path $root 'aria.policy.json'
 $hello = Join-Path $root 'examples/hello.aria'
 $denied = Join-Path $root 'examples/denied-write.aria'
 
+
+Import-Module (Join-Path $root 'src/Aria.GraphCore.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.TypedCore.psm1') -Force -DisableNameChecking
 
 Test-Case 'opcode registry is machine-readable and complete' {
@@ -1046,6 +1048,135 @@ Test-Case 'typed IR rejects unknown opcode' {
     $result = Test-AriaTypedIr -Document $document
     Assert-True (-not [bool]$result.valid) 'Unknown opcode was accepted.'
     Assert-Equal 'E_IR_OPCODE' ([string]$result.errors[0].code) 'Unknown opcode error code mismatch.'
+}
+function New-TestGraphRule {
+    [pscustomobject]@{
+        schema = 'aria.graph-rule/0.3'
+        name = 'grant_access'
+        pattern = [pscustomobject]@{
+            sourceType = 'User'
+            edgeType = 'requests'
+            targetType = 'Resource'
+            sourceWhere = @{ status = 'active' }
+            targetWhere = @{}
+        }
+        guard = [pscustomobject]@{
+            kind = 'eq'
+            left = 'source.status'
+            right = 'active'
+        }
+        capabilities = @('cap:graph.write')
+        rewrite = @(
+            [pscustomobject]@{
+                op = 'remove.edge'
+                id = '$edge.id'
+            },
+            [pscustomobject]@{
+                op = 'add.edge'
+                id = 'edge:access:1'
+                type = 'access'
+                source = '$source.id'
+                target = '$target.id'
+            }
+        )
+    }
+}
+
+Test-Case 'graph core accepts valid typed graph' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/valid-access-graph.json') -Raw | ConvertFrom-Json
+    $result = Test-AriaGraph $graph
+    Assert-True ([bool]$result.valid) 'Valid typed graph was rejected.'
+}
+
+Test-Case 'graph core rejects dangling edge' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/invalid-dangling-edge.json') -Raw | ConvertFrom-Json
+    $result = Test-AriaGraph $graph
+    Assert-True (-not [bool]$result.valid) 'Dangling edge was accepted.'
+    Assert-Equal 'E_GRAPH_EDGE_DANGLING' ([string]$result.errors[0].code) 'Dangling edge error mismatch.'
+}
+
+Test-Case 'graph core rejects duplicate node identity' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/valid-access-graph.json') -Raw | ConvertFrom-Json
+    $graph.nodes = @($graph.nodes) + @([pscustomobject]@{id='user:42';type='User'})
+    $result = Test-AriaGraph $graph
+    Assert-True (-not [bool]$result.valid) 'Duplicate node identity was accepted.'
+}
+
+Test-Case 'graph core rejects endpoint type mismatch' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/valid-access-graph.json') -Raw | ConvertFrom-Json
+    $graph.nodes[0].type = 'Resource'
+    $result = Test-AriaGraph $graph
+    Assert-True (-not [bool]$result.valid) 'Invalid edge endpoint typing was accepted.'
+}
+
+Test-Case 'graph pattern returns typed bindings' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/valid-access-graph.json') -Raw | ConvertFrom-Json
+    $rule = New-TestGraphRule
+    $matches = @(Find-AriaGraphMatches -Graph $graph -Pattern $rule.pattern)
+    Assert-Equal '1' ([string]$matches.Count) 'Typed pattern match count mismatch.'
+    Assert-Equal 'User' ([string]$matches[0].source.type) 'Source binding type mismatch.'
+    Assert-Equal 'Resource' ([string]$matches[0].target.type) 'Target binding type mismatch.'
+}
+
+Test-Case 'graph guard rejects unsupported kind' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/valid-access-graph.json') -Raw | ConvertFrom-Json
+    $rule = New-TestGraphRule
+    $match = @(Find-AriaGraphMatches -Graph $graph -Pattern $rule.pattern)[0]
+    $guard = Test-AriaGraphGuard -Guard ([pscustomobject]@{kind='execute'}) -Match $match
+    Assert-True (-not [bool]$guard.valid) 'Unsupported graph guard was accepted.'
+    Assert-Equal 'E_GRAPH_GUARD_KIND' ([string]$guard.error.code) 'Graph guard error mismatch.'
+}
+
+Test-Case 'graph rule rejects missing capability' {
+    $rule = New-TestGraphRule
+    $result = Test-AriaGraphRule -Rule $rule -GrantedCapabilities @()
+    Assert-True (-not [bool]$result.valid) 'Missing graph capability was accepted.'
+    Assert-Equal 'E_GRAPH_CAPABILITY' ([string]$result.errors[0].code) 'Graph capability error mismatch.'
+}
+
+Test-Case 'graph rewrite commits valid transaction' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/valid-access-graph.json') -Raw | ConvertFrom-Json
+    $result = Invoke-AriaGraphRewrite -Graph $graph -Rule (New-TestGraphRule) -GrantedCapabilities @('cap:graph.write')
+    Assert-True ([bool]$result.committed) 'Valid graph rewrite did not commit.'
+    Assert-True ([string]$result.beforeDigest -cne [string]$result.afterDigest) 'Committed rewrite did not change graph identity.'
+}
+
+Test-Case 'graph rewrite removes matched edge' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/valid-access-graph.json') -Raw | ConvertFrom-Json
+    $result = Invoke-AriaGraphRewrite -Graph $graph -Rule (New-TestGraphRule) -GrantedCapabilities @('cap:graph.write')
+    $requests = @($result.graph.edges | Where-Object {$_.type -eq 'requests'})
+    $access = @($result.graph.edges | Where-Object {$_.type -eq 'access'})
+    Assert-Equal '0' ([string]$requests.Count) 'Matched request edge remained after rewrite.'
+    Assert-Equal '1' ([string]$access.Count) 'Access edge was not created.'
+}
+
+Test-Case 'graph rewrite rejects false guard without mutation' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/valid-access-graph.json') -Raw | ConvertFrom-Json
+    $rule = New-TestGraphRule
+    $rule.guard.right = 'disabled'
+    $before = Get-AriaGraphDigest $graph
+    $result = Invoke-AriaGraphRewrite -Graph $graph -Rule $rule -GrantedCapabilities @('cap:graph.write')
+    Assert-True ([bool]$result.rejected) 'False guard did not reject rewrite.'
+    Assert-Equal 'guard-false' ([string]$result.reason) 'False guard rejection reason mismatch.'
+    Assert-Equal $before ([string]$result.afterDigest) 'False guard changed graph identity.'
+}
+
+Test-Case 'graph rewrite rolls back invalid candidate' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/valid-access-graph.json') -Raw | ConvertFrom-Json
+    $rule = New-TestGraphRule
+    $rule.rewrite[1].target = 'resource:missing'
+    $before = Get-AriaGraphDigest $graph
+    $result = Invoke-AriaGraphRewrite -Graph $graph -Rule $rule -GrantedCapabilities @('cap:graph.write')
+    Assert-True ([bool]$result.rejected) 'Invalid candidate graph was committed.'
+    Assert-Equal 'result-invalid' ([string]$result.reason) 'Rollback rejection reason mismatch.'
+    Assert-Equal $before ([string]$result.afterDigest) 'Rollback did not preserve original graph identity.'
+}
+
+Test-Case 'graph rewrite event is content addressed' {
+    $graph = Get-Content (Join-Path $root 'tests/fixtures/graph-core/valid-access-graph.json') -Raw | ConvertFrom-Json
+    $result = Invoke-AriaGraphRewrite -Graph $graph -Rule (New-TestGraphRule) -GrantedCapabilities @('cap:graph.write')
+    Assert-True ([string]$result.event.transaction -match '^sha256:[a-f0-9]{64}$') 'Graph transaction event is not content addressed.'
+    Assert-Equal 'aria.graph.rewrite.committed' ([string]$result.event.type) 'Graph event type mismatch.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

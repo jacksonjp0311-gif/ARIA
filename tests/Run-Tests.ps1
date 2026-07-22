@@ -11,6 +11,7 @@ if ([string]::IsNullOrWhiteSpace($tempRoot)) {
 
 Import-Module (Join-Path $root 'src/Aria.Display.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Transmission.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Semantics.psm1') -Force -DisableNameChecking
@@ -22,7 +23,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Write-AriaTreeStage -Name 'test lattice' -State Pulse -Detail '42 deterministic gates'
+Write-AriaTreeStage -Name 'test lattice' -State Pulse -Detail '46 deterministic gates'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -573,6 +574,45 @@ Test-Case 'VM rejects connection message before open' {
     Assert-True $rejected 'Connection intent before open unexpectedly executed.'
 }
 
+Test-Case 'runtime profile resolves CI deterministically' {
+    $beforeCI = $env:CI
+    $beforeOutput = $env:ARIA_OUTPUT
+    try {
+        $env:CI = 'true'
+        $env:ARIA_OUTPUT = ''
+        $profile = Get-AriaRuntimeProfile
+        Assert-Equal 'ci' $profile.mode 'CI profile mismatch.'
+        Assert-True (-not $profile.animation) 'CI profile unexpectedly enables animation.'
+    }
+    finally {
+        $env:CI = $beforeCI
+        $env:ARIA_OUTPUT = $beforeOutput
+    }
+}
+
+Test-Case 'transmission canonical digest is deterministic' {
+    $payload = [pscustomobject][ordered]@{ repository='ARIA'; checks=@('pass','pass','pass') }
+    $one = New-AriaTransmission -Channel github -Kind workflow -Status pass -Source test -Payload $payload
+    $two = New-AriaTransmission -Channel github -Kind workflow -Status pass -Source test -Payload $payload
+    Assert-Equal $one.digest $two.digest 'Transmission digest changed for identical content.'
+}
+
+Test-Case 'compressed transmission round-trip verifies' {
+    $record = New-AriaTransmission -Channel github -Kind workflow -Status pass -Source test -Payload ([pscustomobject][ordered]@{run=7; conclusion='success'})
+    [byte[]]$bytes = ConvertTo-AriaTransmissionBytes -Transmission $record
+    $decoded = Read-AriaTransmissionBytes -Bytes $bytes
+    Assert-Equal $record.digest $decoded.digest 'Transmission round-trip digest mismatch.'
+    Assert-Equal 'github' $decoded.channel 'Transmission round-trip channel mismatch.'
+}
+
+Test-Case 'transmission container rejects tampering' {
+    $record = New-AriaTransmission -Channel github -Kind workflow -Status pass -Source test -Payload ([pscustomobject][ordered]@{run=7})
+    [byte[]]$bytes = ConvertTo-AriaTransmissionBytes -Transmission $record
+    $bytes[$bytes.Length-1] = $bytes[$bytes.Length-1] -bxor 1
+    $rejected = $false
+    try { $null = Read-AriaTransmissionBytes -Bytes $bytes } catch { $rejected = $true }
+    Assert-True $rejected 'Tampered transmission unexpectedly passed verification.'
+}
 $script:SuiteClock.Stop()
 Write-AriaSummary -Title 'CONFORMANCE COMPLETE' -Passed ($script:Failed -eq 0) -Detail ("{0} passed · {1} failed" -f $script:Passed, $script:Failed) -Duration $script:SuiteClock.Elapsed
 if ($script:Failed -gt 0) { throw "ARIA test suite failed: $script:Failed failure(s)." }

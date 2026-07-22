@@ -20,6 +20,7 @@ $script:VerboseOutput = $VerboseOutput -or $env:ARIA_VERBOSE -eq '1'
 
 Import-Module (Join-Path $root 'src/Aria.Display.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Transmission.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Semantics.psm1') -Force -DisableNameChecking
@@ -34,6 +35,8 @@ function Show-AriaHelp {
   aria verify
   aria manifest
   aria test
+  aria profile
+  aria transmit <provider.json>
   aria gate|check <program.aria> [-Workspace <repository>] [-Strict]
   aria compile|build <program.aria> [-Out <program.ariac>] [-Workspace <repository>] [-Strict]
   aria run|start|trace <program.aria> [-Out <program.ariac>] [-Workspace <repository>] [-Strict]
@@ -60,7 +63,37 @@ function Assert-AriaRepositoryManifest {
 
 try {
     switch ($Command.ToLowerInvariant()) {
-        'doctor' {
+        'profile' {
+            $profile = Get-AriaRuntimeProfile
+            if ($profile.mode -eq 'machine') {
+                Write-Output (ConvertTo-AriaJson -Value $profile)
+            }
+            else {
+                Write-AriaBanner -Title 'ARIA / OPERATOR PROFILE' -Subtitle 'adaptive terminal contract'
+                Write-AriaTreeStage -Name 'mode' -State Pass -Detail $profile.mode
+                Write-AriaTreeStage -Name 'terminal width' -State Info -Detail ([string]$profile.width)
+                Write-AriaTreeStage -Name 'interactive' -State $(if($profile.interactive){'Pass'}else{'Info'}) -Detail ([string]$profile.interactive)
+                Write-AriaTreeStage -Name 'unicode' -State $(if($profile.unicode){'Pass'}else{'Warn'}) -Detail ([string]$profile.unicode)
+                Write-AriaTreeStage -Name 'animation' -State Info -Detail ([string]$profile.animation)
+                Write-AriaSummary -Title 'PROFILE RESOLVED' -Passed $true -Detail $profile.mode
+            }
+        }
+        'transmit' {
+            if (-not $Path) { throw 'transmit requires a provider JSON path.' }
+            $profile = Get-AriaRuntimeProfile
+            $record = Import-AriaTransmissionPayload -Path $Path
+            [byte[]]$bytes = ConvertTo-AriaTransmissionBytes -Transmission $record
+            $folder = Join-Path $workspaceRoot '.aria/transmissions'
+            New-Item -ItemType Directory -Path $folder -Force | Out-Null
+            $artifact = Join-Path $folder ($record.digest + '.ariat')
+            [IO.File]::WriteAllBytes($artifact,$bytes)
+            $verified = Read-AriaTransmissionBytes -Bytes ([IO.File]::ReadAllBytes($artifact))
+            Write-AriaTransmissionView -Transmission $verified -Profile $profile
+            if ($script:VerboseOutput -and $profile.mode -ne 'machine') {
+                Write-AriaKeyValue -Key 'artifact' -Value $artifact
+                Write-AriaKeyValue -Key 'compressed bytes' -Value ([string]$bytes.Length)
+            }
+        }        'doctor' {
             $clock = [Diagnostics.Stopwatch]::StartNew()
             Write-AriaBanner -Title 'ARIA / DOCTOR'
             Write-AriaTreeStage -Name 'host inspection' -State Pulse -Detail 'PowerShell + policy + container'

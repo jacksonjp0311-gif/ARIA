@@ -71,7 +71,7 @@ try {
             Write-AriaKeyValue -Key 'Policy' -Value (Resolve-Path -LiteralPath $Policy).Path
             $null = Get-AriaPolicy -PolicyPath $Policy
             Write-AriaTreeStage -Name 'policy document' -State Pass -Detail 'deny by default'
-            $probe = Join-Path $env:TEMP ('aria-gzip-' + [guid]::NewGuid().ToString('N') + '.bin')
+            $probe = Join-Path ([System.IO.Path]::GetTempPath()) ('aria-gzip-' + [guid]::NewGuid().ToString('N') + '.bin')
             try {
                 $sample = [pscustomobject][ordered]@{
                     format = 'aria.bytecode'; containerVersion = 1; compilerVersion = Get-AriaCompilerVersion

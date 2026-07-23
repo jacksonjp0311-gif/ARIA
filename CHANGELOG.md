@@ -2,6 +2,15 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Source Core alpha.22
+
+- Closed ordinary source types to `Int`, `Text`, and `Bool`.
+- Rejected direct and mutual recursion before evaluation.
+- Defined `Int` as a checked signed 64-bit value with structured overflow and division-by-zero failures.
+- Preserved source line and column coordinates through the AST and structured diagnostics.
+- Distinguished parse, type, and runtime rejection codes.
+- Expanded conformance to 159 deterministic gates.
+
 ## 0.1.0-alpha.5 — Connectflow
 
 - Advanced the language lock to specification `0.4.0`.

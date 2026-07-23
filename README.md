@@ -34,8 +34,8 @@ brutally rigorous underneath
 |---|---|
 | Compiler | `0.1.0-alpha.5` |
 | Language specification | `0.4.0` |
-| Source Core | `alpha.21` · `aria.source-ir/0.7` |
-| Conformance | `151/151` deterministic gates |
+| Source Core | `alpha.22` · `aria.source-ir/0.7` |
+| Conformance | `159/159` deterministic gates |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
@@ -107,7 +107,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ conformance lattice   PASS   151/151 · coherent
+◆ conformance lattice   PASS   159/159 · coherent
 ```
 
 ### Run an ordinary ARIA program
@@ -118,7 +118,7 @@ Expected shape:
 .\aria-source.cmd ir .\examples\source-core\03-function.aria
 ```
 
-Source Core programs are pure in alpha.21:
+Source Core programs are pure in alpha.22:
 
 ```aria
 fn add(x: Int, y: Int) -> Int {
@@ -169,7 +169,7 @@ $env:ARIA_NO_ANIMATION = "1"
 
 ### Source Core
 
-Source Core is the ordinary programming surface. Alpha.21 supports:
+Source Core is the ordinary programming surface. Alpha.22 supports:
 
 - `Int`, `Text`, and `Bool`;
 - immutable `let` bindings;
@@ -694,7 +694,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ conformance lattice PASS 151/151 · coherent
+◆ conformance lattice PASS 159/159 · coherent
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.

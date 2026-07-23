@@ -1,4 +1,4 @@
-# Source Language Core alpha.21
+# Source Language Core alpha.22
 
 ARIA now has a small ordinary source language above its verification substrate.
 
@@ -9,7 +9,7 @@ ordinary code should be ordinary
 dangerous effects should be extraordinary
 ```
 
-Alpha.21 is intentionally pure. Programs cannot access files, processes, repositories, networks, secrets, or deployment systems.
+Alpha.22 is intentionally pure. Programs cannot access files, processes, repositories, networks, secrets, or deployment systems.
 
 ## Commands
 
@@ -53,7 +53,7 @@ Both branches must have the same type.
 
 ### Values
 
-Alpha.21 supports:
+Alpha.22 supports exactly:
 
 ```text
 Int
@@ -74,6 +74,20 @@ Bool
 
 Integer division truncates toward zero.
 
+`Int` is a signed 64-bit integer. Arithmetic is checked: addition, subtraction,
+multiplication, division, and unary negation reject results outside the `Int`
+range with `E_SOURCE_INTEGER_OVERFLOW`. Division by zero is rejected with
+`E_SOURCE_DIVISION_ZERO`.
+
+## Rejection contract
+
+Alpha.22 makes the deliberately small language boundary executable:
+
+- type names are closed to `Int`, `Text`, and `Bool`;
+- direct and mutual recursion are rejected with `E_SOURCE_RECURSION`;
+- integer overflow never inherits host-language behavior;
+- type and runtime diagnostics retain source line and column coordinates.
+
 ## Compilation path
 
 ```text
@@ -88,7 +102,7 @@ source text
 
 ## Current boundaries
 
-Alpha.21 deliberately excludes:
+Alpha.22 deliberately excludes:
 
 - mutable bindings;
 - recursion;

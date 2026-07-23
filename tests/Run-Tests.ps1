@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 151 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 159 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -1960,10 +1960,60 @@ Test-Case 'source rejects duplicate names' {
     Assert-True (-not[bool]$result.valid) 'Duplicate source name was accepted.'
 }
 
-Test-Case 'source has no effects in alpha21' {
+Test-Case 'source has no effects in alpha22' {
     $result=Invoke-AriaSourceText 'emit 42;'
     Assert-True ([bool]$result.valid) 'Pure source program was rejected.'
-    Assert-Equal '0' ([string]@($result.ir.effects).Count) 'Alpha.21 source unexpectedly declared effects.'
+    Assert-Equal '0' ([string]@($result.ir.effects).Count) 'Alpha.22 source unexpectedly declared effects.'
+}
+
+Test-Case 'source rejects unknown declared types' {
+    $result=Invoke-AriaSourceText 'fn identity(value: Mystery) -> Mystery { value }'
+    Assert-True (-not[bool]$result.valid) 'Unknown source types were accepted.'
+    Assert-Equal 'E_SOURCE_TYPE_NAME' ([string]$result.errors[0].code) 'Unknown type rejection code mismatch.'
+}
+
+Test-Case 'source rejects direct recursion' {
+    $result=Invoke-AriaSourceText 'fn loop(value: Int) -> Int { loop(value) }'
+    Assert-True (-not[bool]$result.valid) 'Direct recursion was accepted.'
+    Assert-Equal 'E_SOURCE_RECURSION' ([string]$result.errors[0].code) 'Direct recursion rejection code mismatch.'
+}
+
+Test-Case 'source rejects mutual recursion' {
+    $source='fn left(value: Int) -> Int { right(value) } fn right(value: Int) -> Int { left(value) }'
+    $result=Invoke-AriaSourceText $source
+    Assert-True (-not[bool]$result.valid) 'Mutual recursion was accepted.'
+    Assert-Equal 'E_SOURCE_RECURSION' ([string]$result.errors[0].code) 'Mutual recursion rejection code mismatch.'
+}
+
+Test-Case 'source rejects integer addition overflow' {
+    $result=Invoke-AriaSourceText 'emit 9223372036854775807 + 1;'
+    Assert-True (-not[bool]$result.valid) 'Integer addition overflow was accepted.'
+    Assert-Equal 'E_SOURCE_INTEGER_OVERFLOW' ([string]$result.errors[0].code) 'Addition overflow rejection code mismatch.'
+}
+
+Test-Case 'source rejects integer multiplication overflow' {
+    $result=Invoke-AriaSourceText 'emit 9223372036854775807 * 2;'
+    Assert-True (-not[bool]$result.valid) 'Integer multiplication overflow was accepted.'
+    Assert-Equal 'E_SOURCE_INTEGER_OVERFLOW' ([string]$result.errors[0].code) 'Multiplication overflow rejection code mismatch.'
+}
+
+Test-Case 'source rejects integer division overflow' {
+    $result=Invoke-AriaSourceText 'emit (-9223372036854775807 - 1) / -1;'
+    Assert-True (-not[bool]$result.valid) 'Integer division overflow was accepted.'
+    Assert-Equal 'E_SOURCE_INTEGER_OVERFLOW' ([string]$result.errors[0].code) 'Division overflow rejection code mismatch.'
+}
+
+Test-Case 'source runtime failures have structured codes' {
+    $result=Invoke-AriaSourceText 'emit 7 / 0;'
+    Assert-True (-not[bool]$result.valid) 'Division by zero was accepted.'
+    Assert-Equal 'E_SOURCE_DIVISION_ZERO' ([string]$result.errors[0].code) 'Division-by-zero rejection code mismatch.'
+}
+
+Test-Case 'source diagnostics retain line and column' {
+    $result=Invoke-AriaSourceText "let value: Int = 1;`nemit value + `"text`";"
+    Assert-True (-not[bool]$result.valid) 'Invalid operator program was accepted.'
+    Assert-Equal '2' ([string]$result.errors[0].line) 'Diagnostic line was not preserved.'
+    Assert-True ([int]$result.errors[0].column-gt0) 'Diagnostic column was not preserved.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

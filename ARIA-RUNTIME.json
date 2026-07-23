@@ -1,0 +1,29 @@
+{
+  "schema": "aria.runtime/1",
+  "release": "alpha.21",
+  "status": "stable",
+  "repository": {
+    "name": "ARIA",
+    "root": ".",
+    "canonicalCli": "aria.cmd",
+    "mainEntrypoint": "aria.ps1"
+  },
+  "bootstrap": {
+    "humanGuide": "AGENTS.md",
+    "runtimeManifest": "ARIA-RUNTIME.json",
+    "doctor": "aria.cmd doctor -Strict",
+    "tests": "aria.cmd test"
+  },
+  "architecture": {
+    "compiler": "src/Aria.Gate.psm1",
+    "parser": "src/Aria.Parser.psm1",
+    "semantics": "src/Aria.Semantics.psm1",
+    "bytecode": "src/Aria.Bytecode.psm1",
+    "virtualMachine": "src/Aria.VM.psm1",
+    "sourceCore": "src/Aria.SourceCore.psm1"
+  },
+  "continuity": {
+    "stableTag": "aria-alpha21-stable",
+    "rule": "Every evolution must preserve doctor, conformance, manifest integrity, documentation, and machine discovery."
+  }
+}

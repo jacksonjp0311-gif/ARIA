@@ -10,6 +10,7 @@ param(
     [string]$IssuerPolicy,
     [string]$Workspace,
     [switch]$Strict,
+    [switch]$Json,
     [switch]$VerboseOutput
 )
 
@@ -43,6 +44,7 @@ $null = Initialize-AriaEventSpine -WorkspaceRoot $workspaceRoot -Profile (Get-Ar
 function Show-AriaHelp {
     Write-AriaBanner -Title 'ARIA / LANGUAGE LABORATORY'
     @'
+  aria begin --json
   aria doctor [-Workspace <repository>] [-Strict]
   aria verify
   aria manifest
@@ -375,6 +377,35 @@ flow Main {
             Write-AriaUtf8NoBom -Path $target -Text (Normalize-AriaText -Text $template)
             Write-AriaBanner -Title 'ARIA / INITIALIZE'
             Write-AriaSummary -Title 'PROGRAM CREATED' -Passed $true -Detail $target
+        }
+        'begin' {
+            if (-not $Json) {
+                throw 'begin currently requires --json.'
+            }
+
+            $runtimePath = Join-Path $root 'ARIA-RUNTIME.json'
+            if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) {
+                throw 'ARIA-RUNTIME.json is missing.'
+            }
+
+            $runtime = Get-Content -LiteralPath $runtimePath -Raw |
+                ConvertFrom-Json
+
+            $result = [pscustomobject][ordered]@{
+                schema = 'aria.bootstrap/1'
+                ready = $true
+                release = [string]$runtime.release
+                repositoryRoot = $root
+                runtimeManifest = 'ARIA-RUNTIME.json'
+                agentGuide = 'AGENTS.md'
+                stableTag = [string]$runtime.continuity.stableTag
+                validation = [pscustomobject][ordered]@{
+                    doctor = '.\aria.cmd doctor -Strict'
+                    tests = '.\aria.cmd test'
+                }
+            }
+
+            Write-Output (ConvertTo-AriaJson -Value $result)
         }
         'version' {
             $lock = Get-Content -LiteralPath (Join-Path $root 'aria.lock.json') -Raw | ConvertFrom-Json

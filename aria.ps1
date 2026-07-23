@@ -35,6 +35,8 @@ Import-Module (Join-Path $root 'src/Aria.Bytecode.psm1') -Force -DisableNameChec
 Import-Module (Join-Path $root 'src/Aria.Gate.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.VM.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.EvolutionPlanning.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Intent.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.IntentVerifier.psm1') -Force -DisableNameChecking
 
 $null = Initialize-AriaEventSpine -WorkspaceRoot $workspaceRoot -Profile (Get-AriaOperatorProfile) -Persist
 
@@ -58,6 +60,7 @@ function Show-AriaHelp {
   aria graph <program.aria|program.ariac>
   aria evolve plan <request.json> [-Workspace <repository>]
   aria evolve verify <proposal-id> -Capability <bundle.json> -Authorization <authorization.json> -IssuerPolicy <verification-policy.json>
+  aria intent verify <intent-verification-bundle.json> [-Workspace <repository>]
   aria init <ProgramName>
 
   ARIA 0.4 adds verified human-agent connection contracts: intent, proposal, consent, and closure.
@@ -129,6 +132,22 @@ try {
                 }
                 default{throw "evolve supports 'plan' and 'verify'."}
             }
+        }
+        'intent' {
+            if($Path-cne'verify'){throw "intent supports 'verify'."}
+            if(-not$RequestPath){throw 'intent verify requires an intent verification bundle JSON path.'}
+            $clock=[Diagnostics.Stopwatch]::StartNew()
+            Write-AriaBanner -Title 'ARIA / INTENT VERIFY' -Subtitle 'declared objective · independent challenge · evidence-derived verdict'
+            Write-AriaTreeStage -Name 'artifact identities' -State Pulse -Detail $RequestPath
+            $result=Invoke-AriaIntentVerificationFile -Path $RequestPath -WorkspaceRoot $workspaceRoot
+            Write-AriaTreeStage -Name 'interpretation binding' -State $(if($result.satisfied){'Pass'}else{'Fail'}) -Detail $result.proof.interpretationId
+            Write-AriaTreeStage -Name 'authority ceiling' -State $(if('E_INTENT_EXCESS_AUTHORITY'-in@($result.errors|ForEach-Object{$_.code})){'Fail'}else{'Pass'}) -Detail 'declared effects compared'
+            Write-AriaTreeStage -Name 'ambiguity and challenge' -State $(if(@($result.errors|ForEach-Object{$_.code}|Where-Object{$_-like'E_INTENT_AMBIGUITY*'-or$_-like'E_INTENT_CHALLENGE*'}).Count){'Fail'}else{'Pass'}) -Detail 'material disagreement requires human resolution'
+            Write-AriaTreeStage -Name 'derived obligations' -State $(if($result.satisfied){'Pass'}else{'Fail'}) -Detail ("{0} evaluated" -f @($result.proof.obligations).Count)
+            Write-AriaTreeStage -Name 'proof record' -State Info -Detail $result.proofPath
+            $clock.Stop()
+            Write-AriaSummary -Title $(if($result.satisfied){'INTENT SATISFIED'}else{'INTENT REJECTED'}) -Passed ([bool]$result.satisfied) -Detail $result.proof.id -Duration $clock.Elapsed
+            if(-not$result.satisfied){throw ('Intent verification rejected the program: '+(@($result.errors|ForEach-Object{$_.code}|Sort-Object -Unique)-join', '))}
         }
         'profile' {
             $profile = Get-AriaRuntimeProfile

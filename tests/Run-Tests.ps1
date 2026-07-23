@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 179 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 192 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -63,6 +63,8 @@ Import-Module (Join-Path $root 'src/Aria.GovernedEvolution.psm1') -Force -Disabl
 Import-Module (Join-Path $root 'src/Aria.EvolutionPlanning.psm1') -Force -DisableNameChecking
 
 Import-Module (Join-Path $root 'src/Aria.SourceCore.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Intent.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.IntentVerifier.psm1') -Force -DisableNameChecking
 
 Test-Case 'opcode registry is machine-readable and complete' {
     $registry = Get-AriaOpcodeRegistry
@@ -2314,6 +2316,169 @@ Test-Case 'source diagnostics retain line and column' {
     Assert-True (-not[bool]$result.valid) 'Invalid operator program was accepted.'
     Assert-Equal '2' ([string]$result.errors[0].line) 'Diagnostic line was not preserved.'
     Assert-True ([int]$result.errors[0].column-gt0) 'Diagnostic column was not preserved.'
+}
+
+function New-AriaIntentTestBundle {
+    param(
+        [string[]]$ProgramEffects=@('repository.write'),
+        $OutcomeValue=$true,
+        [string[]]$ObservedForbiddenOutcomes=@(),
+        [switch]$OmitEvidence,
+        [switch]$OmitChallenge,
+        [switch]$MaterialAmbiguity,
+        [switch]$ResolveAmbiguity,
+        [switch]$MaterialChallenge,
+        [switch]$ResolveChallenge,
+        [switch]$OmitClaimedObligation,
+        [switch]$SameChallenger
+    )
+    $ambiguities=@()
+    if($MaterialAmbiguity){$ambiguities=@([pscustomobject][ordered]@{id='publish-target';question='Public release or internal registry?';severity='material'})}
+    $intent=New-AriaIntent `
+        -Name 'PublishVerifiedRelease' `
+        -Objective 'Publish a release without changing runtime behavior.' `
+        -RequiredOutcomes @([pscustomobject][ordered]@{id='tests.pass';expected=$true}) `
+        -ForbiddenOutcomes @('history.rewrite') `
+        -AllowedEffects @('repository.write','network.send') `
+        -AcceptanceCriteria @([pscustomobject][ordered]@{id='semantic-diff';evidenceKind='semantic-diff'}) `
+        -Ambiguities $ambiguities `
+        -RequireIndependentChallenge
+    $claimed=@('tests.pass','semantic-diff')
+    if($OmitClaimedObligation){$claimed=@('tests.pass')}
+    $interpretation=New-AriaIntentInterpretation `
+        -IntentId $intent.id `
+        -Interpreter 'agent:producer' `
+        -UnderstoodObjective 'Publish only after tests and a zero semantic diff.' `
+        -ExpectedEffects @('repository.write','network.send') `
+        -ClaimedObligations $claimed `
+        -UnresolvedAmbiguities $(if($MaterialAmbiguity){@('publish-target')}else{@()}) `
+        -ImplementationRef 'sha256:program'
+    $issues=@()
+    if($MaterialChallenge){$issues=@([pscustomobject][ordered]@{id='alternate-target';severity='material';message='The publication target is not explicit.'})}
+    $challenges=@()
+    if(-not$OmitChallenge){
+        $challenges=@(New-AriaIntentChallenge `
+            -IntentId $intent.id `
+            -InterpretationId $interpretation.id `
+            -Challenger $(if($SameChallenger){'agent:producer'}else{'agent:critic'}) `
+            -Issues $issues)
+    }
+    $ambiguityResolutions=@()
+    if($ResolveAmbiguity){$ambiguityResolutions=@([pscustomobject][ordered]@{id='publish-target';resolution='public release'})}
+    $challengeResolutions=@()
+    if($ResolveChallenge){$challengeResolutions=@([pscustomobject][ordered]@{id='alternate-target';resolution='public release confirmed'})}
+    $approval=New-AriaIntentApproval `
+        -IntentId $intent.id `
+        -InterpretationId $interpretation.id `
+        -Approver 'human:operator' `
+        -Decision approved `
+        -DecidedAt '2026-07-23T12:00:00Z' `
+        -AmbiguityResolutions $ambiguityResolutions `
+        -ChallengeResolutions $challengeResolutions `
+        -Nonce 'intent-test-1'
+    $program=New-AriaIntentProgramSummary `
+        -ArtifactId 'sha256:program' `
+        -RequestedEffects $ProgramEffects `
+        -Outcomes @([pscustomobject][ordered]@{id='tests.pass';actual=$OutcomeValue}) `
+        -ObservedForbiddenOutcomes $ObservedForbiddenOutcomes
+    $evidence=@()
+    if(-not$OmitEvidence){
+        $evidence=@(New-AriaIntentEvidence `
+            -CriterionId 'semantic-diff' `
+            -Kind 'semantic-diff' `
+            -SubjectId 'sha256:program' `
+            -Digest 'sha256:evidence' `
+            -Passed $true)
+    }
+    [pscustomobject][ordered]@{
+        schema='aria.intent-verification-bundle/0.9'
+        intent=$intent
+        interpretation=$interpretation
+        approval=$approval
+        challenges=$challenges
+        program=$program
+        evidence=$evidence
+        verificationPolicy=[pscustomobject][ordered]@{
+            schema='aria.intent-verification-policy/0.9'
+            trustedApprovers=@('human:operator')
+        }
+    }
+}
+
+Test-Case 'intent identities are canonical and deterministic' {
+    $one=New-AriaIntentTestBundle
+    $two=New-AriaIntentTestBundle
+    Assert-Equal $one.intent.id $two.intent.id 'Intent identity changed.'
+    Assert-Equal $one.interpretation.id $two.interpretation.id 'Interpretation identity changed.'
+}
+
+Test-Case 'intent verifier derives a satisfied verdict' {
+    $result=Invoke-AriaIntentVerification (New-AriaIntentTestBundle)
+    Assert-True ([bool]$result.satisfied) ('Valid intent bundle was rejected: '+(@($result.errors|ForEach-Object{$_.code})-join','))
+    Assert-Equal 'satisfied' $result.proof.verdict 'Intent proof verdict mismatch.'
+}
+
+Test-Case 'intent verifier rejects tampered identities' {
+    $bundle=New-AriaIntentTestBundle
+    $bundle.intent.objective='silently changed'
+    $result=Invoke-AriaIntentVerification $bundle
+    Assert-True ('E_INTENT_IDENTITY'-in@($result.errors.code)) 'Tampered intent identity was not rejected.'
+}
+
+Test-Case 'intent verifier rejects excess program authority' {
+    $result=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -ProgramEffects @('repository.write','secret.read'))
+    Assert-True ('E_INTENT_EXCESS_AUTHORITY'-in@($result.errors.code)) 'Excess authority was not rejected.'
+}
+
+Test-Case 'intent verifier rejects mismatched required outcomes' {
+    $result=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -OutcomeValue $false)
+    Assert-True ('E_INTENT_REQUIRED_OUTCOME'-in@($result.errors.code)) 'Wrong required outcome was not rejected.'
+}
+
+Test-Case 'intent verifier rejects observed forbidden outcomes' {
+    $result=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -ObservedForbiddenOutcomes @('history.rewrite'))
+    Assert-True ('E_INTENT_FORBIDDEN_OUTCOME'-in@($result.errors.code)) 'Forbidden outcome was not rejected.'
+}
+
+Test-Case 'intent verifier requires criterion evidence' {
+    $result=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -OmitEvidence)
+    Assert-True ('E_INTENT_EVIDENCE_MISSING'-in@($result.errors.code)) 'Missing criterion evidence was accepted.'
+}
+
+Test-Case 'intent verifier gates material ambiguity' {
+    $result=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -MaterialAmbiguity)
+    Assert-True ('E_INTENT_AMBIGUITY_UNRESOLVED'-in@($result.errors.code)) 'Unresolved ambiguity was accepted.'
+    $resolved=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -MaterialAmbiguity -ResolveAmbiguity)
+    Assert-True ([bool]$resolved.satisfied) 'Human-resolved ambiguity was rejected.'
+}
+
+Test-Case 'intent verifier requires an independent challenge' {
+    $missing=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -OmitChallenge)
+    Assert-True ('E_INTENT_CHALLENGE_REQUIRED'-in@($missing.errors.code)) 'Missing challenge was accepted.'
+}
+
+Test-Case 'intent verifier rejects self-challenge' {
+    $result=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -SameChallenger)
+    Assert-True ('E_INTENT_CHALLENGE_INDEPENDENCE'-in@($result.errors.code)) 'Producer self-challenge was accepted.'
+}
+
+Test-Case 'intent verifier gates material critic disagreement' {
+    $result=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -MaterialChallenge)
+    Assert-True ('E_INTENT_CHALLENGE_UNRESOLVED'-in@($result.errors.code)) 'Unresolved critic disagreement was accepted.'
+    $resolved=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -MaterialChallenge -ResolveChallenge)
+    Assert-True ([bool]$resolved.satisfied) 'Human-resolved critic disagreement was rejected.'
+}
+
+Test-Case 'intent verifier catches interpretation omission' {
+    $result=Invoke-AriaIntentVerification (New-AriaIntentTestBundle -OmitClaimedObligation)
+    Assert-True ('E_INTENT_OBLIGATION_OMITTED'-in@($result.errors.code)) 'Interpretation obligation omission was accepted.'
+}
+
+Test-Case 'intent proofs are deterministic and contain derived obligations' {
+    $one=Invoke-AriaIntentVerification (New-AriaIntentTestBundle)
+    $two=Invoke-AriaIntentVerification (New-AriaIntentTestBundle)
+    Assert-Equal $one.proof.id $two.proof.id 'Intent proof identity changed.'
+    Assert-Equal '3' ([string]@($one.proof.obligations).Count) 'Derived obligation count mismatch.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

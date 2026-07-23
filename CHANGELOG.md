@@ -2,6 +2,17 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Intent Verification alpha.25
+
+- Added canonical, content-addressed intent, interpretation, approval, challenge, program-summary, evidence, and proof artifacts.
+- Added `aria intent verify <bundle.json>` with persistent satisfied or rejected proof records.
+- Derived required outcomes, forbidden outcomes, effect ceilings, and acceptance-evidence obligations without accepting a model-supplied satisfaction assertion.
+- Required exact human approval of the intent and interpretation identities.
+- Gated material ambiguity and independent-critic disagreement on explicit human resolutions.
+- Rejected self-challenge, omitted obligations, excess authority, tampered identities, and evidence bound to another program.
+- Added eight JSON schemas, a complete release example, architecture documentation, and thirteen adversarial gates.
+- Expanded conformance to 192 deterministic gates.
+
 ## Evolution Verification alpha.24
 
 - Added `aria evolve verify <proposal-id>` as a non-mutating authorization command.

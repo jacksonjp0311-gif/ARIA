@@ -14,10 +14,11 @@ ARIA is an experimental programming language and runtime built around one hard r
 
 > **Nothing executes merely because it was requested. It executes only after structure, identity, type, policy, capability, and artifact integrity have been verified.**
 
-ARIA now has two complementary surfaces:
+ARIA now has three complementary surfaces:
 
 - **Source Core** for small, ordinary, pure programs with immutable bindings, typed functions, expressions, and output;
-- **the verified runtime substrate** for bytecode, capability authority, graph execution, replay, events, and governed repository evolution.
+- **the verified runtime substrate** for bytecode, capability authority, graph execution, replay, events, and governed repository evolution;
+- **Intent Verification** for binding human objectives to interpretations, independent challenges, explicit authority, execution evidence, and derived verdicts.
 
 The source language is intentionally familiar. The machinery underneath is deliberately explicit, deterministic, and auditable.
 
@@ -35,12 +36,13 @@ brutally rigorous underneath
 | Compiler | `0.1.0-alpha.5` |
 | Language specification | `0.4.0` |
 | Source Core | `alpha.22` · `aria.source-ir/0.7` |
-| Conformance | `179/179` deterministic gates |
+| Conformance | `192/192` deterministic gates |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
 | Graph substrate | Transactional execution + deterministic replay |
 | Evolution | Persistent plans + verified authorization + rollback proof |
+| Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
 | Event model | Typed Event Spine + append-only NDJSON ledger |
 | Operator UI | Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
@@ -107,7 +109,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ conformance lattice   PASS   179/179 · coherent
+◆ conformance lattice   PASS   192/192 · coherent
 ```
 
 ### Run an ordinary ARIA program
@@ -150,6 +152,7 @@ Common operations:
 .\aria.cmd sync
 .\aria.cmd evolve plan .\examples\evolution-plan.json
 .\aria.cmd evolve verify <proposal-id> -Capability <bundle.json> -Authorization <authorization.json> -IssuerPolicy <verification-policy.json>
+.\aria.cmd intent verify .\examples\intent\publish-verified-release.json
 ```
 
 Raw buffered provider output is hidden by default. To expose it:
@@ -306,6 +309,7 @@ Runtime actions emit typed events through the Event Spine and operator feedback 
 | Graph Replay | Semantic diff, transition-chain verification and historical reconstruction |
 | Capability Authority | Content-addressed, attenuable and revocable authority |
 | Governed Evolution | Exact proposals, human authorization, candidate snapshots and rollback proof |
+| Intent Verification | Approved interpretations, independent challenges and evidence-derived verdicts |
 
 ---
 
@@ -550,6 +554,7 @@ Important deterministic surfaces include:
 - graph snapshots and replay transitions;
 - capability tokens and authority decisions;
 - governed-evolution proposals, authorizations, candidates, and rollback proofs;
+- intent declarations, interpretations, approvals, challenges, evidence, and derived proofs;
 - remote Git SHA verification.
 
 Timestamps and environment-specific values must be normalized before participating in identity calculations.
@@ -568,6 +573,7 @@ Timestamps and environment-specific values must be normalized before participati
 ├── src/                     # Compiler, verifier, VM, event and UI modules
 ├── schemas/                 # Typed JSON schemas
 ├── examples/source-core/    # Ordinary pure ARIA programs
+├── examples/intent/         # Complete intent-verification bundles
 ├── examples/                # Verified-runtime examples and provider fixtures
 ├── tests/                   # Deterministic conformance suite
 ├── docs/                    # Architecture and evolution documents
@@ -645,6 +651,29 @@ drifted, resolves capability and authorizer trust, reconstructs the candidate
 and rollback proof, and appends an `authorized` record. Candidate files remain
 untouched.
 
+### Intent verification
+
+ARIA can also test whether an implementation remains inside a declared human
+objective:
+
+```powershell
+.\aria.cmd intent verify .\examples\intent\publish-verified-release.json
+```
+
+The bundle separates canonical intent from the producer's interpretation,
+binds human approval to both identities, requires an independent challenge,
+caps program effects, and compares measured outcomes and evidence with derived
+obligations. Material ambiguity or critic disagreement blocks satisfaction
+until a human resolution is recorded.
+
+The verifier accepts no caller-supplied `intentSatisfied` Boolean. It creates a
+content-addressed `aria.intent-proof/0.9` under `.aria/intent/` and exits
+non-zero when the proof verdict is `rejected`.
+
+This is a misinterpretation-detection boundary, not mind reading: unstated human
+intent cannot be proven. See [Intent Verification](docs/36-intent-verification.md)
+for the artifact contracts, rejection rules, and trust boundary.
+
 Never force-push shared `main`.
 
 Before committing:
@@ -721,7 +750,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ conformance lattice PASS 179/179 · coherent
+◆ conformance lattice PASS 192/192 · coherent
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
@@ -748,6 +777,7 @@ Start here:
 | `docs/33-source-language-core.md` | Ordinary pure Source Core language |
 | `docs/34-evolution-planning.md` | Persistent, non-mutating evolution planning |
 | `docs/35-evolution-verification.md` | Non-mutating capability and authorization verification |
+| `docs/36-intent-verification.md` | Intent artifacts, ambiguity gates, independent challenge and derived proofs |
 
 Earlier documents record the architectural evolution and remain useful context.
 

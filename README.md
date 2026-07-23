@@ -1,6 +1,6 @@
 # ARIA
 
-> **A local-first, graph-native, glyphic programming language for verified computation and AI-readable execution.**
+> **A local-first, typed programming language for verified computation, explicit authority, and governable evolution.**
 
 ```text
 Glyphs compress expression.
@@ -14,7 +14,12 @@ ARIA is an experimental programming language and runtime built around one hard r
 
 > **Nothing executes merely because it was requested. It executes only after structure, identity, type, policy, capability, and artifact integrity have been verified.**
 
-The surface is intentionally compact and unfamiliar. The machinery underneath is deliberately explicit, deterministic, and auditable.
+ARIA now has two complementary surfaces:
+
+- **Source Core** for small, ordinary, pure programs with immutable bindings, typed functions, expressions, and output;
+- **the verified runtime substrate** for bytecode, capability authority, graph execution, replay, events, and governed repository evolution.
+
+The source language is intentionally familiar. The machinery underneath is deliberately explicit, deterministic, and auditable.
 
 ```text
 alien on the outside
@@ -29,10 +34,13 @@ brutally rigorous underneath
 |---|---|
 | Compiler | `0.1.0-alpha.5` |
 | Language specification | `0.4.0` |
-| Conformance | `71/71` deterministic gates |
+| Source Core | `alpha.21` · `aria.source-ir/0.7` |
+| Conformance | `151/151` deterministic gates |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
+| Graph substrate | Transactional execution + deterministic replay |
+| Evolution | Content-addressed proposals + human authorization + rollback proof |
 | Event model | Typed Event Spine + append-only NDJSON ledger |
 | Operator UI | Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
@@ -99,8 +107,29 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ conformance lattice   PASS   71/71 · coherent
+◆ conformance lattice   PASS   151/151 · coherent
 ```
+
+### Run an ordinary ARIA program
+
+```powershell
+.\aria-source.cmd check .\examples\source-core\03-function.aria
+.\aria-source.cmd run .\examples\source-core\03-function.aria
+.\aria-source.cmd ir .\examples\source-core\03-function.aria
+```
+
+Source Core programs are pure in alpha.21:
+
+```aria
+fn add(x: Int, y: Int) -> Int {
+    x + y
+}
+
+let answer: Int = add(20, 22);
+emit answer;
+```
+
+The result is statically checked, evaluated without ambient effects, lowered to deterministic `aria.source-ir/0.7`, and assigned a SHA-256 identity.
 
 ### Discover the CLI
 
@@ -136,7 +165,22 @@ $env:ARIA_NO_ANIMATION = "1"
 
 ---
 
-## A minimal ARIA program
+## Two language surfaces
+
+### Source Core
+
+Source Core is the ordinary programming surface. Alpha.21 supports:
+
+- `Int`, `Text`, and `Bool`;
+- immutable `let` bindings;
+- explicitly typed pure functions;
+- arithmetic, comparison, Boolean, and text expressions;
+- typed conditional expressions;
+- deterministic output and IR identity.
+
+It deliberately excludes filesystem, process, repository, network, secret, and deployment effects.
+
+### Verified runtime language
 
 ARIA programs are glyphic, typed, and graph-oriented. Exact syntax continues to evolve, so the canonical examples in `examples/` and the language specification are the source of truth.
 
@@ -201,18 +245,20 @@ Runtime actions emit typed events through the Event Spine and operator feedback 
 ## Architecture
 
 ```text
+┌─────────────────────────────┐    ┌─────────────────────────────┐
+│   SOURCE CORE · PURE CODE   │    │ VERIFIED RUNTIME LANGUAGE   │
+│ let · fn · if · emit        │    │ glyphs · memory · effects   │
+└──────────────┬──────────────┘    └──────────────┬──────────────┘
+               │                                  │
+       typed AST + source IR              parser + semantics
+               │                                  │
+               └────────────────┬─────────────────┘
+                                ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                         ARIA SOURCE                          │
+│            DETERMINISTIC IDENTITY + TYPED AUTHORITY           │
 └──────────────────────────────┬───────────────────────────────┘
                                │
-                    parser + semantic typing
-                               │
-                               ▼
-┌──────────────────────────────────────────────────────────────┐
-│               DETERMINISTIC COMPILER / BYTECODE              │
-└──────────────────────────────┬───────────────────────────────┘
-                               │
-                   compressed .ariac artifact
+             bytecode · graphs · proposals · capabilities
                                │
                                ▼
 ┌──────────────────────────────────────────────────────────────┐
@@ -239,6 +285,7 @@ Runtime actions emit typed events through the Event Spine and operator feedback 
 
 | Module | Responsibility |
 |---|---|
+| Source Core | Pure typed source, evaluation, deterministic source IR |
 | Parser | Source structure and syntax |
 | Semantic/type layer | Meaning preservation and type correctness |
 | Compiler | Deterministic bytecode generation |
@@ -252,6 +299,11 @@ Runtime actions emit typed events through the Event Spine and operator feedback 
 | Gitflow | Buffered and verified Git transport |
 | Bufferflow | Animated buffering state machine |
 | Signalflow | Typed transmission receipts and per-item feedback |
+| Typed Authority Core | Canonical types, immutable bindings, structured errors and typed IR |
+| Graph Core | Validated graph patterns and transactional rewrites |
+| Graph Replay | Semantic diff, transition-chain verification and historical reconstruction |
+| Capability Authority | Content-addressed, attenuable and revocable authority |
+| Governed Evolution | Exact proposals, human authorization, candidate snapshots and rollback proof |
 
 ---
 
@@ -492,6 +544,10 @@ Important deterministic surfaces include:
 - event digests;
 - provider transmission envelopes;
 - repository manifests;
+- Source Core IR;
+- graph snapshots and replay transitions;
+- capability tokens and authority decisions;
+- governed-evolution proposals, authorizations, candidates, and rollback proofs;
 - remote Git SHA verification.
 
 Timestamps and environment-specific values must be normalized before participating in identity calculations.
@@ -504,10 +560,13 @@ Timestamps and environment-specific values must be normalized before participati
 .
 ├── aria.ps1                 # Primary PowerShell CLI
 ├── aria.cmd                 # Windows launcher
+├── aria-source.ps1          # Pure Source Core CLI
+├── aria-source.cmd          # Source Core Windows launcher
 ├── aria.policy.json         # Deny-by-default policy
 ├── src/                     # Compiler, verifier, VM, event and UI modules
 ├── schemas/                 # Typed JSON schemas
-├── examples/                # Canonical ARIA programs
+├── examples/source-core/    # Ordinary pure ARIA programs
+├── examples/                # Verified-runtime examples and provider fixtures
 ├── tests/                   # Deterministic conformance suite
 ├── docs/                    # Architecture and evolution documents
 ├── .aria/                   # Local runtime state and event ledger
@@ -520,23 +579,44 @@ Generated runtime state under `.aria/` should be treated differently from source
 
 ## Development workflow
 
-ARIA evolves directly on `main` through validated commits.
+ARIA evolves through validated commits. Material changes should use a feature branch and review before reaching `main`.
 
 Required sequence:
 
 ```text
 clean tree
   → fetch
-  → fast-forward-only merge
+  → feature branch
+  → content-addressed proposal
+  → explicit human authorization
   → modify
   → seal manifest
   → strict doctor
   → conformance
+  → rollback proof
   → reseal manifest
   → commit
-  → push
+  → push + review
   → verify remote SHA
 ```
+
+### Governed evolution
+
+ARIA can represent a repository change as a verified plan rather than an ambient edit:
+
+```text
+proposal
+  → exact base commit and file digests
+  → capability-authority decision
+  → human authorization of the proposal identity
+  → deterministic candidate snapshot
+  → semantic diff
+  → executable rollback proof
+  → manifest + strict doctor + conformance
+  → Git transition
+```
+
+The current boundary is deliberate: ARIA proves and records the plan, while a constrained outer host applies accepted files, runs the real gates, and performs Git operations. Proposal content never becomes arbitrary shell authority.
 
 Never force-push shared `main`.
 
@@ -569,7 +649,7 @@ An AI working in this repository should follow these rules:
 11. Encode `.ps1` and `.psm1` files as UTF-8 with BOM and LF when glyphs are present.
 12. Encode non-PowerShell text as UTF-8 without BOM and LF.
 13. Run strict doctor, conformance, and manifest validation before committing.
-14. Use normal commits and pushes on `main`; never rewrite shared history.
+14. Use reviewed feature branches for material changes; never rewrite shared history.
 15. Report uncertainty instead of inventing missing behavior.
 
 ### AI task model
@@ -614,10 +694,10 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ conformance lattice PASS 71/71 · coherent
+◆ conformance lattice PASS 151/151 · coherent
 ```
 
-CI runs under PowerShell 7 on Ubuntu. Local validation commonly runs under Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
+CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
 
 ---
 
@@ -633,6 +713,12 @@ Start here:
 | `docs/24-oscillator-buffer.md` | Original oscillator primitive |
 | `docs/25-bufferflow.md` | Interlocking buffering phases |
 | `docs/26-signalflow.md` | Receipts and per-item signal feedback |
+| `docs/27-typed-authority-core.md` | Type lattice, immutable scope and typed IR |
+| `docs/28-graph-execution.md` | Guarded transactional graph rewriting |
+| `docs/29-replay-semantic-diff.md` | Deterministic replay and semantic graph diff |
+| `docs/30-capability-authority.md` | Content-addressed capability authority |
+| `docs/31-governed-evolution.md` | Authorized repository evolution and rollback proof |
+| `docs/33-source-language-core.md` | Ordinary pure Source Core language |
 
 Earlier documents record the architectural evolution and remain useful context.
 

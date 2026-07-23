@@ -3,3 +3,5 @@
 *.png binary
 *.ico binary
 *.zip binary
+.gitattributes text eol=lf
+tests/conformance-lanes.json text eol=lf

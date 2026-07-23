@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 120 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 135 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -57,6 +57,8 @@ Import-Module (Join-Path $root 'src/Aria.TypedCore.psm1') -Force -DisableNameChe
 Import-Module (Join-Path $root 'src/Aria.GraphReplay.psm1') -Force -DisableNameChecking
 
 Import-Module (Join-Path $root 'src/Aria.CapabilityAuthority.psm1') -Force -DisableNameChecking
+
+Import-Module (Join-Path $root 'src/Aria.GovernedEvolution.psm1') -Force -DisableNameChecking
 
 Test-Case 'opcode registry is machine-readable and complete' {
     $registry = Get-AriaOpcodeRegistry
@@ -1642,6 +1644,224 @@ Test-Case 'graph rewrite requires verified capability authority' {
     Assert-True ([bool]$rejected.rejected) 'Invalid graph authority did not reject rewrite.'
     Assert-Equal 'authority-rejected' ([string]$rejected.reason) 'Authority rejection reason mismatch.'
     Assert-Equal ([string]$rejected.beforeDigest) ([string]$rejected.afterDigest) 'Rejected authority changed graph identity.'
+}
+function Get-TestGovernedEvolutionInputs {
+    $snapshot = Get-Content (Join-Path $root 'tests/fixtures/governed-evolution/base-snapshot.json') -Raw | ConvertFrom-Json
+    $proposal = Get-Content (Join-Path $root 'tests/fixtures/governed-evolution/valid-proposal.json') -Raw | ConvertFrom-Json
+    $authorization = Get-Content (Join-Path $root 'tests/fixtures/governed-evolution/valid-authorization.json') -Raw | ConvertFrom-Json
+
+    $token = New-AriaCapabilityToken `
+        -Issuer 'operator:jackson' `
+        -Subject 'agent:evolver' `
+        -Resource 'repository:ARIA' `
+        -Effects @('repository.write') `
+        -NotBefore '2026-01-01T00:00:00Z' `
+        -ExpiresAt '2027-01-01T00:00:00Z' `
+        -Nonce 'aria-alpha20-evolution-authority'
+
+    [pscustomobject]@{
+        snapshot=$snapshot
+        proposal=$proposal
+        authorization=$authorization
+        token=$token
+        policy=New-AriaIssuerTrustPolicy -TrustedIssuers @('operator:jackson') -MaxDelegationDepth 1
+        ledger=New-AriaRevocationLedger
+        commit=('a' * 40)
+        decisionTime='2026-06-01T00:00:00Z'
+    }
+}
+
+Test-Case 'evolution proposal identity is deterministic' {
+    $input=Get-TestGovernedEvolutionInputs
+    $first=Test-AriaEvolutionProposal $input.proposal
+    $second=Test-AriaEvolutionProposal $input.proposal
+
+    Assert-True ([bool]$first.valid) 'Valid evolution proposal was rejected.'
+    Assert-Equal ([string]$first.expectedId) ([string]$second.expectedId) 'Evolution proposal identity was not deterministic.'
+}
+
+Test-Case 'evolution proposal rejects tampered identity' {
+    $input=Get-TestGovernedEvolutionInputs
+    $input.proposal.targetVersion='9.9.9'
+    $result=Test-AriaEvolutionProposal $input.proposal
+
+    Assert-True (-not [bool]$result.valid) 'Tampered evolution proposal was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_EVOLUTION_IDENTITY') 'Evolution identity rejection missing.'
+}
+
+Test-Case 'evolution proposal rejects unsafe repository path' {
+    $input=Get-TestGovernedEvolutionInputs
+    $input.proposal.changes[0].path='../escape.txt'
+    $result=Test-AriaEvolutionProposal $input.proposal
+
+    Assert-True (-not [bool]$result.valid) 'Unsafe repository path was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_EVOLUTION_PATH') 'Unsafe path rejection missing.'
+}
+
+Test-Case 'evolution proposal rejects duplicate change path' {
+    $input=Get-TestGovernedEvolutionInputs
+    $input.proposal.changes=@($input.proposal.changes)+@($input.proposal.changes[0])
+    $result=Test-AriaEvolutionProposal $input.proposal
+
+    Assert-True (-not [bool]$result.valid) 'Duplicate proposal path was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_EVOLUTION_PATH_DUPLICATE') 'Duplicate path rejection missing.'
+}
+
+Test-Case 'evolution proposal requires all core gates' {
+    $input=Get-TestGovernedEvolutionInputs
+    $input.proposal.requiredGates=@('manifest','conformance')
+    $result=Test-AriaEvolutionProposal $input.proposal
+
+    Assert-True (-not [bool]$result.valid) 'Proposal without strict doctor gate was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_EVOLUTION_GATE_REQUIRED') 'Required gate rejection missing.'
+}
+
+Test-Case 'evolution proposal rejects incomplete rollback plan' {
+    $input=Get-TestGovernedEvolutionInputs
+    $input.proposal.rollbackPlan=@()
+    $result=Test-AriaEvolutionProposal $input.proposal
+
+    Assert-True (-not [bool]$result.valid) 'Proposal without rollback plan was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_EVOLUTION_ROLLBACK_MISSING') 'Rollback rejection missing.'
+}
+
+Test-Case 'evolution authority approves matching proposer scope' {
+    $input=Get-TestGovernedEvolutionInputs
+    $decision=New-AriaAuthorityDecision `
+        -Token $input.token `
+        -Policy $input.policy `
+        -Subject 'agent:evolver' `
+        -Resource 'repository:ARIA' `
+        -RequestedEffects @('repository.write') `
+        -DecisionTime $input.decisionTime `
+        -RevocationLedger $input.ledger
+
+    Assert-True ([bool]$decision.approved) 'Matching evolution authority was rejected.'
+}
+
+Test-Case 'evolution authority rejects proposer subject mismatch' {
+    $input=Get-TestGovernedEvolutionInputs
+    $input.proposal.proposer='agent:intruder'
+
+    $plan=Invoke-AriaGovernedEvolutionPlan `
+        -Proposal $input.proposal `
+        -Authorization $input.authorization `
+        -CapabilityToken $input.token `
+        -IssuerPolicy $input.policy `
+        -RevocationLedger $input.ledger `
+        -DecisionTime $input.decisionTime `
+        -TrustedAuthorizers @('operator:jackson') `
+        -CurrentCommit $input.commit `
+        -CurrentSnapshot $input.snapshot
+
+    Assert-True (-not [bool]$plan.approved) 'Mismatched proposal subject was approved.'
+    Assert-True (@($plan.errors.code) -contains 'E_CAP_SUBJECT') 'Evolution subject rejection missing.'
+}
+
+Test-Case 'evolution plan requires human authorization' {
+    $input=Get-TestGovernedEvolutionInputs
+    $input.authorization.decision='rejected'
+
+    $plan=Invoke-AriaGovernedEvolutionPlan `
+        -Proposal $input.proposal `
+        -Authorization $input.authorization `
+        -CapabilityToken $input.token `
+        -IssuerPolicy $input.policy `
+        -RevocationLedger $input.ledger `
+        -DecisionTime $input.decisionTime `
+        -TrustedAuthorizers @('operator:jackson') `
+        -CurrentCommit $input.commit `
+        -CurrentSnapshot $input.snapshot
+
+    Assert-True (-not [bool]$plan.approved) 'Human-rejected evolution was approved.'
+    Assert-True (@($plan.errors.code) -contains 'E_EVOLUTION_NOT_APPROVED') 'Human authorization rejection missing.'
+}
+
+Test-Case 'evolution authorization rejects tampered identity' {
+    $input=Get-TestGovernedEvolutionInputs
+    $input.authorization.authorizer='operator:tampered'
+    $result=Test-AriaEvolutionAuthorization `
+        -Authorization $input.authorization `
+        -ProposalId $input.proposal.id `
+        -TrustedAuthorizers @('operator:jackson')
+
+    Assert-True (-not [bool]$result.valid) 'Tampered evolution authorization was accepted.'
+    Assert-True (@($result.errors.code) -contains 'E_EVOLUTION_AUTH_IDENTITY') 'Authorization identity rejection missing.'
+}
+
+Test-Case 'evolution plan rejects base commit mismatch' {
+    $input=Get-TestGovernedEvolutionInputs
+
+    $plan=Invoke-AriaGovernedEvolutionPlan `
+        -Proposal $input.proposal `
+        -Authorization $input.authorization `
+        -CapabilityToken $input.token `
+        -IssuerPolicy $input.policy `
+        -RevocationLedger $input.ledger `
+        -DecisionTime $input.decisionTime `
+        -TrustedAuthorizers @('operator:jackson') `
+        -CurrentCommit ('b' * 40) `
+        -CurrentSnapshot $input.snapshot
+
+    Assert-True (-not [bool]$plan.approved) 'Mismatched base commit was approved.'
+    Assert-True (@($plan.errors.code) -contains 'E_EVOLUTION_BASE_COMMIT') 'Base commit rejection missing.'
+}
+
+Test-Case 'evolution candidate applies expected content digest' {
+    $input=Get-TestGovernedEvolutionInputs
+    $candidate=Invoke-AriaEvolutionChanges `
+        -Snapshot $input.snapshot `
+        -Changes @($input.proposal.changes)
+
+    Assert-True ([bool]$candidate.valid) 'Valid evolution change did not produce a candidate.'
+    Assert-Equal ([string]$input.proposal.changes[0].afterDigest) ([string]$candidate.snapshot.files[0].digest) 'Candidate content digest mismatch.'
+}
+
+Test-Case 'evolution candidate rejects stale before digest' {
+    $input=Get-TestGovernedEvolutionInputs
+    $input.proposal.changes[0].beforeDigest=('f' * 64)
+    $candidate=Invoke-AriaEvolutionChanges `
+        -Snapshot $input.snapshot `
+        -Changes @($input.proposal.changes)
+
+    Assert-True (-not [bool]$candidate.valid) 'Stale proposal base digest was accepted.'
+    Assert-Equal 'E_EVOLUTION_BASE_DIGEST' ([string]$candidate.errors[0].code) 'Stale base digest rejection mismatch.'
+}
+
+Test-Case 'evolution rollback reproduces original snapshot' {
+    $input=Get-TestGovernedEvolutionInputs
+    $candidate=Invoke-AriaEvolutionChanges `
+        -Snapshot $input.snapshot `
+        -Changes @($input.proposal.changes)
+
+    $rollback=Test-AriaEvolutionRollback `
+        -OriginalSnapshot $input.snapshot `
+        -CandidateSnapshot $candidate.snapshot `
+        -RollbackPlan @($input.proposal.rollbackPlan)
+
+    Assert-True ([bool]$rollback.valid) 'Evolution rollback proof failed.'
+    Assert-Equal ([string]$input.snapshot.id) ([string]$rollback.restoredSnapshot.id) 'Rollback did not reproduce original identity.'
+}
+
+Test-Case 'governed evolution emits content-addressed decision event' {
+    $input=Get-TestGovernedEvolutionInputs
+
+    $plan=Invoke-AriaGovernedEvolutionPlan `
+        -Proposal $input.proposal `
+        -Authorization $input.authorization `
+        -CapabilityToken $input.token `
+        -IssuerPolicy $input.policy `
+        -RevocationLedger $input.ledger `
+        -DecisionTime $input.decisionTime `
+        -TrustedAuthorizers @('operator:jackson') `
+        -CurrentCommit $input.commit `
+        -CurrentSnapshot $input.snapshot
+
+    Assert-True ([bool]$plan.approved) 'Valid governed evolution plan was rejected.'
+    Assert-True ([bool]$plan.rollbackVerified) 'Governed evolution did not prove rollback.'
+    Assert-Equal 'approved' ([string]$plan.authorityDecision.outcome) 'Authority decision was not approved.'
+    Assert-Equal 'aria.evolution.plan.approved' ([string]$plan.event.type) 'Governed evolution event type mismatch.'
+    Assert-True ([string]$plan.event.id -match '^sha256:[a-f0-9]{64}$') 'Governed evolution event is not content addressed.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

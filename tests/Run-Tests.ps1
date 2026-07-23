@@ -13,6 +13,7 @@ Import-Module (Join-Path $root 'src/Aria.Display.psm1') -Force -DisableNameCheck
 Import-Module (Join-Path $root 'src/Aria.Etherflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Transmission.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.SignalSubset.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.EventSpine.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Gitflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
@@ -26,7 +27,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 197 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 202 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -609,6 +610,35 @@ Test-Case 'runtime profile resolves CI deterministically' {
     }
 }
 
+Test-Case 'signal subset emits allowlisted fields only' {
+  $items=@([pscustomobject][ordered]@{branch='main';coherence='aligned';token='secret'})
+  $s=New-AriaSignalSubset -Items $items -Fields branch,coherence -Purpose test -Source test -ConsentBasis test -ConsentScope test
+  Assert-True ('token' -in @($s.excludedFields)) 'Excluded field missing.'
+  Assert-True ($null-eq$s.items[0].PSObject.Properties['token']) 'Excluded value leaked.'
+}
+Test-Case 'signal subset enforces limit' {
+  $items=1..5|ForEach-Object{[pscustomobject][ordered]@{value=$_}}
+  $s=New-AriaSignalSubset -Items $items -Fields value -Purpose test -Source test -ConsentBasis test -ConsentScope test -Limit 2
+  Assert-Equal 5 $s.sourceCount 'Source count mismatch.'
+  Assert-Equal 2 $s.emittedCount 'Limit was not enforced.'
+}
+Test-Case 'signal subset digest is deterministic' {
+  $items=@([pscustomobject][ordered]@{branch='main';exitCode=0})
+  $a=New-AriaSignalSubset -Items $items -Fields branch,exitCode -Purpose test -Source test -ConsentBasis test -ConsentScope test
+  $b=New-AriaSignalSubset -Items $items -Fields exitCode,branch -Purpose test -Source test -ConsentBasis test -ConsentScope test
+  Assert-Equal $a.digest $b.digest 'Digest changed with field argument order.'
+}
+Test-Case 'signal subset rejects tampering' {
+  $s=New-AriaSignalSubset -Items @([pscustomobject][ordered]@{branch='main'}) -Fields branch -Purpose test -Source test -ConsentBasis test -ConsentScope test
+  $s.items[0].branch='other'
+  Assert-True (-not(Test-AriaSignalSubset $s).valid) 'Tampered subset verified.'
+}
+Test-Case 'signal subset survives transmission round trip' {
+  $s=New-AriaSignalSubset -Items @([pscustomobject][ordered]@{branch='main';exitCode=0}) -Fields branch,exitCode -Purpose test -Source test -ConsentBasis test -ConsentScope test
+  $t=New-AriaSubsetTransmission -Subset $s -Channel github -Status pass
+  $decoded=Read-AriaTransmissionBytes (ConvertTo-AriaTransmissionBytes $t)
+  Assert-True (Test-AriaSignalSubset $decoded.payload).valid 'Decoded subset failed verification.'
+}
 Test-Case 'transmission canonical digest is deterministic' {
     $payload = [pscustomobject][ordered]@{ repository='ARIA'; checks=@('pass','pass','pass') }
     $one = New-AriaTransmission -Channel github -Kind workflow -Status pass -Source test -Payload $payload

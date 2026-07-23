@@ -211,6 +211,61 @@ Program text expresses intent. Policy and capabilities decide whether that inten
 
 ---
 
+## Glyph-native execution and signal evolution
+
+ARIA's executable glyph triad lowers into existing trusted operations:
+
+```aria
+🜁 answer: Number = 40 + 2
+🜂 answer
+🜄 Project.status = "active"
+🜁 Project.status -> state: Text
+```
+
+```text
+🜁 air    bind or recall  → let / recall
+🜂 fire   externalize     → emit
+🜄 water  preserve        → remember
+```
+
+The parser lowers glyph syntax before semantic analysis, bytecode generation,
+artifact verification, policy, and VM execution. Glyphs compress expression;
+they do not bypass authority.
+
+ARIA also uses bounded signal subsets for learning from transmissions:
+
+```text
+🜁 observe → 🜃 bound → 🜂 transmit → 🜄 retain → 🜍 attest → ∿ evolve
+```
+
+A signal subset declares purpose, source, field allowlist, excluded fields,
+counts, limit, consent, retention, selected records, and digest. It is carried
+inside `aria.transmission/1`, preserving the established compressed container
+and tamper checks. Subset evidence may inform governed evolution but never
+grants capability or replaces human authorization.
+
+The complete self-hosting path is:
+
+```text
+glyph source
+  → parser lowering
+  → semantics and types
+  → deterministic bytecode
+  → artifact verification
+  → policy and capability
+  → VM execution
+  → typed events and bounded signal subsets
+  → governed plan and authorization
+  → transactional apply
+  → manifest, strict doctor, conformance
+  → exact-path commit
+  → optional SHA-verified push
+```
+
+See `grammar/alchemy.json`, `examples/glyph-triad.aria`,
+`docs/36-evolution-application.md`, and `docs/37-signal-subsets.md`.
+
+---
 ## Execution model
 
 ### 1. Parse
@@ -304,6 +359,7 @@ Runtime actions emit typed events through the Event Spine and operator feedback 
 | Gitflow | Buffered and verified Git transport |
 | Bufferflow | Animated buffering state machine |
 | Signalflow | Typed transmission receipts and per-item feedback |
+| Signal Subset | Bounded, consent-scoped transmission evidence |
 | Typed Authority Core | Canonical types, immutable bindings, structured errors and typed IR |
 | Graph Core | Validated graph patterns and transactional rewrites |
 | Graph Replay | Semantic diff, transition-chain verification and historical reconstruction |
@@ -624,7 +680,7 @@ proposal
   → Git transition
 ```
 
-The current boundary is deliberate: ARIA proves and records the plan, while a constrained outer host applies accepted files, runs the real gates, and performs Git operations. Proposal content never becomes arbitrary shell authority.
+ARIA now applies an authorized proposal through a constrained transaction executor that binds candidate bytes to the exact base commit, preserves rollback, seals the manifest, runs strict doctor and conformance, commits only approved paths, and optionally pushes while verifying the remote SHA. Proposal content never becomes arbitrary shell authority.
 
 The first native planning command is non-mutating:
 
@@ -777,7 +833,8 @@ Start here:
 | `docs/33-source-language-core.md` | Ordinary pure Source Core language |
 | `docs/34-evolution-planning.md` | Persistent, non-mutating evolution planning |
 | `docs/35-evolution-verification.md` | Non-mutating capability and authorization verification |
-| `docs/36-intent-verification.md` | Intent artifacts, ambiguity gates, independent challenge and derived proofs |
+| docs/36-intent-verification.md | Intent artifacts, ambiguity gates, independent challenge and derived proofs |
+| docs/37-signal-subsets.md | Bounded transmission evidence, consent, retention and evolution inputs |
 
 Earlier documents record the architectural evolution and remain useful context.
 

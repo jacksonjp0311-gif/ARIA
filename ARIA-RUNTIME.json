@@ -22,7 +22,8 @@
                          "virtualMachine":  "src/Aria.VM.psm1",
                          "sourceCore":  "src/Aria.SourceCore.psm1",
                          "alchemicalSyntax":  "grammar/alchemy.json",
-                         "evolutionApplication":  "src/Aria.EvolutionApply.psm1"
+                         "evolutionApplication":  "src/Aria.EvolutionApply.psm1",
+                         "signalSubset":  "src/Aria.SignalSubset.psm1"
                      },
     "continuity":  {
                        "stableTag":  "aria-alpha21-stable",

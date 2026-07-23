@@ -74,3 +74,9 @@ Use `-Push` only for an explicitly requested remote update. The application
 module binds candidate bytes to the authorized base commit, seals the manifest,
 executes strict doctor and conformance gates, commits only approved paths, and
 writes an application receipt beneath `.aria/evolution/`.
+## Signal-subset evidence
+
+Use `src/Aria.SignalSubset.psm1` for bounded operational evidence. Declare a
+field allowlist, purpose, source, consent scope, retention and finite limit.
+Exclude raw stdout, stderr, secrets, credentials and unrelated user data by
+default. A subset digest is evidence, not execution authority.

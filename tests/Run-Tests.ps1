@@ -311,6 +311,72 @@ Test-Case 'path confinement rejects traversal' {
 Test-Case 'repository manifest verifies' {
     $manifest = Test-AriaManifest -Root $root
     Assert-True $manifest.valid ("Manifest verification failed: $($manifest.message)")
+
+    $identity = Test-AriaManifestByteIdentity -Root $root
+
+    Assert-True `
+        $identity.valid `
+        ("Repository byte identity failed: $($identity.message)")
+
+    $identityRoot = Join-Path `
+        $tempRoot `
+        ('aria-manifest-identity-' + [guid]::NewGuid().ToString('N'))
+
+    $null = New-Item `
+        -ItemType Directory `
+        -Path $identityRoot `
+        -Force
+
+    try {
+        & git -C $identityRoot init --quiet
+
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Could not initialize byte-identity test repository.'
+        }
+
+        & git -C $identityRoot config core.autocrlf false
+
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Could not configure byte-identity test repository.'
+        }
+
+        Write-AriaUtf8NoBom `
+            -Path (Join-Path $identityRoot '.gitattributes') `
+            -Text "*.txt text eol=lf`n"
+
+        Write-AriaUtf8NoBom `
+            -Path (Join-Path $identityRoot 'sample.txt') `
+            -Text "alpha`r`nbeta`r`n"
+
+        $fractured = Test-AriaManifestByteIdentity `
+            -Root $identityRoot
+
+        Assert-True `
+            (-not $fractured.valid) `
+            'Git-normalized working bytes unexpectedly passed.'
+
+        Assert-True `
+            ($fractured.message -match 'git-normalized:sample\.txt') `
+            ("Unexpected byte-identity diagnostic: $($fractured.message)")
+
+        Write-AriaUtf8NoBom `
+            -Path (Join-Path $identityRoot 'sample.txt') `
+            -Text "alpha`nbeta`n"
+
+        $canonical = Test-AriaManifestByteIdentity `
+            -Root $identityRoot
+
+        Assert-True `
+            $canonical.valid `
+            ("Canonical Git bytes were rejected: $($canonical.message)")
+    }
+    finally {
+        Remove-Item `
+            -LiteralPath $identityRoot `
+            -Recurse `
+            -Force `
+            -ErrorAction SilentlyContinue
+    }
 }
 
 

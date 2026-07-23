@@ -254,6 +254,171 @@ function Resolve-AriaConfinedPath {
     return $candidate
 }
 
+function Invoke-AriaManifestGitHashPaths {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Root,
+
+        [Parameter(Mandatory=$true)]
+        [string[]]$Paths,
+
+        [switch]$NoFilters
+    )
+
+    if ($Paths.Count -eq 0) {
+        return @()
+    }
+
+    $arguments = @(
+        '-C'
+        $Root
+        'hash-object'
+    )
+
+    if ($NoFilters) {
+        $arguments += '--no-filters'
+    }
+
+    $arguments += '--stdin-paths'
+
+    $previousOutputEncoding = $global:OutputEncoding
+
+    try {
+        $global:OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+
+        $output = @(
+            $Paths |
+                & git @arguments 2>&1
+        )
+
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $global:OutputEncoding = $previousOutputEncoding
+    }
+
+    if ($exitCode -ne 0) {
+        $detail = (($output | Out-String).Trim())
+
+        throw (
+            "Git hash-object failed while evaluating manifest byte identity: $detail"
+        )
+    }
+
+    $hashes = @(
+        $output |
+            ForEach-Object {
+                ([string]$_).Trim()
+            } |
+            Where-Object {
+                $_ -match '^[0-9a-f]{40,64}$'
+            }
+    )
+
+    if ($hashes.Count -ne $Paths.Count) {
+        throw (
+            "Git hash-object returned {0} digest(s) for {1} manifest path(s)." -f `
+                $hashes.Count,
+                $Paths.Count
+        )
+    }
+
+    return [string[]]$hashes
+}
+
+function Test-AriaManifestByteIdentity {
+    param(
+        [string]$Root = (Get-AriaRepositoryRoot),
+
+        [object[]]$Entries
+    )
+
+    $rootFull = [System.IO.Path]::GetFullPath($Root).
+        TrimEnd([char]47, [char]92)
+
+    if ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) {
+        return [pscustomobject][ordered]@{
+            valid      = $true
+            applicable = $false
+            message    = 'git byte identity not applicable: git is unavailable'
+            checked    = 0
+            problems   = @()
+        }
+    }
+
+    $repositoryProbe = @(
+        & git `
+            -C $rootFull `
+            rev-parse `
+            --is-inside-work-tree 2>&1
+    )
+
+    if (
+        $LASTEXITCODE -ne 0 -or
+        @($repositoryProbe).Count -eq 0 -or
+        ([string]$repositoryProbe[0]).Trim() -ne 'true'
+    ) {
+        return [pscustomobject][ordered]@{
+            valid      = $true
+            applicable = $false
+            message    = 'git byte identity not applicable: root is not a Git work tree'
+            checked    = 0
+            problems   = @()
+        }
+    }
+
+    if ($null -eq $Entries) {
+        $Entries = @(
+            Get-AriaManifestEntries -Root $rootFull
+        )
+    }
+
+    $paths = @(
+        $Entries |
+            ForEach-Object {
+                [string]$_.path
+            }
+    )
+
+    $rawHashes = @(
+        Invoke-AriaManifestGitHashPaths `
+            -Root $rootFull `
+            -Paths $paths `
+            -NoFilters
+    )
+
+    $filteredHashes = @(
+        Invoke-AriaManifestGitHashPaths `
+            -Root $rootFull `
+            -Paths $paths
+    )
+
+    $problems = New-Object System.Collections.Generic.List[string]
+
+    for ($index = 0; $index -lt $paths.Count; $index++) {
+        if ($rawHashes[$index] -ne $filteredHashes[$index]) {
+            [void]$problems.Add(
+                "git-normalized:$($paths[$index])"
+            )
+        }
+    }
+
+    $message = if ($problems.Count -eq 0) {
+        'working bytes match Git clean-filter output'
+    }
+    else {
+        $problems -join ', '
+    }
+
+    return [pscustomobject][ordered]@{
+        valid      = ($problems.Count -eq 0)
+        applicable = $true
+        message    = $message
+        checked    = $paths.Count
+        problems   = @($problems.ToArray())
+    }
+}
+
 function Get-AriaManifestEntries {
     param([string]$Root = (Get-AriaRepositoryRoot))
     $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd([char]47, [char]92)
@@ -275,48 +440,130 @@ function Get-AriaManifestEntries {
 
 function Update-AriaManifest {
     param([string]$Root = (Get-AriaRepositoryRoot))
-    $lines = New-Object System.Collections.Generic.List[string]
-    foreach ($entry in Get-AriaManifestEntries -Root $Root) {
-        $lines.Add("$($entry.hash)  $($entry.path)")
+
+    $entries = @(
+        Get-AriaManifestEntries -Root $Root
+    )
+
+    $byteIdentity = Test-AriaManifestByteIdentity `
+        -Root $Root `
+        -Entries $entries
+
+    if (-not $byteIdentity.valid) {
+        throw (
+            'ARIA manifest byte identity failed: ' +
+            $byteIdentity.message
+        )
     }
+
+    $lines = New-Object System.Collections.Generic.List[string]
+
+    foreach ($entry in $entries) {
+        [void]$lines.Add(
+            "$($entry.hash)  $($entry.path)"
+        )
+    }
+
     $text = ($lines -join "`n") + "`n"
-    Write-AriaUtf8NoBom -Path (Join-Path $Root 'MANIFEST.sha256') -Text $text
+
+    Write-AriaUtf8NoBom `
+        -Path (Join-Path $Root 'MANIFEST.sha256') `
+        -Text $text
+
     return $lines.Count
 }
 
 function Test-AriaManifest {
     param([string]$Root = (Get-AriaRepositoryRoot))
+
     $manifestPath = Join-Path $Root 'MANIFEST.sha256'
+
     if (-not (Test-Path -LiteralPath $manifestPath)) {
-        return [pscustomobject][ordered]@{ valid = $false; message = 'MANIFEST.sha256 is missing.'; expected = 0; actual = 0 }
-    }
-    $expected = [ordered]@{}
-    foreach ($line in (Normalize-AriaText -Text (Read-AriaUtf8Text -Path $manifestPath)).Split("`n")) {
-        if (-not $line) { continue }
-        if ($line -notmatch '^([0-9a-f]{64})  (.+)$') {
-            return [pscustomobject][ordered]@{ valid = $false; message = "Malformed manifest line: $line"; expected = 0; actual = 0 }
+        return [pscustomobject][ordered]@{
+            valid        = $false
+            message      = 'MANIFEST.sha256 is missing.'
+            expected     = 0
+            actual       = 0
+            byteIdentity = $null
         }
+    }
+
+    $expected = [ordered]@{}
+
+    foreach (
+        $line in (
+            Normalize-AriaText `
+                -Text (Read-AriaUtf8Text -Path $manifestPath)
+        ).Split("`n")
+    ) {
+        if (-not $line) {
+            continue
+        }
+
+        if ($line -notmatch '^([0-9a-f]{64})  (.+)$') {
+            return [pscustomobject][ordered]@{
+                valid        = $false
+                message      = "Malformed manifest line: $line"
+                expected     = 0
+                actual       = 0
+                byteIdentity = $null
+            }
+        }
+
         $expected[$matches[2]] = $matches[1]
     }
-    $actualEntries = Get-AriaManifestEntries -Root $Root
+
+    $actualEntries = @(
+        Get-AriaManifestEntries -Root $Root
+    )
+
     $actual = @{}
-    foreach ($entry in $actualEntries) { $actual[$entry.path] = $entry.hash }
+
+    foreach ($entry in $actualEntries) {
+        $actual[$entry.path] = $entry.hash
+    }
+
     $problems = New-Object System.Collections.Generic.List[string]
+
     foreach ($path in $expected.Keys) {
-        if (-not $actual.ContainsKey($path)) { $problems.Add("missing:$path"); continue }
-        if ($actual[$path] -ne $expected[$path]) { $problems.Add("changed:$path") }
+        if (-not $actual.ContainsKey($path)) {
+            [void]$problems.Add("missing:$path")
+            continue
+        }
+
+        if ($actual[$path] -ne $expected[$path]) {
+            [void]$problems.Add("changed:$path")
+        }
     }
+
     foreach ($path in $actual.Keys) {
-        if (-not $expected.Contains($path)) { $problems.Add("untracked:$path") }
+        if (-not $expected.Contains($path)) {
+            [void]$problems.Add("untracked:$path")
+        }
     }
-    $manifestMessage = 'manifest verified'
-    if ($problems.Count -ne 0) { $manifestMessage = $problems -join ', ' }
+
+    $byteIdentity = Test-AriaManifestByteIdentity `
+        -Root $Root `
+        -Entries $actualEntries
+
+    foreach ($problem in @($byteIdentity.problems)) {
+        [void]$problems.Add([string]$problem)
+    }
+
+    $manifestMessage = if ($problems.Count -eq 0) {
+        'manifest verified'
+    }
+    else {
+        $problems -join ', '
+    }
+
     return [pscustomobject][ordered]@{
-        valid = ($problems.Count -eq 0)
-        message = $manifestMessage
-        expected = $expected.Count
-        actual = $actual.Count
+        valid        = ($problems.Count -eq 0)
+        message      = $manifestMessage
+        expected     = $expected.Count
+        actual       = $actual.Count
+        byteIdentity = $byteIdentity
     }
 }
 
-Export-ModuleMember -Function Get-AriaRepositoryRoot, Read-AriaUtf8Text, Get-AriaCompilerVersion, Get-AriaLock, Normalize-AriaText, Get-AriaSourceText, Write-AriaUtf8NoBom, Get-AriaSha256Bytes, Get-AriaSha256Text, Get-AriaSha256File, ConvertTo-AriaJson, ConvertTo-AriaHashtable, Test-AriaSemanticVersion, New-AriaDiagnostic, Get-AriaErrorDiagnostics, Resolve-AriaConfinedPath, Get-AriaManifestEntries, Update-AriaManifest, Test-AriaManifest
+Export-ModuleMember -Function Get-AriaRepositoryRoot, Read-AriaUtf8Text, Get-AriaCompilerVersion, Get-AriaLock, Normalize-AriaText, Get-AriaSourceText, Write-AriaUtf8NoBom, Get-AriaSha256Bytes, Get-AriaSha256Text, Get-AriaSha256File, ConvertTo-AriaJson, ConvertTo-AriaHashtable, Test-AriaSemanticVersion, New-AriaDiagnostic, Get-AriaErrorDiagnostics, Resolve-AriaConfinedPath, Get-AriaManifestEntries, Test-AriaManifestByteIdentity, Update-AriaManifest, Test-AriaManifest

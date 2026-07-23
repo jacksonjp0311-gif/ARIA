@@ -85,6 +85,118 @@ function Write-AriaBanner {
     }
 }
 
+function Get-AriaSignalStyle {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Mode
+    )
+
+    $styles = [ordered]@{
+        Observe  = @('🜁', 'Magenta', 'OBSERVE',  'measuring')
+        Bind     = @('🜃', 'Magenta', 'BOUND',    'bounded')
+        Emit     = @('🜂', 'Magenta', 'EMIT',     'transmitting')
+        Retain   = @('🜄', 'Green',   'RETAIN',   'retained')
+        Attest   = @('🜍', 'Green',   'ATTEST',   'verified')
+        Evolve   = @('∿',  'Magenta', 'EVOLVE',   'transitioning')
+        Seal     = @('◆',  'Green',   'SEALED',   'coherent')
+        Fracture = @('⬗',  'Red',     'FRACTURE', 'fractured')
+    }
+
+    if (-not $styles.Contains($Mode)) {
+        throw "Unknown ARIA signal mode '$Mode'."
+    }
+
+    $style = $styles[$Mode]
+
+    [pscustomobject][ordered]@{
+        schema    = 'aria.display-signal-style/0.1'
+        mode      = $Mode
+        glyph     = [string]$style[0]
+        color     = [string]$style[1]
+        label     = [string]$style[2]
+        coherence = [string]$style[3]
+    }
+}
+
+function Write-AriaSignal {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$Mode,
+        [Parameter(Mandatory=$true)][string]$Name,
+        [AllowEmptyString()][string]$Value = '',
+        [AllowEmptyString()][string]$Detail = '',
+        $Duration,
+        [AllowEmptyString()][string]$Prefix = '',
+        [switch]$PassThru
+    )
+
+    $style = Get-AriaSignalStyle -Mode $Mode
+    $durationText = Format-AriaDuration -Duration $Duration
+
+    if ($Prefix) {
+        Write-AriaPaint -Text $Prefix -Color Gray -NoNewline
+    }
+
+    Write-AriaPaint `
+        -Text $style.glyph `
+        -Color $style.color `
+        -Bold `
+        -NoNewline
+
+    Write-AriaPaint `
+        -Text ('  {0,-18}' -f $Name) `
+        -Color White `
+        -NoNewline
+
+    $signalValue = if ($Value) {
+        $Value
+    }
+    else {
+        $style.label
+    }
+
+    Write-AriaPaint `
+        -Text $signalValue `
+        -Color $style.color `
+        -Bold `
+        -NoNewline
+
+    $tail = New-Object System.Collections.Generic.List[string]
+
+    if ($durationText) {
+        [void]$tail.Add($durationText)
+    }
+
+    if ($Detail) {
+        [void]$tail.Add($Detail)
+    }
+
+    if ($tail.Count -gt 0) {
+        Write-AriaPaint `
+            -Text (' · ' + ($tail -join ' · ')) `
+            -Color Gray
+    }
+    else {
+        Write-Host ''
+    }
+
+    if ($PassThru) {
+        [pscustomobject][ordered]@{
+            schema    = 'aria.display-signal/0.1'
+            mode      = $style.mode
+            glyph     = $style.glyph
+            color     = $style.color
+            label     = $style.label
+            coherence = $style.coherence
+            name      = $Name
+            value     = $Value
+            detail    = $Detail
+            duration  = $durationText
+        }
+    }
+}
+
 function Write-AriaStage {
     param(
         [Parameter(Mandatory=$true)][string]$Name,
@@ -181,8 +293,14 @@ function Write-AriaSummary {
         [string]$Detail = '',
         $Duration
     )
+
     Write-Host ''
-    Write-AriaStage -Name $Title -State $(if ($Passed) { 'Pass' } else { 'Fail' }) -Detail $Detail -Duration $Duration
+
+    Write-AriaSignal `
+        -Mode $(if ($Passed) { 'Seal' } else { 'Fracture' }) `
+        -Name $Title `
+        -Value $(if ($Detail) { $Detail } elseif ($Passed) { 'ONLINE' } else { 'FAILED' }) `
+        -Duration $Duration
 }
 
 function Write-AriaStream {
@@ -724,11 +842,37 @@ function Format-AriaTransmissionReceipt {
 
 function Write-AriaTransmissionReceipt {
     [CmdletBinding()]
-    param([Parameter(Mandatory=$true)]$Receipt)
+    param(
+        [Parameter(Mandatory=$true)]
+        $Receipt
+    )
 
-    $line = Format-AriaTransmissionReceipt -Receipt $Receipt
-    $color = if ([string]$Receipt.outcome -eq 'PASS') { [ConsoleColor]::DarkCyan } else { [ConsoleColor]::Red }
-    Write-Host $line -ForegroundColor $color
+    $detail = New-Object System.Collections.Generic.List[string]
+
+    if ($null -ne $Receipt.durationMs) {
+        [void]$detail.Add(
+            ('{0}ms' -f [int64]$Receipt.durationMs)
+        )
+    }
+
+    if ($null -ne $Receipt.totalBytes) {
+        [void]$detail.Add(
+            ('{0}B' -f [int64]$Receipt.totalBytes)
+        )
+    }
+
+    if ($null -ne $Receipt.exitCode) {
+        [void]$detail.Add(
+            ('exit:{0}' -f [int]$Receipt.exitCode)
+        )
+    }
+
+    Write-AriaSignal `
+        -Mode $(if ([string]$Receipt.outcome -eq 'PASS') { 'Emit' } else { 'Fracture' }) `
+        -Name $(if ($Receipt.label) { [string]$Receipt.label } else { 'transmission' }) `
+        -Value $(if ($Receipt.coherence) { [string]$Receipt.coherence } else { [string]$Receipt.outcome }) `
+        -Detail ($detail -join ' · ') `
+        -Prefix '└─ '
 }
 
 function Invoke-AriaBufferedItem {
@@ -834,3 +978,4 @@ Export-ModuleMember -Function `
     Write-AriaTransmissionReceipt, `
     Invoke-AriaBufferedItem, `
     Invoke-AriaBufferedSequence
+Export-ModuleMember -Function Get-AriaSignalStyle, Write-AriaSignal

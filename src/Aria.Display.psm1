@@ -74,15 +74,405 @@ function Write-AriaBanner {
         [Parameter(Mandatory=$true)][string]$Title,
         [string]$Subtitle = 'gated compiler · compressed bytecode · local virtual machine'
     )
+
+    $mode = Get-AriaBannerSignalMode -Title $Title
+    $style = Get-AriaSignalStyle -Mode $mode
+
     Write-Host ''
-    Write-AriaPaint -Text '◆' -Color Magenta -Bold -NoNewline
-    Write-AriaPaint -Text ('  {0}' -f $Title.ToUpperInvariant()) -Color Cyan -Bold -NoNewline
+
+    Invoke-AriaGlyphMotion -Style $style
+
+    Write-AriaPaint `
+        -Text $style.glyph `
+        -Color $style.color `
+        -Bold `
+        -NoNewline
+
+    Write-AriaPaint `
+        -Text ('  {0}' -f $Title.ToUpperInvariant()) `
+        -Color Cyan `
+        -Bold `
+        -NoNewline
+
     if ($Subtitle) {
-        Write-AriaPaint -Text ('   {0}' -f $Subtitle) -Color Gray
+        Write-AriaPaint `
+            -Text ('   {0}' -f $Subtitle) `
+            -Color Gray
     }
     else {
         Write-Host ''
     }
+
+    $script:AriaSignalState.previousMode = $style.mode
+    $script:AriaSignalState.previousGlyph = $style.glyph
+}
+
+$script:AriaSignalState = [pscustomobject][ordered]@{
+    sequence = 0
+    previousMode = $null
+    previousGlyph = $null
+}
+
+function Get-AriaGlyphRegistry {
+    [CmdletBinding()]
+    param()
+
+    $definitions = @(
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Observe'
+            glyph        = '🜁'
+            color        = 'Magenta'
+            label        = 'OBSERVE'
+            coherence    = 'measuring'
+            motion       = 'Pulse'
+            cognitiveCue = 'orient attention'
+            domain       = 'analysis'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Bind'
+            glyph        = '🜃'
+            color        = 'Magenta'
+            label        = 'BOUND'
+            coherence    = 'bounded'
+            motion       = 'Clamp'
+            cognitiveCue = 'mark constraint'
+            domain       = 'authority'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Emit'
+            glyph        = '🜂'
+            color        = 'Magenta'
+            label        = 'EMIT'
+            coherence    = 'transmitting'
+            motion       = 'Wave'
+            cognitiveCue = 'signal initiation'
+            domain       = 'transmission'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Retain'
+            glyph        = '🜄'
+            color        = 'Green'
+            label        = 'RETAIN'
+            coherence    = 'retained'
+            motion       = 'Settle'
+            cognitiveCue = 'encode persistence'
+            domain       = 'memory'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Attest'
+            glyph        = '🜍'
+            color        = 'Green'
+            label        = 'ATTEST'
+            coherence    = 'verified'
+            motion       = 'Pulse'
+            cognitiveCue = 'confirm identity'
+            domain       = 'verification'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Evolve'
+            glyph        = '∿'
+            color        = 'Magenta'
+            label        = 'EVOLVE'
+            coherence    = 'transitioning'
+            motion       = 'Wave'
+            cognitiveCue = 'indicate transformation'
+            domain       = 'evolution'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Seal'
+            glyph        = '◆'
+            color        = 'Green'
+            label        = 'SEALED'
+            coherence    = 'coherent'
+            motion       = 'Settle'
+            cognitiveCue = 'signal completion'
+            domain       = 'artifact'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Fracture'
+            glyph        = '⬗'
+            color        = 'Red'
+            label        = 'FRACTURE'
+            coherence    = 'fractured'
+            motion       = 'Shake'
+            cognitiveCue = 'interrupt and warn'
+            domain       = 'failure'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'System'
+            glyph        = '⌬'
+            color        = 'Cyan'
+            label        = 'SYSTEM'
+            coherence    = 'online'
+            motion       = 'Orbit'
+            cognitiveCue = 'establish system frame'
+            domain       = 'system'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Operator'
+            glyph        = '◉'
+            color        = 'Magenta'
+            label        = 'OPERATOR'
+            coherence    = 'present'
+            motion       = 'Pulse'
+            cognitiveCue = 'center human agency'
+            domain       = 'human'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Agent'
+            glyph        = '⟁'
+            color        = 'Magenta'
+            label        = 'AGENT'
+            coherence    = 'engaged'
+            motion       = 'Pulse'
+            cognitiveCue = 'mark delegated agency'
+            domain       = 'agent'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Repository'
+            glyph        = '▧'
+            color        = 'Cyan'
+            label        = 'REPOSITORY'
+            coherence    = 'tracked'
+            motion       = 'Clamp'
+            cognitiveCue = 'anchor provenance'
+            domain       = 'repository'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Service'
+            glyph        = 'ϟ'
+            color        = 'Magenta'
+            label        = 'SERVICE'
+            coherence    = 'active'
+            motion       = 'Spark'
+            cognitiveCue = 'signal external action'
+            domain       = 'service'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Surface'
+            glyph        = '◇'
+            color        = 'Cyan'
+            label        = 'SURFACE'
+            coherence    = 'visible'
+            motion       = 'Pulse'
+            cognitiveCue = 'present information'
+            domain       = 'surface'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Memory'
+            glyph        = '⊙'
+            color        = 'Green'
+            label        = 'MEMORY'
+            coherence    = 'continuous'
+            motion       = 'Orbit'
+            cognitiveCue = 'cue continuity'
+            domain       = 'memory'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Artifact'
+            glyph        = '◆'
+            color        = 'Green'
+            label        = 'ARTIFACT'
+            coherence    = 'materialized'
+            motion       = 'Settle'
+            cognitiveCue = 'mark produced evidence'
+            domain       = 'artifact'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Policy'
+            glyph        = '⛨'
+            color        = 'Magenta'
+            label        = 'POLICY'
+            coherence    = 'governing'
+            motion       = 'Clamp'
+            cognitiveCue = 'mark rule boundary'
+            domain       = 'policy'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Stream'
+            glyph        = '∿'
+            color        = 'Magenta'
+            label        = 'STREAM'
+            coherence    = 'flowing'
+            motion       = 'Wave'
+            cognitiveCue = 'show continuous flow'
+            domain       = 'stream'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Connect'
+            glyph        = '↔'
+            color        = 'Magenta'
+            label        = 'CONNECT'
+            coherence    = 'linked'
+            motion       = 'Bridge'
+            cognitiveCue = 'show relationship'
+            domain       = 'connection'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Parallel'
+            glyph        = '⧉'
+            color        = 'Magenta'
+            label        = 'PARALLEL'
+            coherence    = 'distributed'
+            motion       = 'Orbit'
+            cognitiveCue = 'show concurrent work'
+            domain       = 'coordination'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Converge'
+            glyph        = '⧉'
+            color        = 'Green'
+            label        = 'CONVERGED'
+            coherence    = 'integrated'
+            motion       = 'Settle'
+            cognitiveCue = 'show coherent joining'
+            domain       = 'coordination'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Sync'
+            glyph        = '⌁'
+            color        = 'Cyan'
+            label        = 'SYNC'
+            coherence    = 'aligned'
+            motion       = 'Wave'
+            cognitiveCue = 'cue synchronization'
+            domain       = 'coordination'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Retry'
+            glyph        = '⟲'
+            color        = 'Magenta'
+            label        = 'RETRY'
+            coherence    = 're-entering'
+            motion       = 'Orbit'
+            cognitiveCue = 'cue another attempt'
+            domain       = 'recovery'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Wait'
+            glyph        = '⧖'
+            color        = 'Cyan'
+            label        = 'WAIT'
+            coherence    = 'pending'
+            motion       = 'Pulse'
+            cognitiveCue = 'hold attention gently'
+            domain       = 'latency'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Discover'
+            glyph        = '⟡'
+            color        = 'Cyan'
+            label        = 'DISCOVER'
+            coherence    = 'revealed'
+            motion       = 'Spark'
+            cognitiveCue = 'mark new information'
+            domain       = 'discovery'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Focus'
+            glyph        = '◎'
+            color        = 'Magenta'
+            label        = 'FOCUS'
+            coherence    = 'centered'
+            motion       = 'Pulse'
+            cognitiveCue = 'direct focal attention'
+            domain       = 'attention'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Gate'
+            glyph        = '⚑'
+            color        = 'Magenta'
+            label        = 'GATE'
+            coherence    = 'evaluating'
+            motion       = 'Clamp'
+            cognitiveCue = 'mark decision point'
+            domain       = 'verification'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Isolate'
+            glyph        = '⊗'
+            color        = 'Red'
+            label        = 'ISOLATE'
+            coherence    = 'contained'
+            motion       = 'Clamp'
+            cognitiveCue = 'mark containment'
+            domain       = 'safety'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Merge'
+            glyph        = '⊕'
+            color        = 'Green'
+            label        = 'MERGE'
+            coherence    = 'combined'
+            motion       = 'Bridge'
+            cognitiveCue = 'show composition'
+            domain       = 'integration'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Measure'
+            glyph        = '⏱'
+            color        = 'Cyan'
+            label        = 'MEASURE'
+            coherence    = 'timed'
+            motion       = 'Pulse'
+            cognitiveCue = 'cue quantitative state'
+            domain       = 'measurement'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Authorize'
+            glyph        = '⛨'
+            color        = 'Green'
+            label        = 'AUTHORIZE'
+            coherence    = 'granted'
+            motion       = 'Pulse'
+            cognitiveCue = 'confirm permission'
+            domain       = 'authority'
+        }
+        [pscustomobject][ordered]@{
+            schema       = 'aria.display-glyph-registry/0.2'
+            mode         = 'Deny'
+            glyph        = '⊘'
+            color        = 'Red'
+            label        = 'DENY'
+            coherence    = 'withheld'
+            motion       = 'Shake'
+            cognitiveCue = 'interrupt unsafe action'
+            domain       = 'authority'
+        }
+    )
+
+    return $definitions
 }
 
 function Get-AriaSignalStyle {
@@ -92,30 +482,257 @@ function Get-AriaSignalStyle {
         [string]$Mode
     )
 
-    $styles = [ordered]@{
-        Observe  = @('🜁', 'Magenta', 'OBSERVE',  'measuring')
-        Bind     = @('🜃', 'Magenta', 'BOUND',    'bounded')
-        Emit     = @('🜂', 'Magenta', 'EMIT',     'transmitting')
-        Retain   = @('🜄', 'Green',   'RETAIN',   'retained')
-        Attest   = @('🜍', 'Green',   'ATTEST',   'verified')
-        Evolve   = @('∿',  'Magenta', 'EVOLVE',   'transitioning')
-        Seal     = @('◆',  'Green',   'SEALED',   'coherent')
-        Fracture = @('⬗',  'Red',     'FRACTURE', 'fractured')
+    $style = @(
+        Get-AriaGlyphRegistry |
+            Where-Object {
+                $_.mode -eq $Mode
+            }
+    )
+
+    if ($style.Count -ne 1) {
+        throw "Unknown or ambiguous ARIA signal mode '$Mode'."
     }
 
-    if (-not $styles.Contains($Mode)) {
-        throw "Unknown ARIA signal mode '$Mode'."
+    return $style[0]
+}
+
+function Get-AriaMotionPolicy {
+    [CmdletBinding()]
+    param()
+
+    $requested = [string]$env:ARIA_MOTION
+    $reduced = (
+        $env:ARIA_REDUCED_MOTION -eq '1' -or
+        $requested -eq '0' -or
+        $requested -eq 'off'
+    )
+
+    $interactive = (
+        [Environment]::UserInteractive -and
+        -not [Console]::IsOutputRedirected -and
+        $env:CI -ne 'true'
+    )
+
+    $enabled = (
+        -not $reduced -and
+        $interactive
+    )
+
+    $intensity = [string]$env:ARIA_MOTION_INTENSITY
+
+    if ([string]::IsNullOrWhiteSpace($intensity)) {
+        $intensity = 'normal'
     }
 
-    $style = $styles[$Mode]
+    $delayMs = switch ($intensity.ToLowerInvariant()) {
+        'subtle' { 34 }
+        'strong' { 72 }
+        default  { 50 }
+    }
+
+    $maxFrames = switch ($intensity.ToLowerInvariant()) {
+        'subtle' { 2 }
+        'strong' { 5 }
+        default  { 4 }
+    }
 
     [pscustomobject][ordered]@{
-        schema    = 'aria.display-signal-style/0.1'
-        mode      = $Mode
-        glyph     = [string]$style[0]
-        color     = [string]$style[1]
-        label     = [string]$style[2]
-        coherence = [string]$style[3]
+        schema = 'aria.display-motion-policy/0.1'
+        enabled = $enabled
+        reducedMotion = $reduced
+        interactive = $interactive
+        intensity = $intensity
+        delayMs = $delayMs
+        maxFrames = $maxFrames
+    }
+}
+
+function Get-AriaMotionFrames {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]$Style,
+        [AllowNull()]$PreviousStyle
+    )
+
+    $frames = New-Object System.Collections.Generic.List[string]
+
+    if (
+        $null -ne $PreviousStyle -and
+        [string]$PreviousStyle.mode -ne [string]$Style.mode
+    ) {
+        [void]$frames.Add(
+            ('{0}›{1}' -f $PreviousStyle.glyph, $Style.glyph)
+        )
+    }
+
+    switch ([string]$Style.motion) {
+        'Pulse' {
+            [void]$frames.Add('·')
+            [void]$frames.Add([string]$Style.glyph)
+            [void]$frames.Add('◆')
+            [void]$frames.Add([string]$Style.glyph)
+        }
+
+        'Shake' {
+            [void]$frames.Add((' {0}' -f $Style.glyph))
+            [void]$frames.Add(('{0} ' -f $Style.glyph))
+            [void]$frames.Add((' {0}' -f $Style.glyph))
+            [void]$frames.Add([string]$Style.glyph)
+        }
+
+        'Wave' {
+            [void]$frames.Add('·')
+            [void]$frames.Add('∿')
+            [void]$frames.Add([string]$Style.glyph)
+            [void]$frames.Add('∿')
+        }
+
+        'Orbit' {
+            [void]$frames.Add(('◜{0}' -f $Style.glyph))
+            [void]$frames.Add(('◝{0}' -f $Style.glyph))
+            [void]$frames.Add(('◞{0}' -f $Style.glyph))
+            [void]$frames.Add(('◟{0}' -f $Style.glyph))
+        }
+
+        'Spark' {
+            [void]$frames.Add('·')
+            [void]$frames.Add('✦')
+            [void]$frames.Add([string]$Style.glyph)
+            [void]$frames.Add('✦')
+        }
+
+        'Clamp' {
+            [void]$frames.Add(('⟦ {0} ⟧' -f $Style.glyph))
+            [void]$frames.Add(('⟦{0}⟧' -f $Style.glyph))
+        }
+
+        'Settle' {
+            [void]$frames.Add('◇')
+            [void]$frames.Add([string]$Style.glyph)
+            [void]$frames.Add('◆')
+        }
+
+        'Bridge' {
+            [void]$frames.Add(('·{0}·' -f $Style.glyph))
+            [void]$frames.Add(('─{0}─' -f $Style.glyph))
+        }
+
+        default {
+            [void]$frames.Add([string]$Style.glyph)
+        }
+    }
+
+    return $frames.ToArray()
+}
+
+function Invoke-AriaGlyphMotion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]$Style,
+        [AllowEmptyString()][string]$Prefix = ''
+    )
+
+    $policy = Get-AriaMotionPolicy
+
+    if (-not $policy.enabled) {
+        return
+    }
+
+    $previousStyle = $null
+
+    if ($script:AriaSignalState.previousMode) {
+        try {
+            $previousStyle = Get-AriaSignalStyle `
+                -Mode $script:AriaSignalState.previousMode
+        }
+        catch {
+            $previousStyle = $null
+        }
+    }
+
+    $frames = @(
+        Get-AriaMotionFrames `
+            -Style $Style `
+            -PreviousStyle $previousStyle |
+            Select-Object -First $policy.maxFrames
+    )
+
+    $clearWidth = 12
+
+    foreach ($frame in $frames) {
+        Write-Host "`r" -NoNewline
+
+        if ($Prefix) {
+            Write-AriaPaint `
+                -Text $Prefix `
+                -Color Gray `
+                -NoNewline
+        }
+
+        Write-AriaPaint `
+            -Text ([string]$frame) `
+            -Color $Style.color `
+            -Bold `
+            -NoNewline
+
+        Write-Host (' ' * $clearWidth) -NoNewline
+        Start-Sleep -Milliseconds $policy.delayMs
+    }
+
+    Write-Host "`r" -NoNewline
+}
+
+function Get-AriaBannerSignalMode {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Title
+    )
+
+    switch -Regex ($Title.ToUpperInvariant()) {
+        'CONFORMANCE|TEST|LATTICE' {
+            return 'Parallel'
+        }
+
+        'MANIFEST|REPOSITORY|GIT' {
+            return 'Repository'
+        }
+
+        'DOCTOR|SYSTEM|VERIFY|VERSION' {
+            return 'System'
+        }
+
+        'EVOLUTION|EVOLVE' {
+            return 'Evolve'
+        }
+
+        'TRANSMISSION|SEND|PUSH|PULL' {
+            return 'Emit'
+        }
+
+        'SYNC' {
+            return 'Sync'
+        }
+
+        'POLICY|AUTHORITY|CONSENT' {
+            return 'Policy'
+        }
+
+        'MEMORY|RECALL|REMEMBER' {
+            return 'Memory'
+        }
+
+        'COMPILE|BUILD|ARTIFACT|CONTAINER' {
+            return 'Artifact'
+        }
+
+        'AGENT' {
+            return 'Agent'
+        }
+
+        default {
+            return 'System'
+        }
     }
 }
 
@@ -134,8 +751,15 @@ function Write-AriaSignal {
     $style = Get-AriaSignalStyle -Mode $Mode
     $durationText = Format-AriaDuration -Duration $Duration
 
+    Invoke-AriaGlyphMotion `
+        -Style $style `
+        -Prefix $Prefix
+
     if ($Prefix) {
-        Write-AriaPaint -Text $Prefix -Color Gray -NoNewline
+        Write-AriaPaint `
+            -Text $Prefix `
+            -Color Gray `
+            -NoNewline
     }
 
     Write-AriaPaint `
@@ -181,18 +805,28 @@ function Write-AriaSignal {
         Write-Host ''
     }
 
+    $previousMode = $script:AriaSignalState.previousMode
+    $script:AriaSignalState.sequence++
+    $script:AriaSignalState.previousMode = $style.mode
+    $script:AriaSignalState.previousGlyph = $style.glyph
+
     if ($PassThru) {
-        [pscustomobject][ordered]@{
-            schema    = 'aria.display-signal/0.1'
-            mode      = $style.mode
-            glyph     = $style.glyph
-            color     = $style.color
-            label     = $style.label
-            coherence = $style.coherence
-            name      = $Name
-            value     = $Value
-            detail    = $Detail
-            duration  = $durationText
+        return [pscustomobject][ordered]@{
+            schema         = 'aria.display-signal/0.2'
+            sequence       = $script:AriaSignalState.sequence
+            mode           = $style.mode
+            glyph          = $style.glyph
+            color          = $style.color
+            label          = $style.label
+            coherence      = $style.coherence
+            motion         = $style.motion
+            cognitiveCue   = $style.cognitiveCue
+            domain         = $style.domain
+            transitionFrom = $previousMode
+            name           = $Name
+            value          = $Value
+            detail         = $Detail
+            duration       = $durationText
         }
     }
 }
@@ -329,10 +963,31 @@ function Start-AriaEnumerator {
         Items = New-Object System.Collections.Generic.List[object]
     }
 
-    Write-AriaPaint -Text '◈' -Color Magenta -Bold -NoNewline
-    Write-AriaPaint -Text ("  {0}" -f $Name) -Color White -NoNewline
-    if($Expected -gt 0){ Write-AriaPaint -Text ("  ×{0}" -f $Expected) -Color Gray }
-    else { Write-Host '' }
+    $style = Get-AriaSignalStyle -Mode Parallel
+    Invoke-AriaGlyphMotion -Style $style
+
+    Write-AriaPaint `
+        -Text $style.glyph `
+        -Color $style.color `
+        -Bold `
+        -NoNewline
+
+    Write-AriaPaint `
+        -Text ("  {0}" -f $Name) `
+        -Color White `
+        -NoNewline
+
+    if ($Expected -gt 0) {
+        Write-AriaPaint `
+            -Text ("  ×{0}" -f $Expected) `
+            -Color Gray
+    }
+    else {
+        Write-Host ''
+    }
+
+    $script:AriaSignalState.previousMode = 'Parallel'
+    $script:AriaSignalState.previousGlyph = $style.glyph
 }
 
 function Add-AriaEnumerationItem {
@@ -366,24 +1021,54 @@ function Add-AriaEnumerationItem {
 }
 
 function Complete-AriaEnumerator {
-    param([string]$Detail='')
+    param(
+        [string]$Detail = ''
+    )
 
-    if($null -eq $script:AriaEnumeration){ throw 'ARIA enumerator is not active.' }
+    if ($null -eq $script:AriaEnumeration) {
+        throw 'ARIA enumerator is not active.'
+    }
 
     $script:AriaEnumeration.Started.Stop()
-    $total=$script:AriaEnumeration.Items.Count
-    $passed=$script:AriaEnumeration.Passed
-    $failed=$script:AriaEnumeration.Failed
-    $state=if($failed -eq 0){'Pass'}else{'Fail'}
-    $duration=Format-AriaDuration -Duration $script:AriaEnumeration.Started.Elapsed
-    $coherence=if($failed -eq 0){'coherent'}else{"$failed fracture(s)"}
-    $summary="{0}/{1} · {2} · {3}" -f $passed,$total,$duration,$coherence
-    if($Detail){$summary+=" · $Detail"}
 
-    Write-AriaStage -Name $script:AriaEnumeration.Name -State $state -Detail $summary
-    $result=$script:AriaEnumeration
-    $script:AriaEnumeration=$null
-    $result
+    $total = $script:AriaEnumeration.Items.Count
+    $passed = $script:AriaEnumeration.Passed
+    $failed = $script:AriaEnumeration.Failed
+    $duration = Format-AriaDuration `
+        -Duration $script:AriaEnumeration.Started.Elapsed
+
+    $mode = if ($failed -eq 0) {
+        'Converge'
+    }
+    else {
+        'Fracture'
+    }
+
+    $coherence = if ($failed -eq 0) {
+        'coherent'
+    }
+    else {
+        "$failed fracture(s)"
+    }
+
+    $tail = New-Object System.Collections.Generic.List[string]
+    [void]$tail.Add($duration)
+    [void]$tail.Add($coherence)
+
+    if ($Detail) {
+        [void]$tail.Add($Detail)
+    }
+
+    Write-AriaSignal `
+        -Mode $mode `
+        -Name $script:AriaEnumeration.Name `
+        -Value ("{0}/{1}" -f $passed, $total) `
+        -Detail ($tail -join ' · ')
+
+    $result = $script:AriaEnumeration
+    $script:AriaEnumeration = $null
+
+    return $result
 }
 
 function Write-AriaCausalFrame {
@@ -978,4 +1663,4 @@ Export-ModuleMember -Function `
     Write-AriaTransmissionReceipt, `
     Invoke-AriaBufferedItem, `
     Invoke-AriaBufferedSequence
-Export-ModuleMember -Function Get-AriaSignalStyle, Write-AriaSignal
+Export-ModuleMember -Function Get-AriaGlyphRegistry, Get-AriaSignalStyle, Get-AriaMotionPolicy, Write-AriaSignal

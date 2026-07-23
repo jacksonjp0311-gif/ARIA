@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 169 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 179 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -1885,6 +1885,42 @@ function New-TestEvolutionRequest {
     }
 }
 
+function New-TestEvolutionVerificationInputs {
+    param([string]$Workspace,[string]$BaseCommit=('3'*40))
+
+    $decisionTime='2026-07-23T12:00:00Z'
+    $token=New-AriaCapabilityToken `
+        -Issuer 'operator:test' `
+        -Subject 'agent:planner' `
+        -Resource 'repository:ARIA' `
+        -Effects @('repository.write') `
+        -NotBefore '2026-01-01T00:00:00Z' `
+        -ExpiresAt '2027-01-01T00:00:00Z' `
+        -Nonce 'verify-plan-test'
+    $request=New-TestEvolutionRequest @([pscustomobject]@{path='new.md';operation='write';content="new`n"})
+    $request.capabilityIds=@($token.id)
+    $plan=New-AriaEvolutionPlan -Request $request -WorkspaceRoot $Workspace -BaseCommit $BaseCommit
+    $authorization=New-AriaEvolutionAuthorization `
+        -ProposalId $plan.proposal.id `
+        -Authorizer 'operator:reviewer' `
+        -Decision approved `
+        -DecidedAt $decisionTime `
+        -Nonce 'verify-plan-authorization'
+    $verificationPolicy=[pscustomobject][ordered]@{
+        schema='aria.evolution-verification-policy/0.8'
+        trustedAuthorizers=@('operator:reviewer')
+        issuerPolicy=New-AriaIssuerTrustPolicy -TrustedIssuers @('operator:test')
+    }
+    [pscustomobject]@{
+        request=$request
+        plan=$plan
+        token=$token
+        authorization=$authorization
+        verificationPolicy=$verificationPolicy
+        baseCommit=$BaseCommit
+    }
+}
+
 Test-Case 'evolution request accepts a narrow write plan' {
     $request=New-TestEvolutionRequest @([pscustomobject]@{path='docs/plan.md';operation='write';content="planned`n"})
     $result=Test-AriaEvolutionRequest $request
@@ -1989,6 +2025,142 @@ Test-Case 'evolution record persistence is idempotent' {
         $first=Write-AriaEvolutionPlanRecord -Plan $plan -WorkspaceRoot $workspace
         $second=Write-AriaEvolutionPlanRecord -Plan $plan -WorkspaceRoot $workspace
         Assert-Equal ([string]$first.recordId) ([string]$second.recordId) 'Idempotent record identity changed.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution verification policy requires explicit authorizers' {
+    $policy=[pscustomobject]@{
+        schema='aria.evolution-verification-policy/0.8'
+        trustedAuthorizers=@()
+        issuerPolicy=New-AriaIssuerTrustPolicy -TrustedIssuers @('operator:test')
+    }
+    $result=Test-AriaEvolutionVerificationPolicy $policy
+    Assert-True (-not[bool]$result.valid) 'Authorizer-free verification policy was accepted.'
+    Assert-True (@($result.errors.code)-contains'E_EVOLUTION_VERIFY_POLICY_AUTHORIZER') 'Trusted authorizer rejection missing.'
+}
+
+Test-Case 'evolution plan record verifies deterministic identity' {
+    $workspace=Join-Path $tempRoot ('aria-verify-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $input=New-TestEvolutionVerificationInputs $workspace
+        $result=Test-AriaEvolutionPlanRecord $input.plan.record
+        Assert-True ([bool]$result.valid) 'Valid evolution plan record was rejected.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution verification authorizes matching artifacts' {
+    $workspace=Join-Path $tempRoot ('aria-verify-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $input=New-TestEvolutionVerificationInputs $workspace
+        $result=Invoke-AriaEvolutionVerification `
+            -Plan $input.plan `
+            -CapabilityBundle $input.token `
+            -Authorization $input.authorization `
+            -VerificationPolicy $input.verificationPolicy `
+            -CurrentCommit $input.baseCommit
+        Assert-Equal 'authorized' ([string]$result.record.state) 'Verified evolution did not become authorized.'
+        Assert-Equal 'approved' ([string]$result.authorityDecision.outcome) 'Capability authority was not approved.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution verification rejects wrong authorization' {
+    $workspace=Join-Path $tempRoot ('aria-verify-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $input=New-TestEvolutionVerificationInputs $workspace
+        $input.authorization.proposalId='sha256:'+('f'*64)
+        $rejected=$false
+        try{$null=Invoke-AriaEvolutionVerification -Plan $input.plan -CapabilityBundle $input.token -Authorization $input.authorization -VerificationPolicy $input.verificationPolicy -CurrentCommit $input.baseCommit}
+        catch{$rejected=$true}
+        Assert-True $rejected 'Mismatched human authorization was accepted.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution verification rejects capability subject mismatch' {
+    $workspace=Join-Path $tempRoot ('aria-verify-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $input=New-TestEvolutionVerificationInputs $workspace
+        $input.plan.proposal.proposer='agent:intruder'
+        $rejected=$false
+        try{$null=Invoke-AriaEvolutionVerification -Plan $input.plan -CapabilityBundle $input.token -Authorization $input.authorization -VerificationPolicy $input.verificationPolicy -CurrentCommit $input.baseCommit}
+        catch{$rejected=$true}
+        Assert-True $rejected 'Mismatched capability subject was accepted.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'persisted evolution plan reloads against stable workspace' {
+    $workspace=Join-Path $tempRoot ('aria-verify-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $input=New-TestEvolutionVerificationInputs $workspace
+        $persisted=Write-AriaEvolutionPlanRecord -Plan $input.plan -WorkspaceRoot $workspace
+        $loaded=Read-AriaEvolutionPlanRecord -ProposalId $input.plan.proposal.id -WorkspaceRoot $workspace -CurrentCommit $input.baseCommit
+        Assert-Equal ([string]$persisted.recordId) ([string]$loaded.record.id) 'Reloaded plan record identity changed.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'persisted evolution plan rejects workspace drift' {
+    $workspace=Join-Path $tempRoot ('aria-verify-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $input=New-TestEvolutionVerificationInputs $workspace
+        $null=Write-AriaEvolutionPlanRecord -Plan $input.plan -WorkspaceRoot $workspace
+        Write-AriaUtf8NoBom (Join-Path $workspace 'new.md') "unexpected`n"
+        $rejected=$false
+        try{$null=Read-AriaEvolutionPlanRecord -ProposalId $input.plan.proposal.id -WorkspaceRoot $workspace -CurrentCommit $input.baseCommit}
+        catch{$rejected=$true}
+        Assert-True $rejected 'Workspace drift after planning was accepted.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'persisted evolution plan rejects base commit drift' {
+    $workspace=Join-Path $tempRoot ('aria-verify-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $input=New-TestEvolutionVerificationInputs $workspace
+        $null=Write-AriaEvolutionPlanRecord -Plan $input.plan -WorkspaceRoot $workspace
+        $rejected=$false
+        try{$null=Read-AriaEvolutionPlanRecord -ProposalId $input.plan.proposal.id -WorkspaceRoot $workspace -CurrentCommit ('4'*40)}
+        catch{$rejected=$true}
+        Assert-True $rejected 'Base commit drift after planning was accepted.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution verification persists append-only decision records' {
+    $workspace=Join-Path $tempRoot ('aria-verify-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $input=New-TestEvolutionVerificationInputs $workspace
+        $persistedPlan=Write-AriaEvolutionPlanRecord -Plan $input.plan -WorkspaceRoot $workspace
+        $verification=Invoke-AriaEvolutionVerification -Plan $input.plan -CapabilityBundle $input.token -Authorization $input.authorization -VerificationPolicy $input.verificationPolicy -CurrentCommit $input.baseCommit
+        $persisted=Write-AriaEvolutionVerificationRecord -Verification $verification -PlanDirectory $persistedPlan.directory
+        Assert-Equal 'authorized' ([string]$persisted.state) 'Persisted verification state mismatch.'
+        Assert-Equal '9' ([string]@(Get-ChildItem -LiteralPath $persisted.directory -File).Count) 'Authorized record file count mismatch.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution verification persistence is idempotent' {
+    $workspace=Join-Path $tempRoot ('aria-verify-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $input=New-TestEvolutionVerificationInputs $workspace
+        $persistedPlan=Write-AriaEvolutionPlanRecord -Plan $input.plan -WorkspaceRoot $workspace
+        $verification=Invoke-AriaEvolutionVerification -Plan $input.plan -CapabilityBundle $input.token -Authorization $input.authorization -VerificationPolicy $input.verificationPolicy -CurrentCommit $input.baseCommit
+        $first=Write-AriaEvolutionVerificationRecord -Verification $verification -PlanDirectory $persistedPlan.directory
+        $second=Write-AriaEvolutionVerificationRecord -Verification $verification -PlanDirectory $persistedPlan.directory
+        Assert-Equal ([string]$first.verificationId) ([string]$second.verificationId) 'Idempotent verification identity changed.'
     }
     finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
 }

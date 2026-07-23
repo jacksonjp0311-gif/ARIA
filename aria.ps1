@@ -5,6 +5,9 @@ param(
     [Parameter(Position=2)][string]$RequestPath,
     [string]$Out,
     [string]$Policy,
+    [string]$Capability,
+    [string]$Authorization,
+    [string]$IssuerPolicy,
     [string]$Workspace,
     [switch]$Strict,
     [switch]$VerboseOutput
@@ -54,6 +57,7 @@ function Show-AriaHelp {
   aria inspect <program.ariac>
   aria graph <program.aria|program.ariac>
   aria evolve plan <request.json> [-Workspace <repository>]
+  aria evolve verify <proposal-id> -Capability <bundle.json> -Authorization <authorization.json> -IssuerPolicy <verification-policy.json>
   aria init <ProgramName>
 
   ARIA 0.4 adds verified human-agent connection contracts: intent, proposal, consent, and closure.
@@ -83,20 +87,48 @@ try {
             $null = Invoke-AriaGitSync -RepositoryRoot $root -Render -VerboseBuffer:$script:VerboseOutput
         }
         'evolve' {
-            if($Path-cne'plan'){throw "evolve currently supports only 'plan'."}
-            if(-not$RequestPath){throw 'evolve plan requires an evolution request JSON path.'}
-            $clock=[Diagnostics.Stopwatch]::StartNew()
-            Write-AriaBanner -Title 'ARIA / EVOLUTION PLAN' -Subtitle 'content-addressed proposal · rollback proof · no repository mutation'
-            Write-AriaTreeStage -Name 'request verification' -State Pulse -Detail $RequestPath
-            $null=Assert-AriaGitClean -RepositoryRoot $workspaceRoot
-            $head=Get-AriaGitHead -RepositoryRoot $workspaceRoot
-            $result=Invoke-AriaEvolutionPlanFile -Path $RequestPath -WorkspaceRoot $workspaceRoot -BaseCommit $head
-            Write-AriaTreeStage -Name 'proposal identity' -State Pass -Detail $result.plan.proposal.id
-            Write-AriaTreeStage -Name 'candidate snapshot' -State Pass -Detail $result.plan.candidateSnapshot.id
-            Write-AriaTreeStage -Name 'rollback proof' -State Pass -Detail 'original snapshot reproduced'
-            Write-AriaTreeStage -Name 'authorization' -State Warn -Detail 'required before verify or apply'
-            $clock.Stop()
-            Write-AriaSummary -Title 'PLAN RECORDED' -Passed $true -Detail $result.persisted.directory -Duration $clock.Elapsed
+            switch($Path){
+                'plan' {
+                    if(-not$RequestPath){throw 'evolve plan requires an evolution request JSON path.'}
+                    $clock=[Diagnostics.Stopwatch]::StartNew()
+                    Write-AriaBanner -Title 'ARIA / EVOLUTION PLAN' -Subtitle 'content-addressed proposal · rollback proof · no repository mutation'
+                    Write-AriaTreeStage -Name 'request verification' -State Pulse -Detail $RequestPath
+                    $null=Assert-AriaGitClean -RepositoryRoot $workspaceRoot
+                    $head=Get-AriaGitHead -RepositoryRoot $workspaceRoot
+                    $result=Invoke-AriaEvolutionPlanFile -Path $RequestPath -WorkspaceRoot $workspaceRoot -BaseCommit $head
+                    Write-AriaTreeStage -Name 'proposal identity' -State Pass -Detail $result.plan.proposal.id
+                    Write-AriaTreeStage -Name 'candidate snapshot' -State Pass -Detail $result.plan.candidateSnapshot.id
+                    Write-AriaTreeStage -Name 'rollback proof' -State Pass -Detail 'original snapshot reproduced'
+                    Write-AriaTreeStage -Name 'authorization' -State Warn -Detail 'required before verify or apply'
+                    $clock.Stop()
+                    Write-AriaSummary -Title 'PLAN RECORDED' -Passed $true -Detail $result.persisted.directory -Duration $clock.Elapsed
+                }
+                'verify' {
+                    if(-not$RequestPath){throw 'evolve verify requires a proposal identity.'}
+                    if(-not$Capability-or-not$Authorization-or-not$IssuerPolicy){
+                        throw 'evolve verify requires -Capability, -Authorization, and -IssuerPolicy files.'
+                    }
+                    $clock=[Diagnostics.Stopwatch]::StartNew()
+                    Write-AriaBanner -Title 'ARIA / EVOLUTION VERIFY' -Subtitle 'record integrity · capability authority · explicit human authorization'
+                    Write-AriaTreeStage -Name 'plan reconstruction' -State Pulse -Detail $RequestPath
+                    $null=Assert-AriaGitClean -RepositoryRoot $workspaceRoot
+                    $head=Get-AriaGitHead -RepositoryRoot $workspaceRoot
+                    $result=Invoke-AriaEvolutionVerificationFiles `
+                        -ProposalId $RequestPath `
+                        -WorkspaceRoot $workspaceRoot `
+                        -CurrentCommit $head `
+                        -CapabilityPath $Capability `
+                        -AuthorizationPath $Authorization `
+                        -VerificationPolicyPath $IssuerPolicy
+                    Write-AriaTreeStage -Name 'record integrity' -State Pass -Detail $result.plan.record.id
+                    Write-AriaTreeStage -Name 'capability authority' -State Pass -Detail $result.verification.authorityDecision.id
+                    Write-AriaTreeStage -Name 'human authorization' -State Pass -Detail $result.verification.authorization.id
+                    Write-AriaTreeStage -Name 'repository mutation' -State Info -Detail 'none'
+                    $clock.Stop()
+                    Write-AriaSummary -Title 'EVOLUTION AUTHORIZED' -Passed $true -Detail $result.persisted.verificationId -Duration $clock.Elapsed
+                }
+                default{throw "evolve supports 'plan' and 'verify'."}
+            }
         }
         'profile' {
             $profile = Get-AriaRuntimeProfile

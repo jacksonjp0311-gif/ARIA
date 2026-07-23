@@ -35,12 +35,12 @@ brutally rigorous underneath
 | Compiler | `0.1.0-alpha.5` |
 | Language specification | `0.4.0` |
 | Source Core | `alpha.22` · `aria.source-ir/0.7` |
-| Conformance | `169/169` deterministic gates |
+| Conformance | `179/179` deterministic gates |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
 | Graph substrate | Transactional execution + deterministic replay |
-| Evolution | Persistent plans + content-addressed proposals + human authorization + rollback proof |
+| Evolution | Persistent plans + verified authorization + rollback proof |
 | Event model | Typed Event Spine + append-only NDJSON ledger |
 | Operator UI | Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
@@ -107,7 +107,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ conformance lattice   PASS   169/169 · coherent
+◆ conformance lattice   PASS   179/179 · coherent
 ```
 
 ### Run an ordinary ARIA program
@@ -149,6 +149,7 @@ Common operations:
 .\aria.cmd push
 .\aria.cmd sync
 .\aria.cmd evolve plan .\examples\evolution-plan.json
+.\aria.cmd evolve verify <proposal-id> -Capability <bundle.json> -Authorization <authorization.json> -IssuerPolicy <verification-policy.json>
 ```
 
 Raw buffered provider output is hidden by default. To expose it:
@@ -630,6 +631,20 @@ candidate rollback, and writes canonical records under `.aria/evolution/`.
 The record remains `awaiting-authorization`; planning does not apply content,
 run gates, commit, or push.
 
+Authorization is a separate, still non-mutating step:
+
+```powershell
+.\aria.cmd evolve verify <proposal-id> `
+  -Capability .\capability-bundle.json `
+  -Authorization .\authorization.json `
+  -IssuerPolicy .\verification-policy.json
+```
+
+Verification reloads every persisted identity, confirms the repository has not
+drifted, resolves capability and authorizer trust, reconstructs the candidate
+and rollback proof, and appends an `authorized` record. Candidate files remain
+untouched.
+
 Never force-push shared `main`.
 
 Before committing:
@@ -706,7 +721,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ conformance lattice PASS 169/169 · coherent
+◆ conformance lattice PASS 179/179 · coherent
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
@@ -732,6 +747,7 @@ Start here:
 | `docs/31-governed-evolution.md` | Authorized repository evolution and rollback proof |
 | `docs/33-source-language-core.md` | Ordinary pure Source Core language |
 | `docs/34-evolution-planning.md` | Persistent, non-mutating evolution planning |
+| `docs/35-evolution-verification.md` | Non-mutating capability and authorization verification |
 
 Earlier documents record the architectural evolution and remain useful context.
 

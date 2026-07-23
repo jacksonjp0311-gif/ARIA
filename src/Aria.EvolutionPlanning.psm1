@@ -222,8 +222,252 @@ function Invoke-AriaEvolutionPlanFile {
     [pscustomobject][ordered]@{plan=$plan;persisted=$persisted}
 }
 
+function Test-AriaEvolutionPlanRecord {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$Record)
+
+    $errors=New-Object 'System.Collections.Generic.List[object]'
+    if([string](Get-AriaPlanningProperty $Record 'schema')-cne'aria.evolution-plan-record/0.7'){
+        [void]$errors.Add((New-AriaStructuredError -Code 'E_EVOLUTION_RECORD_SCHEMA' -Message 'Unsupported evolution plan record schema.' -Path '$.schema'))
+    }
+    if([string](Get-AriaPlanningProperty $Record 'state')-cne'awaiting-authorization'){
+        [void]$errors.Add((New-AriaStructuredError -Code 'E_EVOLUTION_RECORD_STATE' -Message 'Evolution plan is not awaiting authorization.' -Path '$.state'))
+    }
+    $identity=[ordered]@{
+        schema=Get-AriaPlanningProperty $Record 'schema'
+        state=Get-AriaPlanningProperty $Record 'state'
+        proposalId=Get-AriaPlanningProperty $Record 'proposalId'
+        baseCommit=Get-AriaPlanningProperty $Record 'baseCommit'
+        originalSnapshotId=Get-AriaPlanningProperty $Record 'originalSnapshotId'
+        candidateSnapshotId=Get-AriaPlanningProperty $Record 'candidateSnapshotId'
+        semanticDiff=Get-AriaPlanningProperty $Record 'semanticDiff'
+        rollbackVerified=[bool](Get-AriaPlanningProperty $Record 'rollbackVerified' $false)
+        requiredGates=@((Get-AriaPlanningProperty $Record 'requiredGates' @()))
+    }
+    $expected="sha256:$(Get-AriaSha256Hex (ConvertTo-AriaStableJson $identity))"
+    if([string](Get-AriaPlanningProperty $Record 'id')-cne$expected){
+        [void]$errors.Add((New-AriaStructuredError -Code 'E_EVOLUTION_RECORD_IDENTITY' -Message 'Evolution plan record identity mismatch.' -Path '$.id'))
+    }
+    [pscustomobject][ordered]@{valid=($errors.Count-eq0);errors=@($errors.ToArray());expectedId=$expected}
+}
+
+function Read-AriaEvolutionPlanRecord {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$ProposalId,
+        [Parameter(Mandatory=$true)][string]$WorkspaceRoot,
+        [Parameter(Mandatory=$true)][string]$CurrentCommit
+    )
+
+    $digest=$ProposalId-replace'^sha256:',''
+    if($digest-cnotmatch'^[a-f0-9]{64}$'){throw 'Evolution verification requires a valid proposal identity.'}
+    $directory=Join-Path (Join-Path ([IO.Path]::GetFullPath($WorkspaceRoot)) '.aria/evolution') $digest
+    if(-not(Test-Path -LiteralPath $directory -PathType Container)){throw "Evolution plan record not found: $ProposalId"}
+    $documents=@{}
+    foreach($name in @('request','proposal','original-snapshot','candidate-snapshot','plan')){
+        $path=Join-Path $directory ($name+'.json')
+        if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw "Evolution plan record is incomplete: $($name).json"}
+        try{$documents[$name]=Read-AriaUtf8Text $path|ConvertFrom-Json}
+        catch{throw "Evolution plan record '$($name).json' is invalid JSON: $($_.Exception.Message)"}
+    }
+
+    $proposalValidation=Test-AriaEvolutionProposal $documents['proposal']
+    if(-not[bool]$proposalValidation.valid){throw "Persisted proposal failed verification: $(@($proposalValidation.errors.code)-join', ')"}
+    foreach($name in @('original-snapshot','candidate-snapshot')){
+        $snapshotValidation=Test-AriaRepositorySnapshot $documents[$name]
+        if(-not[bool]$snapshotValidation.valid){throw "Persisted $name failed verification: $(@($snapshotValidation.errors.code)-join', ')"}
+    }
+    $recordValidation=Test-AriaEvolutionPlanRecord $documents['plan']
+    if(-not[bool]$recordValidation.valid){throw "Persisted plan record failed verification: $(@($recordValidation.errors.code)-join', ')"}
+    if([string]$documents['proposal'].id-cne"sha256:$digest"){throw 'Evolution directory identity does not match its proposal.'}
+    if([string]$documents['plan'].proposalId-cne[string]$documents['proposal'].id -or
+       [string]$documents['plan'].originalSnapshotId-cne[string]$documents['original-snapshot'].id -or
+       [string]$documents['plan'].candidateSnapshotId-cne[string]$documents['candidate-snapshot'].id){
+        throw 'Evolution plan record references inconsistent artifact identities.'
+    }
+    if([string]$documents['proposal'].baseCommit-cne$CurrentCommit.ToLowerInvariant()){
+        throw 'Current Git commit no longer matches the persisted evolution proposal.'
+    }
+
+    $regenerated=New-AriaEvolutionPlan `
+        -Request $documents['request'] `
+        -WorkspaceRoot $WorkspaceRoot `
+        -BaseCommit $CurrentCommit
+    if([string]$regenerated.proposal.id-cne[string]$documents['proposal'].id -or
+       [string]$regenerated.originalSnapshot.id-cne[string]$documents['original-snapshot'].id -or
+       [string]$regenerated.candidateSnapshot.id-cne[string]$documents['candidate-snapshot'].id -or
+       [string]$regenerated.record.id-cne[string]$documents['plan'].id){
+        throw 'Evolution plan no longer matches current repository bytes or persisted records.'
+    }
+    [pscustomobject][ordered]@{
+        directory=$directory
+        request=$documents['request']
+        proposal=$documents['proposal']
+        originalSnapshot=$documents['original-snapshot']
+        candidateSnapshot=$documents['candidate-snapshot']
+        record=$documents['plan']
+    }
+}
+
+function Test-AriaEvolutionVerificationPolicy {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)]$Policy)
+
+    $errors=New-Object 'System.Collections.Generic.List[object]'
+    if([string](Get-AriaPlanningProperty $Policy 'schema')-cne'aria.evolution-verification-policy/0.8'){
+        [void]$errors.Add((New-AriaStructuredError -Code 'E_EVOLUTION_VERIFY_POLICY_SCHEMA' -Message 'Unsupported evolution verification policy schema.' -Path '$.schema'))
+    }
+    if($null-eq(Get-AriaPlanningProperty $Policy 'issuerPolicy')){
+        [void]$errors.Add((New-AriaStructuredError -Code 'E_EVOLUTION_VERIFY_POLICY_ISSUER' -Message 'Verification policy requires issuerPolicy.' -Path '$.issuerPolicy'))
+    }
+    if(@((Get-AriaPlanningProperty $Policy 'trustedAuthorizers' @())).Count-eq0){
+        [void]$errors.Add((New-AriaStructuredError -Code 'E_EVOLUTION_VERIFY_POLICY_AUTHORIZER' -Message 'Verification policy requires trustedAuthorizers.' -Path '$.trustedAuthorizers'))
+    }
+    [pscustomobject][ordered]@{valid=($errors.Count-eq0);errors=@($errors.ToArray())}
+}
+
+function Invoke-AriaEvolutionVerification {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]$Plan,
+        [Parameter(Mandatory=$true)]$CapabilityBundle,
+        [Parameter(Mandatory=$true)]$Authorization,
+        [Parameter(Mandatory=$true)]$VerificationPolicy,
+        [Parameter(Mandatory=$true)][string]$CurrentCommit
+    )
+
+    $policyValidation=Test-AriaEvolutionVerificationPolicy $VerificationPolicy
+    if(-not[bool]$policyValidation.valid){throw "Evolution verification policy rejected: $(@($policyValidation.errors.code)-join', ')"}
+    if([string](Get-AriaPlanningProperty $CapabilityBundle 'schema')-eq'aria.capability-bundle/0.8'){
+        $token=Get-AriaPlanningProperty $CapabilityBundle 'token'
+        $knownTokens=@((Get-AriaPlanningProperty $CapabilityBundle 'knownTokens' @()))
+    }
+    else{
+        $token=$CapabilityBundle
+        $knownTokens=@()
+    }
+    if($null-eq$token){throw 'Evolution capability bundle does not contain a token.'}
+    $decisionTime=[string](Get-AriaPlanningProperty $Authorization 'decidedAt')
+    $governed=Invoke-AriaGovernedEvolutionPlan `
+        -Proposal $Plan.proposal `
+        -Authorization $Authorization `
+        -CapabilityToken $token `
+        -KnownTokens $knownTokens `
+        -IssuerPolicy (Get-AriaPlanningProperty $VerificationPolicy 'issuerPolicy') `
+        -DecisionTime $decisionTime `
+        -TrustedAuthorizers @((Get-AriaPlanningProperty $VerificationPolicy 'trustedAuthorizers' @())) `
+        -CurrentCommit $CurrentCommit `
+        -CurrentSnapshot $Plan.originalSnapshot
+    if(-not[bool]$governed.approved){
+        throw "Evolution verification rejected: $(@($governed.errors|ForEach-Object{$_.code+': '+$_.message})-join'; ')"
+    }
+    if([string]$governed.candidateSnapshot.id-cne[string]$Plan.candidateSnapshot.id){
+        throw 'Authorized candidate identity differs from the persisted candidate.'
+    }
+
+    $identity=[ordered]@{
+        schema='aria.evolution-verification-record/0.8'
+        state='authorized'
+        proposalId=[string]$Plan.proposal.id
+        planRecordId=[string]$Plan.record.id
+        authorizationId=[string]$Authorization.id
+        authorityDecisionId=[string]$governed.authorityDecision.id
+        governedEventId=[string]$governed.event.id
+        baseCommit=$CurrentCommit.ToLowerInvariant()
+        candidateSnapshotId=[string]$governed.candidateSnapshot.id
+        rollbackVerified=[bool]$governed.rollbackVerified
+        requiredGates=@($Plan.proposal.requiredGates)
+    }
+    $record=[pscustomobject][ordered]@{
+        schema=$identity.schema
+        state=$identity.state
+        proposalId=$identity.proposalId
+        planRecordId=$identity.planRecordId
+        authorizationId=$identity.authorizationId
+        authorityDecisionId=$identity.authorityDecisionId
+        governedEventId=$identity.governedEventId
+        baseCommit=$identity.baseCommit
+        candidateSnapshotId=$identity.candidateSnapshotId
+        rollbackVerified=$identity.rollbackVerified
+        requiredGates=@($identity.requiredGates)
+        id="sha256:$(Get-AriaSha256Hex (ConvertTo-AriaStableJson $identity))"
+    }
+    [pscustomobject][ordered]@{
+        authorization=$Authorization
+        authorityDecision=$governed.authorityDecision
+        governedEvent=$governed.event
+        record=$record
+    }
+}
+
+function Write-AriaEvolutionVerificationRecord {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]$Verification,
+        [Parameter(Mandatory=$true)][string]$PlanDirectory
+    )
+
+    $documents=[ordered]@{
+        'authorization.json'=$Verification.authorization
+        'authority-decision.json'=$Verification.authorityDecision
+        'governed-event.json'=$Verification.governedEvent
+        'verification.json'=$Verification.record
+    }
+    foreach($entry in $documents.GetEnumerator()){
+        $path=Join-Path $PlanDirectory $entry.Key
+        $text=(ConvertTo-AriaStableJson $entry.Value)+[Environment]::NewLine
+        if(Test-Path -LiteralPath $path -PathType Leaf){
+            if((Read-AriaUtf8Text $path)-cne$text){throw "Evolution verification identity collision at '$path'."}
+        }
+        else{Write-AriaUtf8NoBom -Path $path -Text $text}
+    }
+    [pscustomobject][ordered]@{
+        directory=$PlanDirectory
+        proposalId=$Verification.record.proposalId
+        verificationId=$Verification.record.id
+        state=$Verification.record.state
+    }
+}
+
+function Invoke-AriaEvolutionVerificationFiles {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$ProposalId,
+        [Parameter(Mandatory=$true)][string]$WorkspaceRoot,
+        [Parameter(Mandatory=$true)][string]$CurrentCommit,
+        [Parameter(Mandatory=$true)][string]$CapabilityPath,
+        [Parameter(Mandatory=$true)][string]$AuthorizationPath,
+        [Parameter(Mandatory=$true)][string]$VerificationPolicyPath
+    )
+
+    foreach($path in @($CapabilityPath,$AuthorizationPath,$VerificationPolicyPath)){
+        if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw "Evolution verification input not found: $path"}
+    }
+    try{$capability=Read-AriaUtf8Text $CapabilityPath|ConvertFrom-Json}
+    catch{throw "Capability JSON is invalid: $($_.Exception.Message)"}
+    try{$authorization=Read-AriaUtf8Text $AuthorizationPath|ConvertFrom-Json}
+    catch{throw "Authorization JSON is invalid: $($_.Exception.Message)"}
+    try{$policy=Read-AriaUtf8Text $VerificationPolicyPath|ConvertFrom-Json}
+    catch{throw "Verification policy JSON is invalid: $($_.Exception.Message)"}
+    $plan=Read-AriaEvolutionPlanRecord -ProposalId $ProposalId -WorkspaceRoot $WorkspaceRoot -CurrentCommit $CurrentCommit
+    $verification=Invoke-AriaEvolutionVerification `
+        -Plan $plan `
+        -CapabilityBundle $capability `
+        -Authorization $authorization `
+        -VerificationPolicy $policy `
+        -CurrentCommit $CurrentCommit
+    $persisted=Write-AriaEvolutionVerificationRecord -Verification $verification -PlanDirectory $plan.directory
+    [pscustomobject][ordered]@{plan=$plan;verification=$verification;persisted=$persisted}
+}
+
 Export-ModuleMember -Function `
     Test-AriaEvolutionRequest, `
     New-AriaEvolutionPlan, `
     Write-AriaEvolutionPlanRecord, `
-    Invoke-AriaEvolutionPlanFile
+    Invoke-AriaEvolutionPlanFile, `
+    Test-AriaEvolutionPlanRecord, `
+    Read-AriaEvolutionPlanRecord, `
+    Test-AriaEvolutionVerificationPolicy, `
+    Invoke-AriaEvolutionVerification, `
+    Write-AriaEvolutionVerificationRecord, `
+    Invoke-AriaEvolutionVerificationFiles

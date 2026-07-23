@@ -2,6 +2,17 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Evolution Verification alpha.24
+
+- Added `aria evolve verify <proposal-id>` as a non-mutating authorization command.
+- Reloaded and re-verified every persisted plan, proposal, and snapshot identity.
+- Rejected current-commit and affected-workspace drift.
+- Resolved root and delegated capability bundles against explicit issuer trust.
+- Required separate human authorization from an explicitly trusted authorizer.
+- Appended authorization, authority-decision, governed-event, and verification records without rewriting the plan.
+- Added three verification schemas and ten authorization-focused gates.
+- Expanded conformance to 179 deterministic gates.
+
 ## Evolution Planning alpha.23
 
 - Added `aria evolve plan <request.json>` as a non-mutating planning command.

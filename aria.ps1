@@ -24,6 +24,7 @@ if (-not $Workspace) { $Workspace = $root }
 if (-not (Test-Path -LiteralPath $Workspace -PathType Container)) { throw "ARIA workspace does not exist or is not a directory: $Workspace" }
 $workspaceRoot = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Workspace).Path)
 $script:VerboseOutput = $VerboseOutput -or $env:ARIA_VERBOSE -eq '1'
+if ($script:VerboseOutput) { $env:ARIA_VERBOSE = '1' }
 
 Import-Module (Join-Path $root 'src/Aria.Display.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Etherflow.psm1') -Force -DisableNameChecking

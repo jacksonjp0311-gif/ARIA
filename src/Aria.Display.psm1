@@ -75,6 +75,7 @@ function Write-AriaBanner {
         [string]$Subtitle = 'gated compiler · compressed bytecode · local virtual machine'
     )
 
+    $profile = Get-AriaDisplayProfile
     $mode = Get-AriaBannerSignalMode -Title $Title
     $style = Get-AriaSignalStyle -Mode $mode
 
@@ -94,7 +95,7 @@ function Write-AriaBanner {
         -Bold `
         -NoNewline
 
-    if ($Subtitle) {
+    if ($profile.verbose -and $Subtitle) {
         Write-AriaPaint `
             -Text ('   {0}' -f $Subtitle) `
             -Color Gray
@@ -496,6 +497,34 @@ function Get-AriaSignalStyle {
     return $style[0]
 }
 
+function Get-AriaDisplayProfile {
+    [CmdletBinding()]
+    param()
+
+    $requested = [string]$env:ARIA_DISPLAY
+    $verbose = (
+        $env:ARIA_VERBOSE -eq '1' -or
+        $requested -eq 'verbose' -or
+        $requested -eq 'expanded'
+    )
+
+    $mode = if ($verbose) {
+        'verbose'
+    }
+    else {
+        'compact'
+    }
+
+    [pscustomobject][ordered]@{
+        schema = 'aria.display-profile/0.1'
+        mode = $mode
+        verbose = $verbose
+        compact = (-not $verbose)
+        successExpansion = $verbose
+        fractureExpansion = $true
+    }
+}
+
 function Get-AriaMotionPolicy {
     [CmdletBinding()]
     param()
@@ -525,19 +554,19 @@ function Get-AriaMotionPolicy {
     }
 
     $delayMs = switch ($intensity.ToLowerInvariant()) {
-        'subtle' { 34 }
-        'strong' { 72 }
-        default  { 50 }
+        'subtle' { 28 }
+        'strong' { 52 }
+        default  { 38 }
     }
 
     $maxFrames = switch ($intensity.ToLowerInvariant()) {
-        'subtle' { 2 }
-        'strong' { 5 }
-        default  { 4 }
+        'subtle' { 1 }
+        'strong' { 3 }
+        default  { 2 }
     }
 
     [pscustomobject][ordered]@{
-        schema = 'aria.display-motion-policy/0.1'
+        schema = 'aria.display-motion-policy/0.2'
         enabled = $enabled
         reducedMotion = $reduced
         interactive = $interactive
@@ -769,7 +798,7 @@ function Write-AriaSignal {
         -NoNewline
 
     Write-AriaPaint `
-        -Text ('  {0,-18}' -f $Name) `
+        -Text ('  {0,-18} ' -f $Name) `
         -Color White `
         -NoNewline
 
@@ -812,7 +841,7 @@ function Write-AriaSignal {
 
     if ($PassThru) {
         return [pscustomobject][ordered]@{
-            schema         = 'aria.display-signal/0.2'
+            schema         = 'aria.display-signal/0.3'
             sequence       = $script:AriaSignalState.sequence
             mode           = $style.mode
             glyph          = $style.glyph
@@ -839,37 +868,134 @@ function Write-AriaStage {
         $Duration,
         [string]$Prefix = ''
     )
+
+    $profile = Get-AriaDisplayProfile
+
+    if (
+        $profile.compact -and
+        $State -notin @('Reject', 'Fail', 'Warn')
+    ) {
+        return
+    }
+
     $glyph = '◇'
     $color = 'Cyan'
     $label = 'READY'
     $pulse = $false
+
     switch ($State) {
-        'Pulse' { $glyph = '◈'; $color = 'Magenta'; $label = 'ACTIVE'; $pulse = $true }
-        'Pass'  { $glyph = '◆'; $color = 'Green'; $label = 'PASS' }
-        'Reject'{ $glyph = '◆'; $color = 'Green'; $label = 'REJECT' }
-        'Fail'  { $glyph = '⬗'; $color = 'Red'; $label = 'FAIL' }
-        'Warn'  { $glyph = '⬖'; $color = 'Yellow'; $label = 'WARN' }
-        'Info'  { $glyph = '◇'; $color = 'Cyan'; $label = 'INFO' }
-    }
-    if ($State -eq 'Pulse' -and $env:ARIA_ANIMATION -ne '0' -and $env:CI -ne 'true' -and [Environment]::UserInteractive) {
-        foreach ($frame in @('◇','◈','◆','◈')) {
-            Write-Host "`r" -NoNewline
-            if ($Prefix) { Write-AriaPaint -Text $Prefix -Color Gray -NoNewline }
-            Write-AriaPaint -Text $frame -Color Magenta -Bold -NoNewline
-            Start-Sleep -Milliseconds 55
+        'Pulse' {
+            $glyph = '◈'
+            $color = 'Magenta'
+            $label = 'ACTIVE'
+            $pulse = $true
         }
+
+        'Pass' {
+            $glyph = '◆'
+            $color = 'Green'
+            $label = 'PASS'
+        }
+
+        'Reject' {
+            $glyph = '⊘'
+            $color = 'Red'
+            $label = 'REJECT'
+        }
+
+        'Fail' {
+            $glyph = '⬗'
+            $color = 'Red'
+            $label = 'FAIL'
+        }
+
+        'Warn' {
+            $glyph = '◇'
+            $color = 'Magenta'
+            $label = 'WARN'
+        }
+
+        'Info' {
+            $glyph = '◇'
+            $color = 'Cyan'
+            $label = 'INFO'
+        }
+    }
+
+    if (
+        $State -eq 'Pulse' -and
+        $env:ARIA_ANIMATION -ne '0' -and
+        $env:CI -ne 'true' -and
+        [Environment]::UserInteractive
+    ) {
+        foreach ($frame in @('◇', '◈')) {
+            Write-Host "`r" -NoNewline
+
+            if ($Prefix) {
+                Write-AriaPaint `
+                    -Text $Prefix `
+                    -Color Gray `
+                    -NoNewline
+            }
+
+            Write-AriaPaint `
+                -Text $frame `
+                -Color Magenta `
+                -Bold `
+                -NoNewline
+
+            Start-Sleep -Milliseconds 38
+        }
+
         Write-Host "`r" -NoNewline
     }
+
     $durationText = Format-AriaDuration -Duration $Duration
     $suffixParts = New-Object System.Collections.Generic.List[string]
-    if ($durationText) { $suffixParts.Add($durationText) }
-    if ($Detail) { $suffixParts.Add($Detail) }
-    $suffix = if ($suffixParts.Count -gt 0) { '  ' + ($suffixParts -join ' · ') } else { '' }
-    if ($Prefix) { Write-AriaPaint -Text $Prefix -Color Gray -NoNewline }
-    Write-AriaPaint -Text $glyph -Color $color -Bold -Pulse:$pulse -NoNewline
-    Write-AriaPaint -Text ('  {0,-28}' -f $Name) -Color White -NoNewline
-    Write-AriaPaint -Text ('{0,-7}' -f $label) -Color $color -Bold -NoNewline
-    Write-AriaPaint -Text $suffix -Color Gray
+
+    if ($durationText) {
+        [void]$suffixParts.Add($durationText)
+    }
+
+    if ($Detail) {
+        [void]$suffixParts.Add($Detail)
+    }
+
+    $suffix = if ($suffixParts.Count -gt 0) {
+        '  ' + ($suffixParts -join ' · ')
+    }
+    else {
+        ''
+    }
+
+    if ($Prefix) {
+        Write-AriaPaint `
+            -Text $Prefix `
+            -Color Gray `
+            -NoNewline
+    }
+
+    Write-AriaPaint `
+        -Text $glyph `
+        -Color $color `
+        -Bold `
+        -Pulse:$pulse `
+        -NoNewline
+
+    Write-AriaPaint `
+        -Text ('  {0,-22} ' -f $Name) `
+        -Color White `
+        -NoNewline
+
+    Write-AriaPaint `
+        -Text ('{0,-9}' -f $label) `
+        -Color $color `
+        -Bold `
+        -NoNewline
+
+    Write-AriaPaint `
+        -Text $suffix `
+        -Color Gray
 }
 
 
@@ -914,10 +1040,30 @@ function Write-AriaTrunk {
 }
 
 function Write-AriaKeyValue {
-    param([string]$Key, [AllowEmptyString()][string]$Value)
-    Write-AriaPaint -Text '◇' -Color Cyan -NoNewline
-    Write-AriaPaint -Text ('  {0,-14}' -f $Key) -Color Gray -NoNewline
-    Write-AriaPaint -Text $Value -Color White
+    param(
+        [string]$Key,
+        [AllowEmptyString()][string]$Value
+    )
+
+    $profile = Get-AriaDisplayProfile
+
+    if ($profile.compact) {
+        return
+    }
+
+    Write-AriaPaint `
+        -Text '◇' `
+        -Color Cyan `
+        -NoNewline
+
+    Write-AriaPaint `
+        -Text ('  {0,-14}' -f $Key) `
+        -Color Gray `
+        -NoNewline
+
+    Write-AriaPaint `
+        -Text $Value `
+        -Color White
 }
 
 function Write-AriaSummary {
@@ -928,7 +1074,18 @@ function Write-AriaSummary {
         $Duration
     )
 
+    $profile = Get-AriaDisplayProfile
     Write-Host ''
+
+    if ($profile.verbose) {
+        Write-AriaStage `
+            -Name $Title `
+            -State $(if ($Passed) { 'Pass' } else { 'Fail' }) `
+            -Detail $Detail `
+            -Duration $Duration
+
+        return
+    }
 
     Write-AriaSignal `
         -Mode $(if ($Passed) { 'Seal' } else { 'Fracture' }) `
@@ -961,6 +1118,11 @@ function Start-AriaEnumerator {
         Failed = 0
         Started = [Diagnostics.Stopwatch]::StartNew()
         Items = New-Object System.Collections.Generic.List[object]
+        TransmissionTotal = 0
+        TransmissionPassed = 0
+        TransmissionFailed = 0
+        TransmissionDurationMs = [int64]0
+        TransmissionBytes = [int64]0
     }
 
     $style = Get-AriaSignalStyle -Mode Parallel
@@ -1055,7 +1217,24 @@ function Complete-AriaEnumerator {
     [void]$tail.Add($duration)
     [void]$tail.Add($coherence)
 
-    if ($Detail) {
+    if ($script:AriaEnumeration.TransmissionTotal -gt 0) {
+        [void]$tail.Add(
+            (
+                'tx {0}/{1}' -f `
+                    $script:AriaEnumeration.TransmissionPassed,
+                    $script:AriaEnumeration.TransmissionTotal
+            )
+        )
+
+        [void]$tail.Add(
+            ('{0}B' -f $script:AriaEnumeration.TransmissionBytes)
+        )
+    }
+
+    if (
+        (Get-AriaDisplayProfile).verbose -and
+        $Detail
+    ) {
         [void]$tail.Add($Detail)
     }
 
@@ -1532,6 +1711,39 @@ function Write-AriaTransmissionReceipt {
         $Receipt
     )
 
+    $profile = Get-AriaDisplayProfile
+    $passed = ([string]$Receipt.outcome -eq 'PASS')
+    $enumerating = ($null -ne $script:AriaEnumeration)
+
+    if ($enumerating) {
+        $script:AriaEnumeration.TransmissionTotal++
+
+        if ($passed) {
+            $script:AriaEnumeration.TransmissionPassed++
+        }
+        else {
+            $script:AriaEnumeration.TransmissionFailed++
+        }
+
+        if ($null -ne $Receipt.durationMs) {
+            $script:AriaEnumeration.TransmissionDurationMs +=
+                [int64]$Receipt.durationMs
+        }
+
+        if ($null -ne $Receipt.totalBytes) {
+            $script:AriaEnumeration.TransmissionBytes +=
+                [int64]$Receipt.totalBytes
+        }
+    }
+
+    if (
+        $profile.compact -and
+        $passed -and
+        $enumerating
+    ) {
+        return
+    }
+
     $detail = New-Object System.Collections.Generic.List[string]
 
     if ($null -ne $Receipt.durationMs) {
@@ -1553,11 +1765,11 @@ function Write-AriaTransmissionReceipt {
     }
 
     Write-AriaSignal `
-        -Mode $(if ([string]$Receipt.outcome -eq 'PASS') { 'Emit' } else { 'Fracture' }) `
+        -Mode $(if ($passed) { 'Emit' } else { 'Fracture' }) `
         -Name $(if ($Receipt.label) { [string]$Receipt.label } else { 'transmission' }) `
         -Value $(if ($Receipt.coherence) { [string]$Receipt.coherence } else { [string]$Receipt.outcome }) `
         -Detail ($detail -join ' · ') `
-        -Prefix '└─ '
+        -Prefix $(if ($enumerating) { '└─ ' } else { '' })
 }
 
 function Invoke-AriaBufferedItem {
@@ -1663,4 +1875,4 @@ Export-ModuleMember -Function `
     Write-AriaTransmissionReceipt, `
     Invoke-AriaBufferedItem, `
     Invoke-AriaBufferedSequence
-Export-ModuleMember -Function Get-AriaGlyphRegistry, Get-AriaSignalStyle, Get-AriaMotionPolicy, Write-AriaSignal
+Export-ModuleMember -Function Get-AriaGlyphRegistry, Get-AriaSignalStyle, Get-AriaDisplayProfile, Get-AriaMotionPolicy, Write-AriaSignal

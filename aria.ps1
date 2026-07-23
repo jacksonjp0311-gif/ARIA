@@ -88,7 +88,7 @@ try {
             $clock=[Diagnostics.Stopwatch]::StartNew()
             Write-AriaBanner -Title 'ARIA / EVOLUTION PLAN' -Subtitle 'content-addressed proposal · rollback proof · no repository mutation'
             Write-AriaTreeStage -Name 'request verification' -State Pulse -Detail $RequestPath
-            Assert-AriaGitClean -RepositoryRoot $workspaceRoot
+            $null=Assert-AriaGitClean -RepositoryRoot $workspaceRoot
             $head=Get-AriaGitHead -RepositoryRoot $workspaceRoot
             $result=Invoke-AriaEvolutionPlanFile -Path $RequestPath -WorkspaceRoot $workspaceRoot -BaseCommit $head
             Write-AriaTreeStage -Name 'proposal identity' -State Pass -Detail $result.plan.proposal.id

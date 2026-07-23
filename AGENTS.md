@@ -29,6 +29,7 @@ A healthy baseline must report:
 - `src/Aria.Bytecode.psm1` — bytecode and container
 - `src/Aria.VM.psm1` — local virtual machine
 - `src/Aria.SourceCore.psm1` — source-language core
+- `grammar/alchemy.json` — executable triadic glyph syntax
 - `tests/Run-Tests.ps1` — conformance lattice
 
 ## Evolution rule
@@ -45,3 +46,19 @@ Every evolution must:
 6. require zero failed gates before commit or push.
 
 The protected baseline is `aria-alpha21-stable`.
+## Alchemical glyph syntax
+
+The first executable triad lowers into existing verified operations:
+
+```aria
+🜁 value: Number = 40 + 2
+🜂 value
+🜄 Project.status = "active"
+🜁 Project.status -> state: Text
+```
+
+- `🜁` binds or recalls.
+- `🜂` emits.
+- `🜄` remembers.
+
+Glyph syntax does not bypass semantics, bytecode verification, policy, or the virtual machine.

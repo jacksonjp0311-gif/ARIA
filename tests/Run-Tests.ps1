@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 192 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 197 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -2479,6 +2479,80 @@ Test-Case 'intent proofs are deterministic and contain derived obligations' {
     $two=Invoke-AriaIntentVerification (New-AriaIntentTestBundle)
     Assert-Equal $one.proof.id $two.proof.id 'Intent proof identity changed.'
     Assert-Equal '3' ([string]@($one.proof.obligations).Count) 'Derived obligation count mismatch.'
+}
+# Alpha.22 executable alchemical glyph triad.
+Test-Case 'alchemical glyph registry is machine-readable and triadic' {
+    $path = Join-Path $root 'grammar/alchemy.json'
+    $document = Read-AriaUtf8Text $path | ConvertFrom-Json
+    Assert-Equal 'aria.alchemical-syntax' ([string]$document.format) 'Alchemy registry format mismatch.'
+    Assert-Equal '3' ([string]@($document.triad).Count) 'Alchemy registry is not triadic.'
+    Assert-Equal '🜁' ([string]$document.triad[0].symbol) 'Air glyph mismatch.'
+    Assert-Equal '🜂' ([string]$document.triad[1].symbol) 'Fire glyph mismatch.'
+    Assert-Equal '🜄' ([string]$document.triad[2].symbol) 'Water glyph mismatch.'
+}
+
+Test-Case 'parser lowers executable glyph statements' {
+    $source = Get-AriaSourceText -Path (Join-Path $root 'examples/glyph-triad.aria')
+    $parsed = Parse-AriaSource -Source $source -SourceName '<glyph-triad>'
+    Assert-Equal 0 (Get-AriaErrorDiagnostics -Diagnostics $parsed.diagnostics).Count 'Glyph parser emitted errors.'
+    $statements = @($parsed.model.flows[0].statements)
+    Assert-Equal 'emit' ([string]$statements[1].op) 'Fire did not lower to emit.'
+    Assert-Equal 'remember' ([string]$statements[2].op) 'Water did not lower to remember.'
+    Assert-Equal 'recall' ([string]$statements[3].op) 'Air recall did not lower correctly.'
+    Assert-Equal 'let' ([string]$statements[4].op) 'Air binding did not lower correctly.'
+}
+
+Test-Case 'glyph syntax survives compilation and bytecode verification' {
+    $gate = Invoke-AriaGate -SourcePath (Join-Path $root 'examples/glyph-triad.aria') -PolicyPath $policy -WorkspaceRoot $root -Quiet
+    $verification = Test-AriaBytecodeModel -BytecodeModel $gate.bytecode
+    Assert-True ([bool]$verification.valid) ('Glyph bytecode failed verification: ' + ($verification.errors -join '; '))
+    Assert-True ('EMIT' -in @($gate.bytecode.instructions.op)) 'Fire glyph emitted no EMIT opcode.'
+    Assert-True ('MEM_SET' -in @($gate.bytecode.instructions.op)) 'Water glyph emitted no MEM_SET opcode.'
+    Assert-True ('MEM_GET' -in @($gate.bytecode.instructions.op)) 'Air recall emitted no MEM_GET opcode.'
+}
+
+Test-Case 'glyph triad executes through the existing VM' {
+    $compiled = Invoke-AriaCompile -SourcePath (Join-Path $root 'examples/glyph-triad.aria') -PolicyPath $policy -WorkspaceRoot $root -Quiet
+    $result = Invoke-AriaArtifact -Path $compiled.artifactPath -PolicyPath $policy -WorkspaceRoot $root -PassThru
+    Assert-Equal 'ARIA glyph syntax is online.' ([string]$result.outputs[0]) 'Fire text output mismatch.'
+    Assert-Equal 'active' ([string]$result.outputs[1]) 'Air recall output mismatch.'
+    Assert-Equal '42' ([string]$result.outputs[2]) 'Air binding output mismatch.'
+}
+
+Test-Case 'glyph syntax and word syntax lower to equivalent operations' {
+    $glyphSource = @(
+        'aria 0.4.0'
+        'program GlyphEquivalent version 0.1.0'
+        'entry Main'
+        'memory Project {'
+        '  status = "booting"'
+        '}'
+        'flow Main {'
+        '  🜄 Project.status = "active"'
+        '  🜁 Project.status -> state: Text'
+        '  🜂 state'
+        '}'
+    ) -join "`n"
+
+    $wordSource = @(
+        'aria 0.4.0'
+        'program WordEquivalent version 0.1.0'
+        'entry Main'
+        'memory Project {'
+        '  status = "booting"'
+        '}'
+        'flow Main {'
+        '  remember Project.status = "active"'
+        '  recall Project.status -> state: Text'
+        '  emit state'
+        '}'
+    ) -join "`n"
+
+    $glyph = Parse-AriaSource -Source $glyphSource -SourceName '<glyph-equivalent>'
+    $word = Parse-AriaSource -Source $wordSource -SourceName '<word-equivalent>'
+    Assert-Equal 0 (Get-AriaErrorDiagnostics -Diagnostics $glyph.diagnostics).Count 'Glyph equivalence source failed.'
+    Assert-Equal 0 (Get-AriaErrorDiagnostics -Diagnostics $word.diagnostics).Count 'Word equivalence source failed.'
+    Assert-Equal (@($word.model.flows[0].statements.op)) (@($glyph.model.flows[0].statements.op)) 'Glyph and word operations diverged.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

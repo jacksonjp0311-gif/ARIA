@@ -298,38 +298,184 @@ function ConvertTo-AriaStableJson {
     [CmdletBinding()]
     param([Parameter(Mandatory=$true)]$Value)
 
-    function Normalize($InputValue){
-        if($null-eq$InputValue){return $null}
+    $activeReferences = New-Object 'System.Collections.Generic.List[object]'
 
-        if($InputValue-is[string] -or $InputValue-is[bool] -or
-           $InputValue-is[int] -or $InputValue-is[long] -or
-           $InputValue-is[double] -or $InputValue-is[decimal]){
-            return $InputValue
-        }
+    function Test-AriaCanonicalScalar([object]$InputValue){
+        if($null-eq$InputValue){return $true}
 
-        if($InputValue-is[Collections.IDictionary]){
-            $ordered=[ordered]@{}
-            foreach($key in @($InputValue.Keys | ForEach-Object {[string]$_} | Sort-Object)){
-                $ordered[$key]=Normalize $InputValue[$key]
-            }
-            return $ordered
-        }
-
-        if($InputValue-is[Collections.IEnumerable] -and -not($InputValue-is[string])){
-            $items=@()
-            foreach($item in $InputValue){$items+=,(Normalize $item)}
-            return $items
-        }
-
-        $ordered=[ordered]@{}
-        foreach($property in @($InputValue.PSObject.Properties | Sort-Object Name)){
-            $propertyName=[string]$property.Name
-            $ordered[$propertyName]=Normalize $property.Value
-        }
-        return $ordered
+        $type=$InputValue.GetType()
+        return (
+            $type.IsPrimitive -or
+            $type.IsEnum -or
+            $InputValue-is[string] -or
+            $InputValue-is[decimal] -or
+            $InputValue-is[DateTime] -or
+            $InputValue-is[DateTimeOffset] -or
+            $InputValue-is[Guid] -or
+            $InputValue-is[TimeSpan] -or
+            $InputValue-is[Uri]
+        )
     }
 
-    (Normalize $Value) | ConvertTo-Json -Depth 64 -Compress
+    function Convert-AriaCanonicalScalar([object]$InputValue){
+        if($null-eq$InputValue){return $null}
+
+        if($InputValue-is[DateTime]){
+            return $InputValue.ToUniversalTime().ToString(
+                'yyyy-MM-ddTHH:mm:ss.fffffffZ',
+                [Globalization.CultureInfo]::InvariantCulture
+            )
+        }
+
+        if($InputValue-is[DateTimeOffset]){
+            return $InputValue.ToUniversalTime().ToString(
+                'yyyy-MM-ddTHH:mm:ss.fffffffZ',
+                [Globalization.CultureInfo]::InvariantCulture
+            )
+        }
+
+        if($InputValue-is[TimeSpan]){
+            return $InputValue.ToString(
+                'c',
+                [Globalization.CultureInfo]::InvariantCulture
+            )
+        }
+
+        if($InputValue-is[Guid] -or
+           $InputValue-is[Uri] -or
+           $InputValue.GetType().IsEnum -or
+           $InputValue-is[char]){
+            return [string]$InputValue
+        }
+
+        return $InputValue
+    }
+
+    function Enter-AriaCanonicalReference([object]$Reference){
+        if($null-eq$Reference){return $false}
+        if($Reference.GetType().IsValueType -or $Reference-is[string]){return $false}
+
+        foreach($active in $activeReferences){
+            if([object]::ReferenceEquals($active,$Reference)){
+                throw 'ARIA canonical JSON rejects cyclic object graphs.'
+            }
+        }
+
+        [void]$activeReferences.Add($Reference)
+        return $true
+    }
+
+    function Exit-AriaCanonicalReference([object]$Reference,[bool]$Entered){
+        if(-not$Entered){return}
+
+        $last=$activeReferences.Count-1
+        if($last-lt0 -or -not[object]::ReferenceEquals($activeReferences[$last],$Reference)){
+            throw 'ARIA canonical JSON reference stack lost coherence.'
+        }
+
+        $activeReferences.RemoveAt($last)
+    }
+
+    function Normalize-AriaCanonicalValue([object]$InputValue){
+        if($null-eq$InputValue){return $null}
+
+        # BaseObject determines scalar/container semantics. The original
+        # InputValue retains the ETS property bag for PSCustomObject values.
+        $baseValue=$InputValue.PSObject.BaseObject
+        if($null-eq$baseValue){$baseValue=$InputValue}
+
+        if(Test-AriaCanonicalScalar $baseValue){
+            return Convert-AriaCanonicalScalar $baseValue
+        }
+
+        $isCustomObject=$baseValue-is[Management.Automation.PSCustomObject]
+        $trackReference=(
+            $baseValue-is[Collections.IDictionary] -or
+            ($baseValue-is[Collections.IEnumerable] -and -not($baseValue-is[string]))
+        )
+        $reference=if($trackReference){$baseValue}else{$null}
+        $entered=Enter-AriaCanonicalReference $reference
+
+        try{
+            if($baseValue-is[Collections.IDictionary]){
+                $keyMap=New-Object 'System.Collections.Generic.Dictionary[string,object]'
+                $keyNames=New-Object 'System.Collections.Generic.List[string]'
+
+                foreach($actualKey in $baseValue.Keys){
+                    $keyName=[string]$actualKey
+                    if($keyMap.ContainsKey($keyName)){
+                        throw "ARIA canonical JSON rejects duplicate string key '$keyName'."
+                    }
+
+                    $keyMap.Add($keyName,$actualKey)
+                    [void]$keyNames.Add($keyName)
+                }
+
+                $keyNames.Sort([StringComparer]::Ordinal)
+                $ordered=[ordered]@{}
+                foreach($keyName in $keyNames){
+                    $actualKey=$keyMap[$keyName]
+                    $ordered[$keyName]=Normalize-AriaCanonicalValue $baseValue[$actualKey]
+                }
+                return $ordered
+            }
+
+            if($baseValue-is[Collections.IEnumerable] -and -not($baseValue-is[string])){
+                $items=New-Object 'System.Collections.Generic.List[object]'
+                foreach($item in $baseValue){
+                    [void]$items.Add((Normalize-AriaCanonicalValue $item))
+                }
+
+                $array=@($items.ToArray())
+                return ,$array
+            }
+
+            if($isCustomObject){
+                $propertyMap=New-Object 'System.Collections.Generic.Dictionary[string,object]'
+                $propertyNames=New-Object 'System.Collections.Generic.List[string]'
+
+                # Do not inspect $baseValue.PSObject.Properties here. The
+                # PSCustomObject's NoteProperty bag belongs to the original
+                # PowerShell wrapper represented by $InputValue.
+                foreach($property in @($InputValue.PSObject.Properties)){
+                    if($property.MemberType-ne[Management.Automation.PSMemberTypes]::NoteProperty){
+                        continue
+                    }
+
+                    $propertyName=[string]$property.Name
+                    if($propertyMap.ContainsKey($propertyName)){
+                        throw "ARIA canonical JSON rejects duplicate property '$propertyName'."
+                    }
+
+                    $propertyMap.Add($propertyName,$property)
+                    [void]$propertyNames.Add($propertyName)
+                }
+
+                $propertyNames.Sort([StringComparer]::Ordinal)
+                $ordered=[ordered]@{}
+                foreach($propertyName in $propertyNames){
+                    $property=$propertyMap[$propertyName]
+                    $ordered[$propertyName]=Normalize-AriaCanonicalValue $property.Value
+                }
+                return $ordered
+            }
+
+            if($baseValue-is[IFormattable]){
+                return $baseValue.ToString(
+                    $null,
+                    [Globalization.CultureInfo]::InvariantCulture
+                )
+            }
+
+            return [string]$baseValue
+        }
+        finally{
+            Exit-AriaCanonicalReference -Reference $reference -Entered $entered
+        }
+    }
+
+    (Normalize-AriaCanonicalValue $Value) |
+        ConvertTo-Json -Depth 64 -Compress
 }
 
 function Get-AriaSha256Hex {

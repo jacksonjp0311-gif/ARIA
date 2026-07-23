@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 135 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 136 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -1862,6 +1862,13 @@ Test-Case 'governed evolution emits content-addressed decision event' {
     Assert-Equal 'approved' ([string]$plan.authorityDecision.outcome) 'Authority decision was not approved.'
     Assert-Equal 'aria.evolution.plan.approved' ([string]$plan.event.type) 'Governed evolution event type mismatch.'
     Assert-True ([string]$plan.event.id -match '^sha256:[a-f0-9]{64}$') 'Governed evolution event is not content addressed.'
+}
+Test-Case 'stable JSON permits shared custom object without false cycle' {
+    $shared=[pscustomobject]@{value=7}
+    $document=[pscustomobject]@{left=$shared;right=$shared}
+    $json=ConvertTo-AriaStableJson $document
+
+    Assert-Equal '{"left":{"value":7},"right":{"value":7}}' $json 'Shared custom object was mistaken for a cycle.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

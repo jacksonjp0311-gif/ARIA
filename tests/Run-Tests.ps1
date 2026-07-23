@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 136 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 151 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -59,6 +59,8 @@ Import-Module (Join-Path $root 'src/Aria.GraphReplay.psm1') -Force -DisableNameC
 Import-Module (Join-Path $root 'src/Aria.CapabilityAuthority.psm1') -Force -DisableNameChecking
 
 Import-Module (Join-Path $root 'src/Aria.GovernedEvolution.psm1') -Force -DisableNameChecking
+
+Import-Module (Join-Path $root 'src/Aria.SourceCore.psm1') -Force -DisableNameChecking
 
 Test-Case 'opcode registry is machine-readable and complete' {
     $registry = Get-AriaOpcodeRegistry
@@ -1869,6 +1871,99 @@ Test-Case 'stable JSON permits shared custom object without false cycle' {
     $json=ConvertTo-AriaStableJson $document
 
     Assert-Equal '{"left":{"value":7},"right":{"value":7}}' $json 'Shared custom object was mistaken for a cycle.'
+}
+Test-Case 'source lexer recognizes ordinary tokens' {
+    $tokens=ConvertTo-AriaSourceTokens 'let answer: Int = 42; emit answer;'
+    Assert-Equal 'Let' ([string]$tokens[0].kind) 'Source let token missing.'
+    Assert-Equal 'Int' ([string]$tokens[5].kind) 'Source integer token missing.'
+}
+
+Test-Case 'source parser builds immutable binding' {
+    $program=Read-AriaSourceProgram 'let answer: Int = 42; emit answer;'
+    Assert-Equal 'let' ([string]$program.declarations[0].kind) 'Source binding AST missing.'
+    Assert-Equal 'answer' ([string]$program.declarations[0].name) 'Source binding name mismatch.'
+}
+
+Test-Case 'source checker accepts typed arithmetic' {
+    $result=Invoke-AriaSourceText 'let answer: Int = 2 + 3 * 4; emit answer;'
+    Assert-True ([bool]$result.valid) 'Typed arithmetic program was rejected.'
+    Assert-Equal '14' ([string]$result.output[0]) 'Arithmetic precedence mismatch.'
+}
+
+Test-Case 'source checker rejects binding type mismatch' {
+    $result=Invoke-AriaSourceText 'let answer: Text = 42; emit answer;'
+    Assert-True (-not[bool]$result.valid) 'Binding type mismatch was accepted.'
+}
+
+Test-Case 'source checker rejects unknown binding' {
+    $result=Invoke-AriaSourceText 'emit missing;'
+    Assert-True (-not[bool]$result.valid) 'Unknown binding was accepted.'
+}
+
+Test-Case 'source checker validates function argument types' {
+    $result=Invoke-AriaSourceText 'fn double(x: Int) -> Int { x * 2 } emit double("x");'
+    Assert-True (-not[bool]$result.valid) 'Invalid function argument type was accepted.'
+}
+
+Test-Case 'source evaluator runs pure function' {
+    $result=Invoke-AriaSourceText 'fn add(x: Int, y: Int) -> Int { x + y } emit add(20, 22);'
+    Assert-True ([bool]$result.valid) 'Pure function program was rejected.'
+    Assert-Equal '42' ([string]$result.output[0]) 'Pure function output mismatch.'
+}
+
+Test-Case 'source conditional requires Bool condition' {
+    $result=Invoke-AriaSourceText 'emit if 1 { 2 } else { 3 };'
+    Assert-True (-not[bool]$result.valid) 'Non-Bool conditional was accepted.'
+}
+
+Test-Case 'source conditional requires matching branch types' {
+    $result=Invoke-AriaSourceText 'emit if true { 2 } else { "three" };'
+    Assert-True (-not[bool]$result.valid) 'Mismatched conditional branches were accepted.'
+}
+
+Test-Case 'source text concatenation is deterministic' {
+    $result=Invoke-AriaSourceText 'emit "ARIA " + "online";'
+    Assert-True ([bool]$result.valid) 'Text concatenation was rejected.'
+    Assert-Equal 'ARIA online' ([string]$result.output[0]) 'Text concatenation mismatch.'
+}
+
+Test-Case 'source integer division rejects zero' {
+    $rejected=$false
+    try{
+        $program=Read-AriaSourceProgram 'emit 7 / 0;'
+        $null=Invoke-AriaSourceProgram $program
+    }
+    catch{
+        if($_.Exception.Message-like'*Division by zero*'){$rejected=$true}
+    }
+    Assert-True $rejected 'Division by zero was not rejected.'
+}
+
+Test-Case 'source IR identity is deterministic' {
+    $source='fn add(x: Int, y: Int) -> Int { x + y } emit add(1, 2);'
+    $first=Invoke-AriaSourceText $source
+    $second=Invoke-AriaSourceText $source
+    Assert-Equal ([string]$first.ir.id) ([string]$second.ir.id) 'Source IR identity changed.'
+}
+
+Test-Case 'source examples all execute' {
+    $paths=Get-ChildItem (Join-Path $root 'examples/source-core') -Filter '*.aria' -File
+    Assert-Equal '10' ([string]$paths.Count) 'Expected ten source examples.'
+    foreach($path in $paths){
+        $result=Invoke-AriaSourceFile $path.FullName
+        Assert-True ([bool]$result.valid) "Source example failed: $($path.Name)"
+    }
+}
+
+Test-Case 'source rejects duplicate names' {
+    $result=Invoke-AriaSourceText 'let value: Int = 1; let value: Int = 2; emit value;'
+    Assert-True (-not[bool]$result.valid) 'Duplicate source name was accepted.'
+}
+
+Test-Case 'source has no effects in alpha21' {
+    $result=Invoke-AriaSourceText 'emit 42;'
+    Assert-True ([bool]$result.valid) 'Pure source program was rejected.'
+    Assert-Equal '0' ([string]@($result.ir.effects).Count) 'Alpha.21 source unexpectedly declared effects.'
 }
 $script:SuiteClock.Stop()
 $null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)

@@ -1,5 +1,18 @@
 ﻿[CmdletBinding()]
-param([switch]$VerboseOutput)
+param(
+    [switch]$VerboseOutput,
+
+    [ValidateSet(
+        'all',
+        'syntax',
+        'authority',
+        'artifact',
+        'state',
+        'evolution',
+        'transmission'
+    )]
+    [string]$Lane = 'all'
+)
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
@@ -23,24 +36,149 @@ Import-Module (Join-Path $root 'src/Aria.Bytecode.psm1') -Force -DisableNameChec
 Import-Module (Join-Path $root 'src/Aria.Gate.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.VM.psm1') -Force -DisableNameChecking
 
+$lanePath = Join-Path $PSScriptRoot 'conformance-lanes.json'
+
+if (-not (Test-Path -LiteralPath $lanePath -PathType Leaf)) {
+    throw "ARIA conformance lane registry is missing: $lanePath"
+}
+
+$laneDocument = Get-Content `
+    -LiteralPath $lanePath `
+    -Encoding UTF8 `
+    -Raw |
+    ConvertFrom-Json
+
+if ([string]$laneDocument.schema -ne 'aria.conformance-lanes') {
+    throw 'ARIA conformance lane registry has an invalid schema identity.'
+}
+
+if ([int]$laneDocument.version -ne 1) {
+    throw 'ARIA conformance lane registry has an unsupported version.'
+}
+
+$validLanes = @(
+    'syntax'
+    'authority'
+    'artifact'
+    'state'
+    'evolution'
+    'transmission'
+)
+
+$laneRecords = @($laneDocument.tests)
+
+if ($laneRecords.Count -ne 202) {
+    throw "ARIA conformance lane registry expected 202 tests but found $($laneRecords.Count)."
+}
+
+$script:LaneByName = @{}
+
+foreach ($record in $laneRecords) {
+    $name = [string]$record.name
+    $recordLane = [string]$record.lane
+
+    if ([string]::IsNullOrWhiteSpace($name)) {
+        throw 'ARIA conformance lane registry contains an unnamed test.'
+    }
+
+    if ($script:LaneByName.ContainsKey($name)) {
+        throw "ARIA conformance lane registry contains duplicate test identity: $name"
+    }
+
+    if ($recordLane -notin $validLanes) {
+        throw "ARIA conformance test '$name' has invalid lane '$recordLane'."
+    }
+
+    $script:LaneByName[$name] = $recordLane
+}
+
+$expectedTests = if ($Lane -eq 'all') {
+    $laneRecords.Count
+}
+else {
+    @(
+        $laneRecords |
+            Where-Object {
+                [string]$_.lane -eq $Lane
+            }
+    ).Count
+}
+
+if ($expectedTests -le 0) {
+    throw "ARIA conformance lane '$Lane' contains no tests."
+}
+
+$script:ObservedTests = 0
 $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
-Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 202 -Domain 'conformance'
+
+$subtitle = if ($Lane -eq 'all') {
+    'compiler · verifier · policy · memory · virtual machine'
+}
+else {
+    "directional verifier lane · $Lane"
+}
+
+$enumeratorName = if ($Lane -eq 'all') {
+    'conformance lattice'
+}
+else {
+    "$Lane lane"
+}
+
+Write-AriaBanner `
+    -Title 'ARIA / CONFORMANCE' `
+    -Subtitle $subtitle
+
+Start-AriaEnumerator `
+    -Name $enumeratorName `
+    -Expected $expectedTests `
+    -Domain 'conformance'
+
 function Test-Case {
-    param([string]$Name, [scriptblock]$Body)
+    param(
+        [Parameter(Mandatory=$true)][string]$Name,
+        [Parameter(Mandatory=$true)][scriptblock]$Body
+    )
+
+    if (-not $script:LaneByName.ContainsKey($Name)) {
+        throw "ARIA test is absent from the conformance lane registry: $Name"
+    }
+
+    $testLane = [string]$script:LaneByName[$Name]
+
+    if ($Lane -ne 'all' -and $testLane -ne $Lane) {
+        return
+    }
+
+    $script:ObservedTests++
     $clock = [Diagnostics.Stopwatch]::StartNew()
+
     try {
         & $Body
         $clock.Stop()
-        Add-AriaEnumerationItem -Name $Name -State Pass -Duration $clock.Elapsed
+
+        Add-AriaEnumerationItem `
+            -Name $Name `
+            -State Pass `
+            -Duration $clock.Elapsed
+
         $script:Passed++
     }
     catch {
         $clock.Stop()
-        Add-AriaEnumerationItem -Name $Name -State Fail -Detail $_.Exception.Message -Duration $clock.Elapsed
-        if ($VerboseOutput) { Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray }
+
+        Add-AriaEnumerationItem `
+            -Name $Name `
+            -State Fail `
+            -Detail $_.Exception.Message `
+            -Duration $clock.Elapsed
+
+        if ($VerboseOutput) {
+            Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
+        }
+
         $script:Failed++
     }
 }
@@ -2585,5 +2723,22 @@ Test-Case 'glyph syntax and word syntax lower to equivalent operations' {
     Assert-Equal (@($word.model.flows[0].statements.op)) (@($glyph.model.flows[0].statements.op)) 'Glyph and word operations diverged.'
 }
 $script:SuiteClock.Stop()
-$null = Complete-AriaEnumerator -Detail ("{0} passed · {1} failed" -f $script:Passed,$script:Failed)
-if ($script:Failed -gt 0) { throw "ARIA test suite failed: $script:Failed failure(s)." }
+
+if ($script:ObservedTests -ne $expectedTests) {
+    throw (
+        "ARIA conformance registry divergence: expected {0} test(s), observed {1}." -f `
+            $expectedTests,
+            $script:ObservedTests
+    )
+}
+
+$null = Complete-AriaEnumerator -Detail (
+    "{0} passed · {1} failed · lane {2}" -f `
+        $script:Passed,
+        $script:Failed,
+        $Lane
+)
+
+if ($script:Failed -gt 0) {
+    throw "ARIA test suite failed: $script:Failed failure(s)."
+}

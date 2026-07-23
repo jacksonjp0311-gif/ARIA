@@ -2,6 +2,16 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Evolution Planning alpha.23
+
+- Added `aria evolve plan <request.json>` as a non-mutating planning command.
+- Bound requested changes to exact Git and file-content identities.
+- Persisted request, proposal, original/candidate snapshots, and plan records under `.aria/evolution/`.
+- Required semantic diff and executable rollback proof before recording a plan.
+- Kept every generated plan in `awaiting-authorization` state.
+- Added request and plan-record schemas plus ten rejection-focused gates.
+- Expanded conformance to 169 deterministic gates.
+
 ## Source Core alpha.22
 
 - Closed ordinary source types to `Int`, `Text`, and `Bool`.

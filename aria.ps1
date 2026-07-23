@@ -2,6 +2,7 @@
 param(
     [Parameter(Position=0)][string]$Command = 'help',
     [Parameter(Position=1)][string]$Path,
+    [Parameter(Position=2)][string]$RequestPath,
     [string]$Out,
     [string]$Policy,
     [string]$Workspace,
@@ -30,6 +31,7 @@ Import-Module (Join-Path $root 'src/Aria.Semantics.psm1') -Force -DisableNameChe
 Import-Module (Join-Path $root 'src/Aria.Bytecode.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Gate.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.VM.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.EvolutionPlanning.psm1') -Force -DisableNameChecking
 
 $null = Initialize-AriaEventSpine -WorkspaceRoot $workspaceRoot -Profile (Get-AriaOperatorProfile) -Persist
 
@@ -51,6 +53,7 @@ function Show-AriaHelp {
   aria exec <program.ariac> [-Workspace <repository>] [-Strict]
   aria inspect <program.ariac>
   aria graph <program.aria|program.ariac>
+  aria evolve plan <request.json> [-Workspace <repository>]
   aria init <ProgramName>
 
   ARIA 0.4 adds verified human-agent connection contracts: intent, proposal, consent, and closure.
@@ -78,7 +81,24 @@ try {
         }
         'sync' {
             $null = Invoke-AriaGitSync -RepositoryRoot $root -Render -VerboseBuffer:$script:VerboseOutput
-        }        'profile' {
+        }
+        'evolve' {
+            if($Path-cne'plan'){throw "evolve currently supports only 'plan'."}
+            if(-not$RequestPath){throw 'evolve plan requires an evolution request JSON path.'}
+            $clock=[Diagnostics.Stopwatch]::StartNew()
+            Write-AriaBanner -Title 'ARIA / EVOLUTION PLAN' -Subtitle 'content-addressed proposal · rollback proof · no repository mutation'
+            Write-AriaTreeStage -Name 'request verification' -State Pulse -Detail $RequestPath
+            Assert-AriaGitClean -RepositoryRoot $workspaceRoot
+            $head=Get-AriaGitHead -RepositoryRoot $workspaceRoot
+            $result=Invoke-AriaEvolutionPlanFile -Path $RequestPath -WorkspaceRoot $workspaceRoot -BaseCommit $head
+            Write-AriaTreeStage -Name 'proposal identity' -State Pass -Detail $result.plan.proposal.id
+            Write-AriaTreeStage -Name 'candidate snapshot' -State Pass -Detail $result.plan.candidateSnapshot.id
+            Write-AriaTreeStage -Name 'rollback proof' -State Pass -Detail 'original snapshot reproduced'
+            Write-AriaTreeStage -Name 'authorization' -State Warn -Detail 'required before verify or apply'
+            $clock.Stop()
+            Write-AriaSummary -Title 'PLAN RECORDED' -Passed $true -Detail $result.persisted.directory -Duration $clock.Elapsed
+        }
+        'profile' {
             $profile = Get-AriaRuntimeProfile
             if ($profile.mode -eq 'machine') {
                 Write-Output (ConvertTo-AriaJson -Value $profile)

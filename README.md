@@ -35,12 +35,12 @@ brutally rigorous underneath
 | Compiler | `0.1.0-alpha.5` |
 | Language specification | `0.4.0` |
 | Source Core | `alpha.22` · `aria.source-ir/0.7` |
-| Conformance | `159/159` deterministic gates |
+| Conformance | `169/169` deterministic gates |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
 | Graph substrate | Transactional execution + deterministic replay |
-| Evolution | Content-addressed proposals + human authorization + rollback proof |
+| Evolution | Persistent plans + content-addressed proposals + human authorization + rollback proof |
 | Event model | Typed Event Spine + append-only NDJSON ledger |
 | Operator UI | Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
@@ -107,7 +107,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ conformance lattice   PASS   159/159 · coherent
+◆ conformance lattice   PASS   169/169 · coherent
 ```
 
 ### Run an ordinary ARIA program
@@ -148,6 +148,7 @@ Common operations:
 .\aria.cmd pull
 .\aria.cmd push
 .\aria.cmd sync
+.\aria.cmd evolve plan .\examples\evolution-plan.json
 ```
 
 Raw buffered provider output is hidden by default. To expose it:
@@ -618,6 +619,17 @@ proposal
 
 The current boundary is deliberate: ARIA proves and records the plan, while a constrained outer host applies accepted files, runs the real gates, and performs Git operations. Proposal content never becomes arbitrary shell authority.
 
+The first native planning command is non-mutating:
+
+```powershell
+.\aria.cmd evolve plan .\examples\evolution-plan.json
+```
+
+It binds the request to the exact Git commit and affected file bytes, proves
+candidate rollback, and writes canonical records under `.aria/evolution/`.
+The record remains `awaiting-authorization`; planning does not apply content,
+run gates, commit, or push.
+
 Never force-push shared `main`.
 
 Before committing:
@@ -694,7 +706,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ conformance lattice PASS 159/159 · coherent
+◆ conformance lattice PASS 169/169 · coherent
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
@@ -719,6 +731,7 @@ Start here:
 | `docs/30-capability-authority.md` | Content-addressed capability authority |
 | `docs/31-governed-evolution.md` | Authorized repository evolution and rollback proof |
 | `docs/33-source-language-core.md` | Ordinary pure Source Core language |
+| `docs/34-evolution-planning.md` | Persistent, non-mutating evolution planning |
 
 Earlier documents record the architectural evolution and remain useful context.
 

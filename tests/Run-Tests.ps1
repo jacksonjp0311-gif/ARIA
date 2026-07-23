@@ -26,7 +26,7 @@ $script:Passed = 0
 $script:Failed = 0
 $script:SuiteClock = [Diagnostics.Stopwatch]::StartNew()
 Write-AriaBanner -Title 'ARIA / CONFORMANCE' -Subtitle 'compiler · verifier · policy · memory · virtual machine'
-Start-AriaEnumerator -Name 'conformance lattice' -Expected 159 -Domain 'conformance'
+Start-AriaEnumerator -Name 'conformance lattice' -Expected 169 -Domain 'conformance'
 function Test-Case {
     param([string]$Name, [scriptblock]$Body)
     $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -59,6 +59,8 @@ Import-Module (Join-Path $root 'src/Aria.GraphReplay.psm1') -Force -DisableNameC
 Import-Module (Join-Path $root 'src/Aria.CapabilityAuthority.psm1') -Force -DisableNameChecking
 
 Import-Module (Join-Path $root 'src/Aria.GovernedEvolution.psm1') -Force -DisableNameChecking
+
+Import-Module (Join-Path $root 'src/Aria.EvolutionPlanning.psm1') -Force -DisableNameChecking
 
 Import-Module (Join-Path $root 'src/Aria.SourceCore.psm1') -Force -DisableNameChecking
 
@@ -1865,6 +1867,132 @@ Test-Case 'governed evolution emits content-addressed decision event' {
     Assert-Equal 'aria.evolution.plan.approved' ([string]$plan.event.type) 'Governed evolution event type mismatch.'
     Assert-True ([string]$plan.event.id -match '^sha256:[a-f0-9]{64}$') 'Governed evolution event is not content addressed.'
 }
+
+function New-TestEvolutionRequest {
+    param([object[]]$Changes)
+    [pscustomobject][ordered]@{
+        schema='aria.evolution-request/0.7'
+        proposer='agent:planner'
+        targetVersion='0.5.0-alpha.23'
+        resource='repository:ARIA'
+        capabilityIds=@('sha256:'+('a'*64))
+        changes=@($Changes)
+        evidence=@([pscustomobject][ordered]@{
+            kind='test'
+            id='tests/evolution-planning'
+            digest=('b'*64)
+        })
+    }
+}
+
+Test-Case 'evolution request accepts a narrow write plan' {
+    $request=New-TestEvolutionRequest @([pscustomobject]@{path='docs/plan.md';operation='write';content="planned`n"})
+    $result=Test-AriaEvolutionRequest $request
+    Assert-True ([bool]$result.valid) 'Valid evolution request was rejected.'
+}
+
+Test-Case 'evolution request rejects path traversal' {
+    $request=New-TestEvolutionRequest @([pscustomobject]@{path='../escape.md';operation='write';content='escape'})
+    $result=Test-AriaEvolutionRequest $request
+    Assert-True (-not[bool]$result.valid) 'Evolution path traversal was accepted.'
+    Assert-True (@($result.errors.code)-contains'E_EVOLUTION_REQUEST_PATH') 'Path traversal rejection code missing.'
+}
+
+Test-Case 'evolution request rejects duplicate paths' {
+    $request=New-TestEvolutionRequest @(
+        [pscustomobject]@{path='docs/same.md';operation='write';content='one'},
+        [pscustomobject]@{path='docs/same.md';operation='write';content='two'}
+    )
+    $result=Test-AriaEvolutionRequest $request
+    Assert-True (-not[bool]$result.valid) 'Duplicate evolution paths were accepted.'
+    Assert-True (@($result.errors.code)-contains'E_EVOLUTION_REQUEST_DUPLICATE') 'Duplicate path rejection code missing.'
+}
+
+Test-Case 'evolution request requires capability identity' {
+    $request=New-TestEvolutionRequest @([pscustomobject]@{path='docs/plan.md';operation='write';content='planned'})
+    $request.capabilityIds=@()
+    $result=Test-AriaEvolutionRequest $request
+    Assert-True (-not[bool]$result.valid) 'Capability-free evolution request was accepted.'
+    Assert-True (@($result.errors.code)-contains'E_EVOLUTION_REQUEST_CAPABILITY') 'Capability rejection code missing.'
+}
+
+Test-Case 'evolution planner binds current bytes and commit' {
+    $workspace=Join-Path $tempRoot ('aria-plan-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path (Join-Path $workspace 'docs') -Force|Out-Null
+        Write-AriaUtf8NoBom (Join-Path $workspace 'docs/plan.md') "before`n"
+        $request=New-TestEvolutionRequest @([pscustomobject]@{path='docs/plan.md';operation='write';content="after`n"})
+        $plan=New-AriaEvolutionPlan -Request $request -WorkspaceRoot $workspace -BaseCommit ('c'*40)
+        Assert-Equal ('c'*40) ([string]$plan.proposal.baseCommit) 'Evolution plan did not bind the base commit.'
+        Assert-Equal (Get-AriaEvolutionContentDigest "before`n") ([string]$plan.proposal.changes[0].beforeDigest) 'Evolution plan did not bind current bytes.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution planner proves rollback for added file' {
+    $workspace=Join-Path $tempRoot ('aria-plan-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $request=New-TestEvolutionRequest @([pscustomobject]@{path='new.md';operation='write';content="new`n"})
+        $plan=New-AriaEvolutionPlan -Request $request -WorkspaceRoot $workspace -BaseCommit ('d'*40)
+        Assert-True ([bool]$plan.record.rollbackVerified) 'Added-file rollback was not verified.'
+        Assert-Equal 'delete' ([string]$plan.proposal.rollbackPlan[0].operation) 'Added-file rollback is not a delete.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution planner represents deletion semantically' {
+    $workspace=Join-Path $tempRoot ('aria-plan-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        Write-AriaUtf8NoBom (Join-Path $workspace 'old.md') "old`n"
+        $request=New-TestEvolutionRequest @([pscustomobject]@{path='old.md';operation='delete'})
+        $plan=New-AriaEvolutionPlan -Request $request -WorkspaceRoot $workspace -BaseCommit ('e'*40)
+        Assert-Equal 'old.md' ([string]$plan.record.semanticDiff.removed[0].path) 'Deletion missing from semantic diff.'
+        Assert-Equal 'write' ([string]$plan.proposal.rollbackPlan[0].operation) 'Deleted-file rollback is not a write.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution planning identity is deterministic' {
+    $workspace=Join-Path $tempRoot ('aria-plan-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $request=New-TestEvolutionRequest @([pscustomobject]@{path='new.md';operation='write';content="new`n"})
+        $first=New-AriaEvolutionPlan -Request $request -WorkspaceRoot $workspace -BaseCommit ('f'*40)
+        $second=New-AriaEvolutionPlan -Request $request -WorkspaceRoot $workspace -BaseCommit ('f'*40)
+        Assert-Equal ([string]$first.proposal.id) ([string]$second.proposal.id) 'Evolution proposal identity changed.'
+        Assert-Equal ([string]$first.record.id) ([string]$second.record.id) 'Evolution record identity changed.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution planner persists five canonical records' {
+    $workspace=Join-Path $tempRoot ('aria-plan-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $request=New-TestEvolutionRequest @([pscustomobject]@{path='new.md';operation='write';content="new`n"})
+        $plan=New-AriaEvolutionPlan -Request $request -WorkspaceRoot $workspace -BaseCommit ('1'*40)
+        $persisted=Write-AriaEvolutionPlanRecord -Plan $plan -WorkspaceRoot $workspace
+        Assert-Equal '5' ([string]@(Get-ChildItem -LiteralPath $persisted.directory -File).Count) 'Evolution record file count mismatch.'
+        Assert-True (Test-Path -LiteralPath (Join-Path $persisted.directory 'proposal.json')) 'Proposal record was not persisted.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+Test-Case 'evolution record persistence is idempotent' {
+    $workspace=Join-Path $tempRoot ('aria-plan-'+[guid]::NewGuid().ToString('N'))
+    try{
+        New-Item -ItemType Directory -Path $workspace -Force|Out-Null
+        $request=New-TestEvolutionRequest @([pscustomobject]@{path='new.md';operation='write';content="new`n"})
+        $plan=New-AriaEvolutionPlan -Request $request -WorkspaceRoot $workspace -BaseCommit ('2'*40)
+        $first=Write-AriaEvolutionPlanRecord -Plan $plan -WorkspaceRoot $workspace
+        $second=Write-AriaEvolutionPlanRecord -Plan $plan -WorkspaceRoot $workspace
+        Assert-Equal ([string]$first.recordId) ([string]$second.recordId) 'Idempotent record identity changed.'
+    }
+    finally{Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
 Test-Case 'stable JSON permits shared custom object without false cycle' {
     $shared=[pscustomobject]@{value=7}
     $document=[pscustomobject]@{left=$shared;right=$shared}

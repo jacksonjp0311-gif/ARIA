@@ -21,7 +21,8 @@
                          "bytecode":  "src/Aria.Bytecode.psm1",
                          "virtualMachine":  "src/Aria.VM.psm1",
                          "sourceCore":  "src/Aria.SourceCore.psm1",
-                         "alchemicalSyntax":  "grammar/alchemy.json"
+                         "alchemicalSyntax":  "grammar/alchemy.json",
+                         "evolutionApplication":  "src/Aria.EvolutionApply.psm1"
                      },
     "continuity":  {
                        "stableTag":  "aria-alpha21-stable",

@@ -62,3 +62,15 @@ The first executable triad lowers into existing verified operations:
 - `🜄` remembers.
 
 Glyph syntax does not bypass semantics, bytecode verification, policy, or the virtual machine.
+## Governed application and Git transaction
+
+Authorized evolution is completed through:
+
+```powershell
+.\aria.cmd evolve apply <proposal-id> -Message "Commit message"
+```
+
+Use `-Push` only for an explicitly requested remote update. The application
+module binds candidate bytes to the authorized base commit, seals the manifest,
+executes strict doctor and conformance gates, commits only approved paths, and
+writes an application receipt beneath `.aria/evolution/`.

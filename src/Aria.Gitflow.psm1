@@ -268,12 +268,81 @@ function Invoke-AriaGitSync {
     }
 }
 
+function Get-AriaGitChangedPaths {
+    [CmdletBinding()]
+    param([Parameter(Mandatory=$true)][string]$RepositoryRoot)
+
+    $tracked=Invoke-AriaGitProcess `
+        -Arguments @('diff','--name-only','--') `
+        -RepositoryRoot $RepositoryRoot
+    Assert-AriaGitResult -Result $tracked -Operation 'changed-paths'
+
+    $untracked=Invoke-AriaGitProcess `
+        -Arguments @('ls-files','--others','--exclude-standard') `
+        -RepositoryRoot $RepositoryRoot
+    Assert-AriaGitResult -Result $untracked -Operation 'untracked-paths'
+
+    @(
+        @($tracked.stdout -split "`r?`n")
+        @($untracked.stdout -split "`r?`n")
+    ) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        ForEach-Object { ([string]$_).Replace('\','/') } |
+        Sort-Object -Unique
+}
+
+function Invoke-AriaGitCommit {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$RepositoryRoot,
+        [Parameter(Mandatory=$true)][string[]]$Paths,
+        [Parameter(Mandatory=$true)][string]$Message,
+        [string[]]$ExpectedPaths=$Paths,
+        [switch]$VerboseBuffer
+    )
+
+    $actual=@(Get-AriaGitChangedPaths -RepositoryRoot $RepositoryRoot)
+    $expected=@($ExpectedPaths|ForEach-Object{([string]$_).Replace('\','/')}|Sort-Object -Unique)
+    $unexpected=@($actual|Where-Object{$_-notin$expected})
+    $missing=@($expected|Where-Object{$_-notin$actual})
+    if($unexpected.Count-or$missing.Count){
+        throw ("ARIA Gitflow commit path verification failed. Unexpected: [{0}] Missing: [{1}]" -f ($unexpected-join', '),($missing-join', '))
+    }
+
+    $arguments=New-Object System.Collections.Generic.List[string]
+    $arguments.Add('add')
+    $arguments.Add('--')
+    foreach($path in $Paths){$arguments.Add(([string]$path).Replace('\','/'))}
+    $add=Invoke-AriaGitProcess `
+        -Arguments $arguments.ToArray() `
+        -RepositoryRoot $RepositoryRoot `
+        -VerboseBuffer:$VerboseBuffer
+    Assert-AriaGitResult -Result $add -Operation 'add'
+
+    $commit=Invoke-AriaGitProcess `
+        -Arguments @('commit','-m',$Message) `
+        -RepositoryRoot $RepositoryRoot `
+        -VerboseBuffer:$VerboseBuffer
+    Assert-AriaGitResult -Result $commit -Operation 'commit'
+
+    $head=Get-AriaGitHead -RepositoryRoot $RepositoryRoot
+    $null=Assert-AriaGitClean -RepositoryRoot $RepositoryRoot
+    [pscustomobject][ordered]@{
+        operation='commit'
+        verified=$true
+        head=$head
+        paths=$expected
+        message=$Message
+    }
+}
 Export-ModuleMember -Function `
     Invoke-AriaGitProcess, `
     Assert-AriaGitResult, `
     Get-AriaGitHead, `
     Get-AriaGitRemoteHead, `
     Assert-AriaGitClean, `
+    Get-AriaGitChangedPaths, `
+    Invoke-AriaGitCommit, `
     Write-AriaGitVerification, `
     Invoke-AriaGitPull, `
     Invoke-AriaGitPush, `

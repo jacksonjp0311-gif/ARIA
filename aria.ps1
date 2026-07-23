@@ -8,6 +8,8 @@ param(
     [string]$Capability,
     [string]$Authorization,
     [string]$IssuerPolicy,
+    [string]$Message,
+    [switch]$Push,
     [string]$Workspace,
     [switch]$Strict,
     [switch]$Json,
@@ -36,6 +38,7 @@ Import-Module (Join-Path $root 'src/Aria.Bytecode.psm1') -Force -DisableNameChec
 Import-Module (Join-Path $root 'src/Aria.Gate.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.VM.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.EvolutionPlanning.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.EvolutionApply.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Intent.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.IntentVerifier.psm1') -Force -DisableNameChecking
 
@@ -62,6 +65,7 @@ function Show-AriaHelp {
   aria graph <program.aria|program.ariac>
   aria evolve plan <request.json> [-Workspace <repository>]
   aria evolve verify <proposal-id> -Capability <bundle.json> -Authorization <authorization.json> -IssuerPolicy <verification-policy.json>
+  aria evolve apply <proposal-id> [-Message <commit-message>] [-Push]
   aria intent verify <intent-verification-bundle.json> [-Workspace <repository>]
   aria init <ProgramName>
 
@@ -132,7 +136,30 @@ try {
                     $clock.Stop()
                     Write-AriaSummary -Title 'EVOLUTION AUTHORIZED' -Passed $true -Detail $result.persisted.verificationId -Duration $clock.Elapsed
                 }
-                default{throw "evolve supports 'plan' and 'verify'."}
+                'apply' {
+                    if(-not$RequestPath){throw 'evolve apply requires an authorized proposal identity.'}
+                    $clock=[Diagnostics.Stopwatch]::StartNew()
+                    Write-AriaBanner -Title 'ARIA / EVOLUTION APPLY' -Subtitle 'authorized bytes · verified gates · exact commit'
+                    Write-Host '🜁  reconstruct authorized snapshot' -ForegroundColor Magenta
+                    Write-Host '🜃  verify base commit + clean tree' -ForegroundColor Magenta
+                    Write-Host '🜄  preserve rollback boundary' -ForegroundColor Magenta
+                    Write-Host '🜂  apply candidate bytes' -ForegroundColor Magenta
+                    Write-Host '🜍  seal manifest + execute gates' -ForegroundColor Magenta
+                    Write-Host '◆  commit exact approved paths' -ForegroundColor Magenta
+                    if($Push){Write-Host '∿  push + verify remote identity' -ForegroundColor Magenta}
+                    $result=Invoke-AriaEvolutionApply `
+                        -ProposalId $RequestPath `
+                        -WorkspaceRoot $workspaceRoot `
+                        -CommitMessage $Message `
+                        -Push:$Push `
+                        -VerboseBuffer:$script:VerboseOutput
+                    $clock.Stop()
+                    Write-AriaSummary `
+                        -Title $(if($Push){'EVOLUTION COMMITTED + PUSHED'}else{'EVOLUTION COMMITTED'}) `
+                        -Passed $true `
+                        -Detail $result.receipt.commit `
+                        -Duration $clock.Elapsed
+                }                default{throw "evolve supports 'plan', 'verify', and 'apply'."}
             }
         }
         'intent' {

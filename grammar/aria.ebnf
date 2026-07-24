@@ -62,7 +62,8 @@ return           = ( "return" | "↩" ), [ whitespace, expression ], newline ;
 halt             = "halt", newline ;
 signal-state     = "pulse" | "pass" | "warn" | "fail" | "info" ;
 
-expression       = logical-or ;
+expression       = pipeline ;
+pipeline         = logical-or, { whitespace?, "≫", whitespace?, identifier } ;
 logical-or       = logical-and, { whitespace, "or", whitespace, logical-and } ;
 logical-and      = equality, { whitespace, "and", whitespace, equality } ;
 equality         = comparison, { whitespace?, ( "==" | "!=" ), whitespace?, comparison } ;

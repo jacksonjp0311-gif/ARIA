@@ -223,7 +223,7 @@ try {
 
     Test-GlyphLoweringCase 'alias registry aligns with verified cards' {
         $aliases = @(Get-AriaExecutableGlyphAliases)
-        Assert-Equal 8 $aliases.Count 'Executable alias count mismatch.'
+        Assert-Equal 9 $aliases.Count 'Executable alias count mismatch.'
 
         $invokeAlias = @(
             $aliases |

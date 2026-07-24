@@ -31,6 +31,9 @@ jobs:
       - name: Glyph lowering gates
         shell: pwsh
         run: ./tests/Run-GlyphLoweringTests.ps1
+      - name: Typed composition gates
+        shell: pwsh
+        run: ./tests/Run-CompositionTests.ps1
       - name: Gate hello program
         shell: pwsh
         run: ./aria.ps1 gate ./examples/hello.aria -Strict
@@ -49,4 +52,5 @@ jobs:
           .\aria.ps1 test
           .\tests\Run-GlyphMemoryTests.ps1
           .\tests\Run-GlyphLoweringTests.ps1
+          .\tests\Run-CompositionTests.ps1
           .\aria.ps1 run .\examples\hello.aria -Strict

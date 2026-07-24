@@ -226,7 +226,7 @@ Test-Case 'parser recognizes program and glyph graph' {
     # aria.executable-glyph-parity/0.1
     $aliases = @(Get-AriaExecutableGlyphAliases)
 
-    Assert-Equal 8 $aliases.Count `
+    Assert-Equal 9 $aliases.Count `
         'Executable glyph alias registry size mismatch.'
 
     $uniqueGlyphs = @(
@@ -234,7 +234,7 @@ Test-Case 'parser recognizes program and glyph graph' {
             Sort-Object -Unique
     )
 
-    Assert-Equal 8 $uniqueGlyphs.Count `
+    Assert-Equal 9 $uniqueGlyphs.Count `
         'Executable glyph aliases are not unique.'
 
     $glyphSource = @"

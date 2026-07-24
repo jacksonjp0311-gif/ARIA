@@ -82,6 +82,14 @@ function Get-AriaExecutableGlyphAliases {
             category = 'control'
             authority = 'none'
         }
+
+        [pscustomobject][ordered]@{
+            schema = 'aria.executable-glyph-aliases/0.1'
+            glyph = '≫'
+            keyword = 'pipe'
+            category = 'composition'
+            authority = 'none'
+        }
     )
 }
 

@@ -181,13 +181,15 @@
                                        "kind":  "composition",
                                        "target":  "nested-call"
                                    },
-                      "status":  "specified",
+                      "status":  "verified",
                       "tests":  [
-                                    "composition type continuity",
-                                    "left-to-right deterministic lowering",
-                                    "effect summary preservation"
+                                    "typed unary-stage continuity",
+                                    "left-to-right canonical nested-call lowering",
+                                    "semantic IR and executable bytecode parity",
+                                    "unknown, arity, and type diagnostic parity",
+                                    "cross-platform runtime attestation"
                                 ],
-                      "digest":  "sha256:d9a22f48ac156b95a91b33587e3c2a71b976e93052a438a8846f73b167956ec5"
+                      "digest":  "sha256:1d047e9e6bb1c1f9934ac30ba980141e97d7126d9e96a46684e2514b4302b9c7"
                   },
                   {
                       "format":  "aria.glyph-card",
@@ -317,5 +319,5 @@
                       "digest":  "sha256:eca8909c6e91febcf20eee5ee5bc18d05c0ef705f6aed320a85b30d5772a8027"
                   }
               ],
-    "digest":  "sha256:fef32fbeeaad2d5bd8066130058f263fcd2c117fb97999fa006ce7cac5e04192"
+    "digest":  "sha256:567ae7d6868f597942d1804b82a9f0b3ed2a69640d159a542c1c96f24da3a80a"
 }

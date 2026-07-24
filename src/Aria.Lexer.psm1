@@ -82,6 +82,17 @@ function Get-AriaExpressionTokens {
             continue
         }
 
+        if ($ch -eq '≫') {
+            $tokens.Add(
+                [pscustomobject][ordered]@{
+                    kind = 'pipe'
+                    text = '≫'
+                }
+            )
+            $index++
+            continue
+        }
+
         if ([char]::IsDigit($ch)) {
             $start = $index
             while ($index -lt $Text.Length -and [char]::IsDigit($Text[$index])) { $index++ }
@@ -162,7 +173,7 @@ function Parse-AriaPrimaryExpression {
 
         if (-not (Test-AriaExpressionToken $State 'rparen')) {
             while ($true) {
-                $arguments.Add((Parse-AriaOrExpression $State))
+                $arguments.Add((Parse-AriaPipeExpression $State))
 
                 if (Test-AriaExpressionToken $State 'comma') {
                     Move-AriaExpressionToken $State
@@ -190,7 +201,7 @@ function Parse-AriaPrimaryExpression {
             $arguments = New-Object System.Collections.Generic.List[object]
             if (-not (Test-AriaExpressionToken $State 'rparen')) {
                 while ($true) {
-                    $arguments.Add((Parse-AriaOrExpression $State))
+                    $arguments.Add((Parse-AriaPipeExpression $State))
                     if (Test-AriaExpressionToken $State 'comma') { Move-AriaExpressionToken $State; continue }
                     break
                 }
@@ -202,7 +213,7 @@ function Parse-AriaPrimaryExpression {
     }
     if (Test-AriaExpressionToken $State 'lparen') {
         Move-AriaExpressionToken $State
-        $value = Parse-AriaOrExpression $State
+        $value = Parse-AriaPipeExpression $State
         $null = Read-AriaExpressionToken $State 'rparen'
         return $value
     }
@@ -235,11 +246,33 @@ function Parse-AriaEqualityExpression { param($State) return (Parse-AriaBinaryLe
 function Parse-AriaAndExpression { param($State) return (Parse-AriaBinaryLevel $State ${function:Parse-AriaEqualityExpression} @('and')) }
 function Parse-AriaOrExpression { param($State) return (Parse-AriaBinaryLevel $State ${function:Parse-AriaAndExpression} @('or')) }
 
+function Parse-AriaPipeExpression {
+    param($State)
+
+    $value = Parse-AriaOrExpression $State
+
+    while (Test-AriaExpressionToken $State 'pipe' '≫') {
+        Move-AriaExpressionToken $State
+
+        $stage = Read-AriaExpressionToken `
+            -State $State `
+            -Kind 'identifier'
+
+        $value = [pscustomobject][ordered]@{
+            kind = 'call'
+            name = [string]$stage.value
+            arguments = @($value)
+        }
+    }
+
+    return $value
+}
+
 function ConvertFrom-AriaExpression {
     param([Parameter(Mandatory=$true)][string]$Text,[int]$Line=0)
     [object[]]$tokens = @(Get-AriaExpressionTokens -Text $Text -Line $Line)
     $state = [pscustomobject]@{ tokens=$tokens; index=0; line=$Line }
-    $expression = Parse-AriaOrExpression $state
+    $expression = Parse-AriaPipeExpression $state
     if (-not (Test-AriaExpressionToken $state 'eof')) { $token=Get-AriaCurrentExpressionToken $state; throw "Unexpected expression token '$($token.text)' on line ${Line}." }
     return $expression
 }

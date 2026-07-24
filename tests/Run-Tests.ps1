@@ -503,6 +503,32 @@ Test-Case 'repository manifest verifies' {
             -Force `
             -ErrorAction SilentlyContinue
     }
+
+    # manifest native stdin remains BOM-free under hostile OutputEncoding
+    $savedManifestOutputEncoding = $global:OutputEncoding
+
+    try {
+        $global:OutputEncoding = New-Object System.Text.UTF8Encoding($true)
+        $hostileEncodingIdentity = Test-AriaManifestByteIdentity -Root $root
+    }
+    finally {
+        $global:OutputEncoding = $savedManifestOutputEncoding
+    }
+
+    if (-not [bool]$hostileEncodingIdentity.applicable) {
+        throw 'Manifest byte identity unexpectedly became inapplicable under hostile OutputEncoding.'
+    }
+
+    if (-not [bool]$hostileEncodingIdentity.valid) {
+        throw (
+            'Manifest native stdin acquired encoding-dependent bytes: ' +
+            [string]$hostileEncodingIdentity.message
+        )
+    }
+
+    if ([int]$hostileEncodingIdentity.checked -le 0) {
+        throw 'Manifest native stdin regression did not evaluate any paths.'
+    }
 }
 
 

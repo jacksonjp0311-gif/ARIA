@@ -269,44 +269,93 @@ function Invoke-AriaManifestGitHashPaths {
         return @()
     }
 
-    $arguments = @(
-        '-C'
-        $Root
-        'hash-object'
-    )
+    foreach ($path in $Paths) {
+        if (
+            [string]::IsNullOrEmpty($path) -or
+            $path.IndexOf([char]0) -ge 0 -or
+            $path.IndexOf([char]10) -ge 0 -or
+            $path.IndexOf([char]13) -ge 0
+        ) {
+            throw 'Manifest paths sent to Git must be non-empty single-line strings without NUL characters.'
+        }
+    }
+
+    $argumentText = 'hash-object'
 
     if ($NoFilters) {
-        $arguments += '--no-filters'
+        $argumentText += ' --no-filters'
     }
 
-    $arguments += '--stdin-paths'
+    $argumentText += ' --stdin-paths'
 
-    $previousOutputEncoding = $global:OutputEncoding
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = 'git'
+    $startInfo.Arguments = $argumentText
+    $startInfo.WorkingDirectory = $Root
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardInput = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+
+    # ARIA manifest path transport uses raw UTF-8 without a preamble.
+    # This bypasses Windows PowerShell 5.1 native-pipeline encoding.
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false, $true)
+    $inputText = (($Paths -join "`n") + "`n")
+    $inputBytes = $utf8NoBom.GetBytes($inputText)
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    $started = $false
 
     try {
-        $global:OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+        $started = $process.Start()
 
-        $output = @(
-            $Paths |
-                & git @arguments 2>&1
+        if (-not $started) {
+            throw 'Could not start Git while evaluating manifest byte identity.'
+        }
+
+        $process.StandardInput.BaseStream.Write(
+            $inputBytes,
+            0,
+            $inputBytes.Length
         )
+        $process.StandardInput.BaseStream.Flush()
+        $process.StandardInput.Close()
 
-        $exitCode = $LASTEXITCODE
+        $standardOutput = $process.StandardOutput.ReadToEnd()
+        $standardError = $process.StandardError.ReadToEnd()
+
+        $process.WaitForExit()
+        $exitCode = [int]$process.ExitCode
     }
     finally {
-        $global:OutputEncoding = $previousOutputEncoding
+        if ($started -and -not $process.HasExited) {
+            $process.Kill()
+        }
+
+        $process.Dispose()
     }
 
     if ($exitCode -ne 0) {
-        $detail = (($output | Out-String).Trim())
+        $detail = @(
+            $standardError
+            $standardOutput
+        ) |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_)
+            } |
+            ForEach-Object {
+                ([string]$_).Trim()
+            }
 
         throw (
-            "Git hash-object failed while evaluating manifest byte identity: $detail"
+            'Git hash-object failed while evaluating manifest byte identity: ' +
+            ($detail -join ' | ')
         )
     }
 
     $hashes = @(
-        $output |
+        $standardOutput -split '\r?\n' |
             ForEach-Object {
                 ([string]$_).Trim()
             } |

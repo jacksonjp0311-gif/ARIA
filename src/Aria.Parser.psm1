@@ -66,6 +66,22 @@ function Get-AriaExecutableGlyphAliases {
             category = 'connection'
             authority = 'closure'
         }
+
+        [pscustomobject][ordered]@{
+            schema = 'aria.executable-glyph-aliases/0.1'
+            glyph = '▷'
+            keyword = 'call'
+            category = 'expression'
+            authority = 'none'
+        }
+
+        [pscustomobject][ordered]@{
+            schema = 'aria.executable-glyph-aliases/0.1'
+            glyph = '↩'
+            keyword = 'return'
+            category = 'control'
+            authority = 'none'
+        }
     )
 }
 
@@ -128,6 +144,14 @@ function ConvertFrom-AriaExecutableGlyphSurface {
         '^◆\s+([A-Za-z_][A-Za-z0-9_.-]*)$'
     ) {
         return ('disconnect {0}' -f $matches[1])
+    }
+
+    if ($Text -match '^↩(?:\s+(.+))?$') {
+        if ($matches[1]) {
+            return ('return {0}' -f $matches[1])
+        }
+
+        return 'return'
     }
 
     return $Text

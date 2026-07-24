@@ -58,7 +58,7 @@ if-block         = "if", whitespace, expression, whitespace?, "{", newline, { st
                    [ whitespace, "else", whitespace?, "{", newline, { statement }, "}" ], newline ;
 repeat-block     = "repeat", whitespace, expression, [ whitespace, "as", whitespace, identifier ], whitespace?, "{", newline,
                    { statement }, "}", newline ;
-return           = "return", [ whitespace, expression ], newline ;
+return           = ( "return" | "↩" ), [ whitespace, expression ], newline ;
 halt             = "halt", newline ;
 signal-state     = "pulse" | "pass" | "warn" | "fail" | "info" ;
 
@@ -70,8 +70,9 @@ comparison       = additive, { whitespace?, ( "<" | "<=" | ">" | ">=" ), whitesp
 additive         = multiplicative, { whitespace?, ( "+" | "-" ), whitespace?, multiplicative } ;
 multiplicative   = unary, { whitespace?, ( "*" | "/" ), whitespace?, unary } ;
 unary            = [ "not" | "-" ], primary ;
-primary          = string | number | boolean | null | identifier | call | "(", expression, ")" ;
+primary          = string | number | boolean | null | identifier | call | glyph-call | "(", expression, ")" ;
 call             = identifier, "(", [ expression, { ",", expression } ], ")" ;
+glyph-call       = "▷", whitespace?, identifier, "(", [ expression, { ",", expression } ], ")" ;
 node-kind        = "operator" | "agent" | "repository" | "service" | "surface" |
                    "memory" | "artifact" | "policy" | "stream" | "system" ;
 glyph            = ? one non-whitespace Unicode grapheme ? ;

@@ -71,6 +71,17 @@ function Get-AriaExpressionTokens {
             continue
         }
 
+        if ($ch -eq '▷') {
+            $tokens.Add(
+                [pscustomobject][ordered]@{
+                    kind = 'invoke'
+                    text = '▷'
+                }
+            )
+            $index++
+            continue
+        }
+
         if ([char]::IsDigit($ch)) {
             $start = $index
             while ($index -lt $Text.Length -and [char]::IsDigit($Text[$index])) { $index++ }
@@ -134,6 +145,43 @@ function Parse-AriaPrimaryExpression {
     param($State)
     $token = Get-AriaCurrentExpressionToken $State
     if ($token.kind -eq 'literal') { Move-AriaExpressionToken $State; return [pscustomobject][ordered]@{ kind='literal'; value=$token.value; valueType=$token.valueType } }
+    if ($token.kind -eq 'invoke') {
+        Move-AriaExpressionToken $State
+
+        $nameToken = Read-AriaExpressionToken `
+            -State $State `
+            -Kind 'identifier'
+
+        $name = [string]$nameToken.value
+
+        $null = Read-AriaExpressionToken `
+            -State $State `
+            -Kind 'lparen'
+
+        $arguments = New-Object System.Collections.Generic.List[object]
+
+        if (-not (Test-AriaExpressionToken $State 'rparen')) {
+            while ($true) {
+                $arguments.Add((Parse-AriaOrExpression $State))
+
+                if (Test-AriaExpressionToken $State 'comma') {
+                    Move-AriaExpressionToken $State
+                    continue
+                }
+
+                break
+            }
+        }
+
+        $null = Read-AriaExpressionToken $State 'rparen'
+
+        return [pscustomobject][ordered]@{
+            kind = 'call'
+            name = $name
+            arguments = $arguments.ToArray()
+        }
+    }
+
     if ($token.kind -eq 'identifier') {
         Move-AriaExpressionToken $State
         $name = [string]$token.value

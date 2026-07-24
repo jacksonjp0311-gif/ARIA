@@ -32,6 +32,7 @@ Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecki
 Import-Module (Join-Path $root 'src/Aria.Transmission.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.SignalSubset.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.EventSpine.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.GlyphMemory.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Gitflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
@@ -57,6 +58,7 @@ function Show-AriaHelp {
   aria profile
   aria transmit <provider.json>
   aria events
+  aria glyph list|verify|activate|memory [card-id]
   aria pull|push|sync
   aria gate|check <program.aria> [-Workspace <repository>] [-Strict]
   aria compile|build <program.aria> [-Out <program.ariac>] [-Workspace <repository>] [-Strict]
@@ -179,6 +181,164 @@ try {
             $clock.Stop()
             Write-AriaSummary -Title $(if($result.satisfied){'INTENT SATISFIED'}else{'INTENT REJECTED'}) -Passed ([bool]$result.satisfied) -Detail $result.proof.id -Duration $clock.Elapsed
             if(-not$result.satisfied){throw ('Intent verification rejected the program: '+(@($result.errors|ForEach-Object{$_.code}|Sort-Object -Unique)-join', '))}
+        }
+        'glyph' {
+            $registry = Read-AriaGlyphCardRegistry -Root $root
+
+            switch ($Path) {
+                'list' {
+                    Write-AriaBanner `
+                        -Title 'ARIA / GLYPH MEMORY' `
+                        -Subtitle 'content-addressed cards · collision boundary · governed activation'
+
+                    foreach ($card in @($registry.cards | Sort-Object id)) {
+                        $state = if ([string]$card.status -eq 'verified') {
+                            'Pass'
+                        }
+                        else {
+                            'Info'
+                        }
+
+                        Write-AriaTreeStage `
+                            -Name ("{0} {1}" -f $card.symbol,$card.id) `
+                            -State $state `
+                            -Detail (
+                                "{0} · {1} · {2}" -f
+                                    $card.family,
+                                    $card.status,
+                                    $card.lowering.target
+                            )
+                    }
+
+                    Write-AriaSummary `
+                        -Title 'GLYPH CARDS RESOLVED' `
+                        -Passed $true `
+                        -Detail (
+                            "{0} cards · {1}" -f
+                                @($registry.cards).Count,
+                                $registry.digest.Substring(0,23)
+                        )
+                }
+
+                'verify' {
+                    if (-not $RequestPath) {
+                        throw 'glyph verify requires a card identity.'
+                    }
+
+                    $card = Get-AriaGlyphCard `
+                        -Id $RequestPath `
+                        -Registry $registry
+
+                    $verification = Test-AriaGlyphCard -Card $card
+
+                    if (-not [bool]$verification.valid) {
+                        throw (
+                            'Glyph card verification failed: ' +
+                            (@($verification.errors) -join ', ')
+                        )
+                    }
+
+                    $null = Send-AriaEvent `
+                        -Domain glyph `
+                        -Phase verify `
+                        -State PASS `
+                        -Energy verification `
+                        -Information ("{0} {1}" -f $card.symbol,$card.id) `
+                        -Coherence 'card identity confirmed' `
+                        -Source 'aria.glyph-memory' `
+                        -Data $card `
+                        -Render
+
+                    Write-AriaSummary `
+                        -Title 'GLYPH CARD VERIFIED' `
+                        -Passed $true `
+                        -Detail $card.digest
+                }
+
+                'activate' {
+                    if (-not $RequestPath) {
+                        throw 'glyph activate requires a card identity.'
+                    }
+
+                    $card = Get-AriaGlyphCard `
+                        -Id $RequestPath `
+                        -Registry $registry
+
+                    $contextDigest = 'sha256:' + (
+                        Get-AriaSha256Text (
+                            'aria.glyph-memory.activation/0.1|' +
+                            [string]$card.digest +
+                            '|operator'
+                        )
+                    )
+
+                    $activation = New-AriaGlyphActivation `
+                        -Card $card `
+                        -ContextDigest $contextDigest `
+                        -PolicyDecision allow `
+                        -TestsPassed (@($card.tests).Count) `
+                        -TestsFailed 0 `
+                        -Source 'aria.cli'
+
+                    $memory = Write-AriaGlyphActivationMemory `
+                        -Activation $activation `
+                        -WorkspaceRoot $workspaceRoot
+
+                    $null = Send-AriaEvent `
+                        -Domain glyph `
+                        -Phase activate `
+                        -State PASS `
+                        -Energy activation `
+                        -Information (
+                            "{0} {1}" -f
+                                $card.symbol,
+                                $card.id
+                        ) `
+                        -Coherence 'verified card active' `
+                        -Source 'aria.glyph-memory' `
+                        -Data $activation `
+                        -Render
+
+                    Write-AriaSummary `
+                        -Title 'GLYPH CARD ACTIVE' `
+                        -Passed $true `
+                        -Detail $memory.path
+                }
+
+                'memory' {
+                    $records = @(
+                        Read-AriaGlyphActivationMemory `
+                            -WorkspaceRoot $workspaceRoot
+                    )
+
+                    Write-AriaBanner `
+                        -Title 'ARIA / GLYPH MEMORY' `
+                        -Subtitle 'append-only activation evidence'
+
+                    foreach ($record in $records) {
+                        Write-AriaTreeStage `
+                            -Name (
+                                "{0} {1}" -f
+                                    $record.symbol,
+                                    $record.cardId
+                            ) `
+                            -State Pass `
+                            -Detail $record.digest.Substring(0,23)
+                    }
+
+                    Write-AriaSummary `
+                        -Title 'GLYPH MEMORY VERIFIED' `
+                        -Passed $true `
+                        -Detail ("{0} activation(s)" -f $records.Count)
+                }
+
+                default {
+                    throw (
+                        "glyph supports 'list', 'verify', " +
+                        "'activate', and 'memory'."
+                    )
+                }
+            }
         }
         'profile' {
             $profile = Get-AriaRuntimeProfile

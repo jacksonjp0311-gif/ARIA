@@ -1,0 +1,321 @@
+{
+    "format":  "aria.glyph-card-registry",
+    "version":  1,
+    "reserved":  [
+                     {
+                         "symbol":  "⌬",
+                         "semanticRoot":  "system",
+                         "source":  "grammar/glyphs.json"
+                     },
+                     {
+                         "symbol":  "◉",
+                         "semanticRoot":  "operator",
+                         "source":  "grammar/glyphs.json"
+                     },
+                     {
+                         "symbol":  "⟁",
+                         "semanticRoot":  "agent",
+                         "source":  "grammar/glyphs.json"
+                     },
+                     {
+                         "symbol":  "▧",
+                         "semanticRoot":  "repository",
+                         "source":  "grammar/glyphs.json"
+                     },
+                     {
+                         "symbol":  "ϟ",
+                         "semanticRoot":  "service",
+                         "source":  "grammar/glyphs.json"
+                     },
+                     {
+                         "symbol":  "◇",
+                         "semanticRoot":  "surface",
+                         "source":  "grammar/glyphs.json"
+                     },
+                     {
+                         "symbol":  "⊙",
+                         "semanticRoot":  "memory",
+                         "source":  "grammar/glyphs.json"
+                     },
+                     {
+                         "symbol":  "◆",
+                         "semanticRoot":  "artifact-or-closure",
+                         "source":  "legacy surfaces"
+                     },
+                     {
+                         "symbol":  "⛨",
+                         "semanticRoot":  "policy-or-consent",
+                         "source":  "legacy surfaces"
+                     },
+                     {
+                         "symbol":  "∿",
+                         "semanticRoot":  "stream-or-flow",
+                         "source":  "legacy surfaces"
+                     },
+                     {
+                         "symbol":  "🜁",
+                         "semanticRoot":  "acquire-or-intent",
+                         "source":  "legacy surfaces"
+                     },
+                     {
+                         "symbol":  "🜂",
+                         "semanticRoot":  "externalize-or-propose",
+                         "source":  "legacy surfaces"
+                     },
+                     {
+                         "symbol":  "🜄",
+                         "semanticRoot":  "preserve",
+                         "source":  "grammar/alchemy.json"
+                     },
+                     {
+                         "symbol":  "↔",
+                         "semanticRoot":  "connection",
+                         "source":  "executable connection surface"
+                     }
+                 ],
+    "cards":  [
+                  {
+                      "format":  "aria.glyph-card",
+                      "version":  1,
+                      "id":  "function.invoke",
+                      "symbol":  "▷",
+                      "spoken":  "invoke",
+                      "family":  "function",
+                      "category":  "invocation",
+                      "fixity":  "prefix",
+                      "arity":  1,
+                      "inputs":  [
+                                     {
+                                         "name":  "call",
+                                         "type":  "FunctionCall\u003cT\u003e"
+                                     }
+                                 ],
+                      "output":  "Value\u003cT\u003e",
+                      "purity":  "pure",
+                      "deterministic":  true,
+                      "effects":  [
+
+                                  ],
+                      "capabilities":  [
+
+                                       ],
+                      "lowering":  {
+                                       "kind":  "alias",
+                                       "target":  "call"
+                                   },
+                      "status":  "verified",
+                      "tests":  [
+                                    "existing CALL bytecode verification",
+                                    "typed function argument verification",
+                                    "typed function return verification"
+                                ],
+                      "digest":  "sha256:b5028424bde72ea759926d0318e6640d078bea5f902694a43d98ae92a078f572"
+                  },
+                  {
+                      "format":  "aria.glyph-card",
+                      "version":  1,
+                      "id":  "function.return",
+                      "symbol":  "↩",
+                      "spoken":  "return",
+                      "family":  "function",
+                      "category":  "termination",
+                      "fixity":  "prefix",
+                      "arity":  1,
+                      "inputs":  [
+                                     {
+                                         "name":  "value",
+                                         "type":  "Value\u003cT\u003e"
+                                     }
+                                 ],
+                      "output":  "Control\u003cReturn\u003cT\u003e\u003e",
+                      "purity":  "pure",
+                      "deterministic":  true,
+                      "effects":  [
+
+                                  ],
+                      "capabilities":  [
+
+                                       ],
+                      "lowering":  {
+                                       "kind":  "alias",
+                                       "target":  "return"
+                                   },
+                      "status":  "verified",
+                      "tests":  [
+                                    "existing RETURN bytecode verification",
+                                    "function return type verification",
+                                    "function scope closure verification"
+                                ],
+                      "digest":  "sha256:0dcd6616eb81b3475b18afaf35560ee7eec7495becc2404901c92649258a1de4"
+                  },
+                  {
+                      "format":  "aria.glyph-card",
+                      "version":  1,
+                      "id":  "composition.pipe",
+                      "symbol":  "≫",
+                      "spoken":  "pipe",
+                      "family":  "composition",
+                      "category":  "sequence",
+                      "fixity":  "infix",
+                      "arity":  2,
+                      "inputs":  [
+                                     {
+                                         "name":  "value",
+                                         "type":  "Value\u003cT\u003e"
+                                     },
+                                     {
+                                         "name":  "stage",
+                                         "type":  "Function\u003cT,U\u003e"
+                                     }
+                                 ],
+                      "output":  "Value\u003cU\u003e",
+                      "purity":  "pure",
+                      "deterministic":  true,
+                      "effects":  [
+
+                                  ],
+                      "capabilities":  [
+
+                                       ],
+                      "lowering":  {
+                                       "kind":  "composition",
+                                       "target":  "nested-call"
+                                   },
+                      "status":  "specified",
+                      "tests":  [
+                                    "composition type continuity",
+                                    "left-to-right deterministic lowering",
+                                    "effect summary preservation"
+                                ],
+                      "digest":  "sha256:d9a22f48ac156b95a91b33587e3c2a71b976e93052a438a8846f73b167956ec5"
+                  },
+                  {
+                      "format":  "aria.glyph-card",
+                      "version":  1,
+                      "id":  "algorithm.map",
+                      "symbol":  "⨯",
+                      "spoken":  "map",
+                      "family":  "algorithm",
+                      "category":  "transform",
+                      "fixity":  "prefix",
+                      "arity":  2,
+                      "inputs":  [
+                                     {
+                                         "name":  "sequence",
+                                         "type":  "Sequence\u003cT\u003e"
+                                     },
+                                     {
+                                         "name":  "transform",
+                                         "type":  "Function\u003cT,U\u003e"
+                                     }
+                                 ],
+                      "output":  "Sequence\u003cU\u003e",
+                      "purity":  "pure",
+                      "deterministic":  true,
+                      "effects":  [
+
+                                  ],
+                      "capabilities":  [
+
+                                       ],
+                      "lowering":  {
+                                       "kind":  "builtin",
+                                       "target":  "sequence.map"
+                                   },
+                      "status":  "specified",
+                      "tests":  [
+                                    "map preserves sequence order",
+                                    "map validates transform types",
+                                    "map execution is deterministic"
+                                ],
+                      "digest":  "sha256:780032ce6498fe801ae2657880845710375c1becc36f6b4fd63da439eccadcfb"
+                  },
+                  {
+                      "format":  "aria.glyph-card",
+                      "version":  1,
+                      "id":  "algorithm.filter",
+                      "symbol":  "⫰",
+                      "spoken":  "filter",
+                      "family":  "algorithm",
+                      "category":  "selection",
+                      "fixity":  "prefix",
+                      "arity":  2,
+                      "inputs":  [
+                                     {
+                                         "name":  "sequence",
+                                         "type":  "Sequence\u003cT\u003e"
+                                     },
+                                     {
+                                         "name":  "predicate",
+                                         "type":  "Function\u003cT,Bool\u003e"
+                                     }
+                                 ],
+                      "output":  "Sequence\u003cT\u003e",
+                      "purity":  "pure",
+                      "deterministic":  true,
+                      "effects":  [
+
+                                  ],
+                      "capabilities":  [
+
+                                       ],
+                      "lowering":  {
+                                       "kind":  "builtin",
+                                       "target":  "sequence.filter"
+                                   },
+                      "status":  "specified",
+                      "tests":  [
+                                    "filter preserves source order",
+                                    "filter requires Bool predicate",
+                                    "filter execution is deterministic"
+                                ],
+                      "digest":  "sha256:0b8252646c8d2409cc124f1ab13289799fa1e90e80ee2a0a1734d88a96fc64ae"
+                  },
+                  {
+                      "format":  "aria.glyph-card",
+                      "version":  1,
+                      "id":  "algorithm.reduce",
+                      "symbol":  "Σ",
+                      "spoken":  "reduce",
+                      "family":  "algorithm",
+                      "category":  "aggregation",
+                      "fixity":  "prefix",
+                      "arity":  3,
+                      "inputs":  [
+                                     {
+                                         "name":  "sequence",
+                                         "type":  "Sequence\u003cT\u003e"
+                                     },
+                                     {
+                                         "name":  "reducer",
+                                         "type":  "Function\u003cA,T,A\u003e"
+                                     },
+                                     {
+                                         "name":  "initial",
+                                         "type":  "Value\u003cA\u003e"
+                                     }
+                                 ],
+                      "output":  "Value\u003cA\u003e",
+                      "purity":  "pure",
+                      "deterministic":  true,
+                      "effects":  [
+
+                                  ],
+                      "capabilities":  [
+
+                                       ],
+                      "lowering":  {
+                                       "kind":  "builtin",
+                                       "target":  "sequence.reduce"
+                                   },
+                      "status":  "specified",
+                      "tests":  [
+                                    "reduce validates accumulator continuity",
+                                    "reduce requires explicit initial value",
+                                    "reduce execution is deterministic"
+                                ],
+                      "digest":  "sha256:eca8909c6e91febcf20eee5ee5bc18d05c0ef705f6aed320a85b30d5772a8027"
+                  }
+              ],
+    "digest":  "sha256:fef32fbeeaad2d5bd8066130058f263fcd2c117fb97999fa006ce7cac5e04192"
+}

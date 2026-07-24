@@ -20,6 +20,79 @@ function Get-AriaGlyphMemoryProperty {
     return $property.Value
 }
 
+function Sort-AriaGlyphMemoryStringsOrdinal {
+    [CmdletBinding()]
+    param(
+        [AllowEmptyCollection()][object[]]$Values = @(),
+        [switch]$Unique
+    )
+
+    [string[]]$items = @(
+        @($Values) |
+            ForEach-Object { [string]$_ }
+    )
+
+    [Array]::Sort($items,[StringComparer]::Ordinal)
+
+    if (-not $Unique) {
+        return $items
+    }
+
+    $result = New-Object System.Collections.Generic.List[string]
+    $hasPrevious = $false
+    $previous = ''
+
+    foreach ($item in $items) {
+        if (
+            -not $hasPrevious -or
+            -not [string]::Equals(
+                $previous,
+                $item,
+                [StringComparison]::Ordinal
+            )
+        ) {
+            $result.Add($item)
+            $previous = $item
+            $hasPrevious = $true
+        }
+    }
+
+    return $result.ToArray()
+}
+
+function Sort-AriaGlyphMemoryObjectsOrdinal {
+    [CmdletBinding()]
+    param(
+        [AllowEmptyCollection()][object[]]$Values = @(),
+        [Parameter(Mandatory=$true)][scriptblock]$KeySelector
+    )
+
+    $sorted = [System.Collections.SortedList]::new(
+        [StringComparer]::Ordinal
+    )
+    $index = 0
+
+    foreach ($value in @($Values)) {
+        $baseKey = [string](& $KeySelector $value)
+        $key = (
+            $baseKey +
+            [char]0 +
+            $index.ToString(
+                'D10',
+                [Globalization.CultureInfo]::InvariantCulture
+            )
+        )
+
+        $sorted.Add($key,$value)
+        $index++
+    }
+
+    return @(
+        $sorted.Values |
+            ForEach-Object { $_ }
+    )
+}
+
 function ConvertTo-AriaGlyphCardCanonicalBody {
     [CmdletBinding()]
     param([Parameter(Mandatory=$true)]$Card)
@@ -32,6 +105,21 @@ function ConvertTo-AriaGlyphCardCanonicalBody {
                     type = [string](Get-AriaGlyphMemoryProperty $_ 'type')
                 }
             }
+    )
+
+    $effects = @(
+        @(Get-AriaGlyphMemoryProperty $Card 'effects') |
+            ForEach-Object { [string]$_ }
+    )
+
+    $capabilities = @(
+        @(Get-AriaGlyphMemoryProperty $Card 'capabilities') |
+            ForEach-Object { [string]$_ }
+    )
+
+    $tests = @(
+        @(Get-AriaGlyphMemoryProperty $Card 'tests') |
+            ForEach-Object { [string]$_ }
     )
 
     [pscustomobject][ordered]@{
@@ -49,14 +137,14 @@ function ConvertTo-AriaGlyphCardCanonicalBody {
         purity = [string](Get-AriaGlyphMemoryProperty $Card 'purity')
         deterministic = [bool](Get-AriaGlyphMemoryProperty $Card 'deterministic')
         effects = @(
-            @(Get-AriaGlyphMemoryProperty $Card 'effects') |
-                ForEach-Object { [string]$_ } |
-                Sort-Object -Unique
+            Sort-AriaGlyphMemoryStringsOrdinal `
+                -Values $effects `
+                -Unique
         )
         capabilities = @(
-            @(Get-AriaGlyphMemoryProperty $Card 'capabilities') |
-                ForEach-Object { [string]$_ } |
-                Sort-Object -Unique
+            Sort-AriaGlyphMemoryStringsOrdinal `
+                -Values $capabilities `
+                -Unique
         )
         lowering = [pscustomobject][ordered]@{
             kind = [string](
@@ -72,9 +160,9 @@ function ConvertTo-AriaGlyphCardCanonicalBody {
         }
         status = [string](Get-AriaGlyphMemoryProperty $Card 'status')
         tests = @(
-            @(Get-AriaGlyphMemoryProperty $Card 'tests') |
-                ForEach-Object { [string]$_ } |
-                Sort-Object -Unique
+            Sort-AriaGlyphMemoryStringsOrdinal `
+                -Values $tests `
+                -Unique
         )
     }
 }
@@ -271,7 +359,7 @@ function ConvertTo-AriaGlyphRegistryCanonicalBody {
     [CmdletBinding()]
     param([Parameter(Mandatory=$true)]$Registry)
 
-    $reserved = @(
+    $reservedValues = @(
         @(Get-AriaGlyphMemoryProperty $Registry 'reserved') |
             ForEach-Object {
                 [pscustomobject][ordered]@{
@@ -285,13 +373,27 @@ function ConvertTo-AriaGlyphRegistryCanonicalBody {
                         Get-AriaGlyphMemoryProperty $_ 'source'
                     )
                 }
-            } |
-            Sort-Object symbol, semanticRoot, source
+            }
     )
 
-    $cards = @(
+    $reserved = @(
+        Sort-AriaGlyphMemoryObjectsOrdinal `
+            -Values $reservedValues `
+            -KeySelector {
+                param($entry)
+
+                return (
+                    [string]$entry.symbol +
+                    [char]31 +
+                    [string]$entry.semanticRoot +
+                    [char]31 +
+                    [string]$entry.source
+                )
+            }
+    )
+
+    $cardValues = @(
         @(Get-AriaGlyphMemoryProperty $Registry 'cards') |
-            Sort-Object id |
             ForEach-Object {
                 $body = ConvertTo-AriaGlyphCardCanonicalBody -Card $_
 
@@ -301,6 +403,15 @@ function ConvertTo-AriaGlyphRegistryCanonicalBody {
                         Get-AriaGlyphMemoryProperty $_ 'digest'
                     )
                 }
+            }
+    )
+
+    $cards = @(
+        Sort-AriaGlyphMemoryObjectsOrdinal `
+            -Values $cardValues `
+            -KeySelector {
+                param($entry)
+                return [string]$entry.body.id
             }
     )
 

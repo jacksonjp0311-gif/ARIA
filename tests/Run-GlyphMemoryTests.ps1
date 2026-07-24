@@ -99,11 +99,47 @@ try {
             -Id 'function.invoke' `
             -Registry $registry
 
-        $one = Get-AriaGlyphCardDigest -Card $card
-        $two = Get-AriaGlyphCardDigest -Card $card
+        $cardDigest = Get-AriaGlyphCardDigest -Card $card
+        $registryDigest = Get-AriaGlyphCardRegistryDigest -Registry $registry
 
-        Assert-Equal $one $two 'Card digest changed.'
-        Assert-Equal $card.digest $one 'Stored digest mismatch.'
+        Assert-Equal $card.digest $cardDigest `
+            'Stored card digest mismatch.'
+        Assert-Equal $registry.digest $registryDigest `
+            'Stored registry digest mismatch.'
+
+        $originalCulture = [Threading.Thread]::CurrentThread.CurrentCulture
+        $originalUiCulture = [Threading.Thread]::CurrentThread.CurrentUICulture
+        $cultures = New-Object System.Collections.Generic.List[object]
+        $cultures.Add([Globalization.CultureInfo]::InvariantCulture)
+
+        foreach ($cultureName in @('en-US','tr-TR','de-DE')) {
+            try {
+                $cultures.Add(
+                    [Globalization.CultureInfo]::GetCultureInfo($cultureName)
+                )
+            }
+            catch {
+            }
+        }
+
+        try {
+            foreach ($culture in $cultures) {
+                [Threading.Thread]::CurrentThread.CurrentCulture = $culture
+                [Threading.Thread]::CurrentThread.CurrentUICulture = $culture
+
+                Assert-Equal $cardDigest `
+                    (Get-AriaGlyphCardDigest -Card $card) `
+                    "Card digest changed under culture '$($culture.Name)'."
+
+                Assert-Equal $registryDigest `
+                    (Get-AriaGlyphCardRegistryDigest -Registry $registry) `
+                    "Registry digest changed under culture '$($culture.Name)'."
+            }
+        }
+        finally {
+            [Threading.Thread]::CurrentThread.CurrentCulture = $originalCulture
+            [Threading.Thread]::CurrentThread.CurrentUICulture = $originalUiCulture
+        }
     }
 
     Test-GlyphMemoryCase 'tampered card identity is rejected' {

@@ -14,12 +14,130 @@ function ConvertFrom-AriaParameterList {
     return $parameters.ToArray()
 }
 
+function Get-AriaExecutableGlyphAliases {
+    [CmdletBinding()]
+    param()
+
+    @(
+        [pscustomobject][ordered]@{
+            schema = 'aria.executable-glyph-aliases/0.1'
+            glyph = '∿'
+            keyword = 'flow'
+            category = 'declaration'
+            authority = 'none'
+        }
+
+        [pscustomobject][ordered]@{
+            schema = 'aria.executable-glyph-aliases/0.1'
+            glyph = '↔'
+            keyword = 'connect'
+            category = 'connection'
+            authority = 'protocol'
+        }
+
+        [pscustomobject][ordered]@{
+            schema = 'aria.executable-glyph-aliases/0.1'
+            glyph = '🜁'
+            keyword = 'intent'
+            category = 'connection'
+            authority = 'operator-intent'
+        }
+
+        [pscustomobject][ordered]@{
+            schema = 'aria.executable-glyph-aliases/0.1'
+            glyph = '🜂'
+            keyword = 'propose'
+            category = 'connection'
+            authority = 'agent-proposal'
+        }
+
+        [pscustomobject][ordered]@{
+            schema = 'aria.executable-glyph-aliases/0.1'
+            glyph = '⛨'
+            keyword = 'consent'
+            category = 'authority'
+            authority = 'explicit-human'
+        }
+
+        [pscustomobject][ordered]@{
+            schema = 'aria.executable-glyph-aliases/0.1'
+            glyph = '◆'
+            keyword = 'disconnect'
+            category = 'connection'
+            authority = 'closure'
+        }
+    )
+}
+
+function ConvertFrom-AriaExecutableGlyphSurface {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Text
+    )
+
+    if (
+        $Text -match
+        '^∿\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{$'
+    ) {
+        return ('flow {0} {{' -f $matches[1])
+    }
+
+    if (
+        $Text -match
+        '^↔\s+([A-Za-z_][A-Za-z0-9_.-]*)$'
+    ) {
+        return ('connect {0}' -f $matches[1])
+    }
+
+    if (
+        $Text -match
+        '^🜁\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*(?:<-|←)\s*(.+)$'
+    ) {
+        return (
+            'intent {0} <- {1}' -f
+                $matches[1],
+                $matches[2]
+        )
+    }
+
+    if (
+        $Text -match
+        '^🜂\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*(?:<-|←)\s*(.+)$'
+    ) {
+        return (
+            'propose {0} <- {1}' -f
+                $matches[1],
+                $matches[2]
+        )
+    }
+
+    if (
+        $Text -match
+        '^⛨\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*(?:<-|←)\s*(.+)$'
+    ) {
+        return (
+            'consent {0} <- {1}' -f
+                $matches[1],
+                $matches[2]
+        )
+    }
+
+    if (
+        $Text -match
+        '^◆\s+([A-Za-z_][A-Za-z0-9_.-]*)$'
+    ) {
+        return ('disconnect {0}' -f $matches[1])
+    }
+
+    return $Text
+}
 function Read-AriaStatementSequence {
     param([object[]]$Lines,$State,$Diagnostics)
     $statements = New-Object System.Collections.Generic.List[object]
     while ($State.index -lt $Lines.Count) {
         $line = $Lines[$State.index]
-        $text = [string]$line.text
+        $text = [string](ConvertFrom-AriaExecutableGlyphSurface -Text ([string]$line.text))
         $number = [int]$line.number
         try {
             if ($text -eq '}') { $State.index++; return [pscustomobject]@{ statements=$statements.ToArray(); terminator='close' } }
@@ -88,7 +206,7 @@ function Parse-AriaSource {
     if ($lines.Count -gt 0 -and $lines[0].text -notmatch '^aria\s+') { $diagnostics.Add((New-AriaDiagnostic error 'ARIA1006' 'The first declaration must be the aria language header.' $lines[0].number)) }
     $index = 0
     while ($index -lt $lines.Count) {
-        $line=$lines[$index]; $text=[string]$line.text; $number=[int]$line.number
+        $line=$lines[$index]; $text=[string](ConvertFrom-AriaExecutableGlyphSurface -Text ([string]$line.text)); $number=[int]$line.number
         try {
             if ($text -match '^aria\s+([^\s]+)$') { if($null-ne$model.specVersion){throw 'ARIA header may appear only once.'}; $model.specVersion=$matches[1]; $index++; continue }
             if ($text -match '^module\s+([A-Za-z_][A-Za-z0-9_.-]*)\s+version\s+([^\s]+)$') { if($null-ne$model.moduleName){throw 'Module declaration may appear only once.'}; $model.moduleName=$matches[1]; $model.moduleVersion=$matches[2]; $index++; continue }
@@ -133,4 +251,4 @@ function Parse-AriaSource {
     return [pscustomobject][ordered]@{model=[pscustomobject]$model;diagnostics=$diagnostics.ToArray()}
 }
 
-Export-ModuleMember -Function Parse-AriaSource
+Export-ModuleMember -Function Get-AriaExecutableGlyphAliases, Parse-AriaSource

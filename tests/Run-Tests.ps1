@@ -222,6 +222,132 @@ Test-Case 'parser recognizes program and glyph graph' {
     Assert-Equal 'HelloARIA' $parsed.model.programName 'Program name mismatch.'
     Assert-Equal 4 $parsed.model.graphs[0].nodes.Count 'Graph node count mismatch.'
     Assert-Equal 0 (Get-AriaErrorDiagnostics -Diagnostics $parsed.diagnostics).Count 'Parser emitted errors.'
+
+    # aria.executable-glyph-parity/0.1
+    $aliases = @(Get-AriaExecutableGlyphAliases)
+
+    Assert-Equal 6 $aliases.Count `
+        'Executable glyph alias registry size mismatch.'
+
+    $uniqueGlyphs = @(
+        $aliases.glyph |
+            Sort-Object -Unique
+    )
+
+    Assert-Equal 6 $uniqueGlyphs.Count `
+        'Executable glyph aliases are not unique.'
+
+    $glyphSource = @"
+aria 0.4.0
+module GlyphConnection version 0.1.0
+program GlyphConnection version 0.1.0
+entry Main
+
+agent Architect {
+}
+
+connection HumanAI {
+  operator = "human"
+  agent = "Architect"
+  protocol = "intent-proposal-consent"
+}
+
+∿ Main {
+  ↔ HumanAI
+  🜁 HumanAI ← "inspect"
+  🜂 HumanAI ← "change"
+  ⛨ HumanAI ← true
+  ◆ HumanAI
+}
+"@
+
+    $textSource = @"
+aria 0.4.0
+module GlyphConnection version 0.1.0
+program GlyphConnection version 0.1.0
+entry Main
+
+agent Architect {
+}
+
+connection HumanAI {
+  operator = "human"
+  agent = "Architect"
+  protocol = "intent-proposal-consent"
+}
+
+flow Main {
+  connect HumanAI
+  intent HumanAI <- "inspect"
+  propose HumanAI <- "change"
+  consent HumanAI <- true
+  disconnect HumanAI
+}
+"@
+
+    $glyphParsed = Parse-AriaSource `
+        -Source $glyphSource `
+        -SourceName '<glyph-connection>'
+
+    $textParsed = Parse-AriaSource `
+        -Source $textSource `
+        -SourceName '<text-connection>'
+
+    Assert-Equal 0 `
+        (Get-AriaErrorDiagnostics `
+            -Diagnostics $glyphParsed.diagnostics).Count `
+        'Glyphic connection source emitted parser errors.'
+
+    Assert-Equal 0 `
+        (Get-AriaErrorDiagnostics `
+            -Diagnostics $textParsed.diagnostics).Count `
+        'Textual connection source emitted parser errors.'
+
+    $glyphStatements = @(
+        $glyphParsed.model.flows[0].statements
+    )
+
+    $textStatements = @(
+        $textParsed.model.flows[0].statements
+    )
+
+    Assert-Equal `
+        'connect,intent,propose,consent,disconnect' `
+        (@($glyphStatements.op) -join ',') `
+        'Glyphic connection operations did not lower canonically.'
+
+    Assert-Equal `
+        (@($textStatements.op) -join ',') `
+        (@($glyphStatements.op) -join ',') `
+        'Glyphic and textual operation sequences differ.'
+
+    for (
+        $statementIndex = 0;
+        $statementIndex -lt $glyphStatements.Count;
+        $statementIndex++
+    ) {
+        Assert-Equal `
+            ([string]$textStatements[$statementIndex].connection) `
+            ([string]$glyphStatements[$statementIndex].connection) `
+            "Connection identity differs at statement $statementIndex."
+
+        if (
+            $null -ne
+            $glyphStatements[$statementIndex].PSObject.Properties[
+                'expression'
+            ]
+        ) {
+            Assert-Equal `
+                ([string]$textStatements[$statementIndex].expression.kind) `
+                ([string]$glyphStatements[$statementIndex].expression.kind) `
+                "Expression kind differs at statement $statementIndex."
+
+            Assert-Equal `
+                $textStatements[$statementIndex].expression.value `
+                $glyphStatements[$statementIndex].expression.value `
+                "Expression value differs at statement $statementIndex."
+        }
+    }
 }
 
 Test-Case 'compiler output is deterministic' {

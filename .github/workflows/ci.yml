@@ -25,6 +25,9 @@ jobs:
       - name: Compiler and VM tests
         shell: pwsh
         run: ./aria.ps1 test
+      - name: Glyph memory card gates
+        shell: pwsh
+        run: ./tests/Run-GlyphMemoryTests.ps1
       - name: Gate hello program
         shell: pwsh
         run: ./aria.ps1 gate ./examples/hello.aria -Strict
@@ -41,4 +44,5 @@ jobs:
         run: |
           .\aria.ps1 doctor -Strict
           .\aria.ps1 test
+          .\tests\Run-GlyphMemoryTests.ps1
           .\aria.ps1 run .\examples\hello.aria -Strict

@@ -269,110 +269,108 @@ function Invoke-AriaManifestGitHashPaths {
         return @()
     }
 
-    foreach ($path in $Paths) {
-        if (
-            [string]::IsNullOrEmpty($path) -or
-            $path.IndexOf([char]0) -ge 0 -or
-            $path.IndexOf([char]10) -ge 0 -or
-            $path.IndexOf([char]13) -ge 0
-        ) {
-            throw 'Manifest paths sent to Git must be non-empty single-line strings without NUL characters.'
-        }
-    }
+    $hashes = New-Object System.Collections.Generic.List[string]
+    $chunkSize = 64
 
-    $argumentText = 'hash-object'
-
-    if ($NoFilters) {
-        $argumentText += ' --no-filters'
-    }
-
-    $argumentText += ' --stdin-paths'
-
-    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = 'git'
-    $startInfo.Arguments = $argumentText
-    $startInfo.WorkingDirectory = $Root
-    $startInfo.UseShellExecute = $false
-    $startInfo.CreateNoWindow = $true
-    $startInfo.RedirectStandardInput = $true
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-
-    # ARIA manifest path transport uses raw UTF-8 without a preamble.
-    # This bypasses Windows PowerShell 5.1 native-pipeline encoding.
-    $utf8NoBom = New-Object System.Text.UTF8Encoding($false, $true)
-    $inputText = (($Paths -join "`n") + "`n")
-    $inputBytes = $utf8NoBom.GetBytes($inputText)
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo = $startInfo
-    $started = $false
-
-    try {
-        $started = $process.Start()
-
-        if (-not $started) {
-            throw 'Could not start Git while evaluating manifest byte identity.'
-        }
-
-        $process.StandardInput.BaseStream.Write(
-            $inputBytes,
-            0,
-            $inputBytes.Length
+    for (
+        $offset = 0;
+        $offset -lt $Paths.Count;
+        $offset += $chunkSize
+    ) {
+        $lastIndex = [Math]::Min(
+            ($offset + $chunkSize - 1),
+            ($Paths.Count - 1)
         )
-        $process.StandardInput.BaseStream.Flush()
-        $process.StandardInput.Close()
 
-        $standardOutput = $process.StandardOutput.ReadToEnd()
-        $standardError = $process.StandardError.ReadToEnd()
+        [string[]]$chunk = @(
+            $Paths[$offset..$lastIndex]
+        )
 
-        $process.WaitForExit()
-        $exitCode = [int]$process.ExitCode
-    }
-    finally {
-        if ($started -and -not $process.HasExited) {
-            $process.Kill()
-        }
-
-        $process.Dispose()
-    }
-
-    if ($exitCode -ne 0) {
-        $detail = @(
-            $standardError
-            $standardOutput
-        ) |
-            Where-Object {
-                -not [string]::IsNullOrWhiteSpace($_)
-            } |
-            ForEach-Object {
-                ([string]$_).Trim()
+        foreach ($path in $chunk) {
+            if (
+                [string]::IsNullOrEmpty($path) -or
+                $path.IndexOf([char]0) -ge 0 -or
+                $path.IndexOf([char]10) -ge 0 -or
+                $path.IndexOf([char]13) -ge 0
+            ) {
+                throw 'Manifest paths sent to Git must be non-empty single-line strings without NUL characters.'
             }
 
-        throw (
-            'Git hash-object failed while evaluating manifest byte identity: ' +
-            ($detail -join ' | ')
-        )
-    }
-
-    $hashes = @(
-        $standardOutput -split '\r?\n' |
-            ForEach-Object {
-                ([string]$_).Trim()
-            } |
-            Where-Object {
-                $_ -match '^[0-9a-f]{40,64}$'
+            if (
+                $path.Length -gt 0 -and
+                [int][char]$path[0] -eq 0xFEFF
+            ) {
+                throw (
+                    "Manifest path begins with U+FEFF: " +
+                    $path.Substring(1)
+                )
             }
-    )
+        }
+
+        $arguments = @(
+            '-C'
+            $Root
+            'hash-object'
+        )
+
+        if ($NoFilters) {
+            $arguments += '--no-filters'
+        }
+
+        $arguments += '--'
+        $arguments += $chunk
+
+        $previousPreference = $ErrorActionPreference
+
+        try {
+            $ErrorActionPreference = 'Continue'
+            $output = @(& git @arguments 2>&1)
+            $exitCode = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousPreference
+        }
+
+        if ($exitCode -ne 0) {
+            $detail = (($output | Out-String).Trim())
+
+            throw (
+                "Git hash-object failed while evaluating manifest byte identity: $detail"
+            )
+        }
+
+        $chunkHashes = @(
+            $output |
+                ForEach-Object {
+                    ([string]$_).Trim()
+                } |
+                Where-Object {
+                    $_ -match '^[0-9a-f]{40,64}$'
+                }
+        )
+
+        if ($chunkHashes.Count -ne $chunk.Count) {
+            throw (
+                "Git hash-object returned {0} digest(s) for {1} manifest path(s)." -f `
+                    $chunkHashes.Count,
+                    $chunk.Count
+            )
+        }
+
+        foreach ($hash in $chunkHashes) {
+            [void]$hashes.Add([string]$hash)
+        }
+    }
 
     if ($hashes.Count -ne $Paths.Count) {
         throw (
-            "Git hash-object returned {0} digest(s) for {1} manifest path(s)." -f `
+            "Git hash-object returned {0} total digest(s) for {1} manifest path(s)." -f `
                 $hashes.Count,
                 $Paths.Count
         )
     }
 
-    return [string[]]$hashes
+    return [string[]]$hashes.ToArray()
 }
 
 function Test-AriaManifestByteIdentity {

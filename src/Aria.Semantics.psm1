@@ -1,5 +1,12 @@
 ﻿Set-StrictMode -Version 2.0
 
+if ($null -eq (Get-Command Get-AriaSourceEffectGraph -ErrorAction SilentlyContinue)) {
+    Import-Module `
+        (Join-Path $PSScriptRoot 'Aria.Effects.psm1') `
+        -Force `
+        -DisableNameChecking
+}
+
 function Get-AriaPolicy { param([Parameter(Mandatory=$true)][string]$PolicyPath) return (Read-AriaUtf8Text -Path $PolicyPath | ConvertFrom-Json) }
 function Get-AriaPolicyEffect { param([Parameter(Mandatory=$true)]$Policy,[Parameter(Mandatory=$true)][string]$Effect) return ($Policy.effects.PSObject.Properties | Where-Object{$_.Name-eq$Effect}|Select-Object -First 1) }
 
@@ -315,7 +322,22 @@ function Test-AriaSemantics {
     foreach($fn in $model.functions){$scope=@{};foreach($p in $fn.parameters){$scope[$p.name]=$p.type};Test-AriaStatementSequence @($fn.statements) @($scope) $functions $memories $capabilities $agents $connections $Policy $diagnostics ([string]$fn.returnType) $true @{};if($fn.returnType-ne'Null'-and-not(Test-AriaStatementsAlwaysReturn @($fn.statements))){Add-AriaTypeDiagnostic $diagnostics 'ARIA2092' "Function '$($fn.name)' does not return on every visible path." $fn.line}}
     $flows=@{};foreach($flow in $model.flows){if($flows.ContainsKey($flow.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2040' "Duplicate flow '$($flow.name)'." $flow.line;continue};$flows[$flow.name]=$flow;Test-AriaStatementSequence @($flow.statements) @(@{}) $functions $memories $capabilities $agents $connections $Policy $diagnostics 'Null' $false @{}}
     if($null-ne$model.entry-and-not$flows.ContainsKey($model.entry)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2050' "Entry flow '$($model.entry)' does not exist." 0}
-    return [pscustomobject][ordered]@{model=$model;diagnostics=$diagnostics.ToArray();capabilityMap=$capabilities;functionMap=$functions;memoryTypes=$memories;connectionMap=$connections}
+    $effectGraph = Get-AriaSourceEffectGraph `
+        -Model $model `
+        -CapabilityMap $capabilities
+
+    foreach ($fn in @($model.functions)) {
+        $summary = Get-AriaEffectSummary `
+            -Graph $effectGraph `
+            -Name ([string]$fn.name)
+
+        $fn | Add-Member `
+            -NotePropertyName effectSummary `
+            -NotePropertyValue $summary `
+            -Force
+    }
+
+    return [pscustomobject][ordered]@{model=$model;diagnostics=$diagnostics.ToArray();capabilityMap=$capabilities;functionMap=$functions;memoryTypes=$memories;connectionMap=$connections;effectGraph=$effectGraph}
 }
 
 Export-ModuleMember -Function Get-AriaPolicy,Get-AriaPolicyEffect,Test-AriaPolicyDocument,Get-AriaPolicyMaxBytes,Test-AriaPolicyAllowsCapability,Test-AriaPolicyAllowsEffect,Get-AriaGlyphRegistry,Test-AriaTypeAssignable,Test-AriaSemantics

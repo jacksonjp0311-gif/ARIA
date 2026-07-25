@@ -29,6 +29,7 @@ if ($script:VerboseOutput) { $env:ARIA_VERBOSE = '1' }
 Import-Module (Join-Path $root 'src/Aria.Display.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Etherflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Effects.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Transmission.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.SignalSubset.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.EventSpine.psm1') -Force -DisableNameChecking
@@ -67,6 +68,7 @@ function Show-AriaHelp {
   aria exec <program.ariac> [-Workspace <repository>] [-Strict]
   aria inspect <program.ariac>
   aria graph <program.aria|program.ariac>
+  aria effects <program.aria|program.ariac>
   aria evolve plan <request.json> [-Workspace <repository>]
   aria evolve verify <proposal-id> -Capability <bundle.json> -Authorization <authorization.json> -IssuerPolicy <verification-policy.json>
   aria evolve apply <proposal-id> [-Message <commit-message>] [-Push]
@@ -397,11 +399,12 @@ try {
             Write-AriaTreeStage -Name 'policy document' -State Pass -Detail 'deny by default'
             $probe = Join-Path ([System.IO.Path]::GetTempPath()) ('aria-gzip-' + [guid]::NewGuid().ToString('N') + '.bin')
             try {
+                $sampleEffectGraph = New-AriaEffectGraphFromFacts -Facts @()
                 $sample = [pscustomobject][ordered]@{
                     format = 'aria.bytecode'; containerVersion = 1; compilerVersion = Get-AriaCompilerVersion
                     specVersion = (Get-AriaLock).specVersion; programName = 'DoctorProbe'; programVersion = '0.0.0'
                     sourceHash = ('0' * 64); irHash = ('0' * 64); moduleName = 'Doctor'; moduleVersion = '0.0.0'; entry = 'Main'; constants = @(); memories = @()
-                    capabilities = @(); agents = @(); connections = @(); graphs = @(); functions = @(); instructions = @([pscustomobject][ordered]@{ op = 'HALT'; line = 0 })
+                    capabilities = @(); agents = @(); connections = @(); graphs = @(); effectGraph = $sampleEffectGraph; functions = @(); instructions = @([pscustomobject][ordered]@{ op = 'HALT'; line = 0 })
                 }
                 Write-AriaContainer -Bytes (ConvertTo-AriaContainerBytes -BytecodeModel $sample) -Path $probe
                 $container = Read-AriaContainer -Path $probe
@@ -492,6 +495,24 @@ try {
             if (-not $verification.valid) { throw ('ARIA bytecode verifier rejected artifact: ' + ($verification.errors -join '; ')) }
             Write-AriaTreeStage -Name 'artifact verification' -State Pass -Detail $container.bytecode.programName
             Write-Host (Format-AriaDisassembly -Container $container)
+        }
+        'effects' {
+            if (-not $Path) { throw 'effects requires a .aria source or .ariac artifact path.' }
+            Write-AriaBanner -Title 'ARIA / EFFECT GRAPH' -Subtitle 'transitive purity · capability closure · verifier-backed evidence'
+            if ([System.IO.Path]::GetExtension($Path).ToLowerInvariant() -eq '.ariac') {
+                $container = Read-AriaContainer -Path $Path
+                $verification = Test-AriaBytecodeModel -BytecodeModel $container.bytecode
+                if (-not $verification.valid) { throw ('ARIA bytecode verifier rejected artifact: ' + ($verification.errors -join '; ')) }
+                $effectGraph = $container.bytecode.effectGraph
+            }
+            else {
+                $gate = Invoke-AriaGate -SourcePath $Path -PolicyPath $Policy -WorkspaceRoot $workspaceRoot -Quiet -StrictRepository:$Strict
+                $effectGraph = $gate.effectGraph
+            }
+            $validation = Test-AriaEffectGraph -Graph $effectGraph
+            if (-not $validation.valid) { throw ('ARIA effect graph rejected: ' + ($validation.errors -join '; ')) }
+            Write-Host (Format-AriaEffectGraph -Graph $effectGraph)
+            Write-AriaSummary -Title 'EFFECT GRAPH VERIFIED' -Passed $true -Detail $effectGraph.digest
         }
         'graph' {
             if (-not $Path) { throw 'graph requires a .aria source or .ariac artifact path.' }

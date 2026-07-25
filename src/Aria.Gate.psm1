@@ -88,6 +88,7 @@ function Invoke-AriaGate {
         bytecode = $bytecode
         bytes = $first
         diagnostics = $semantic.diagnostics
+        effectGraph = $semantic.effectGraph
         policyPath = (Resolve-Path -LiteralPath $PolicyPath).Path
         workspaceRoot = [System.IO.Path]::GetFullPath($WorkspaceRoot)
     }

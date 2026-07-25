@@ -838,3 +838,13 @@ remember meaning
 The language should continue to feel discovered rather than arbitrarily
 assembled because each new layer must be the necessary consequence of the
 verified layers beneath it.
+## 11. Attested implementation progress
+
+- Sequence Core alpha.4 closed on `101a88f0316b7a0cb0110b73a1876bd2fa6efae1`.
+- Effect Graph & Purity Core alpha.5 connects source semantics, call topology,
+  bytecode metadata, independent verifier reconstruction, VM admission, glyph
+  proof obligations, CI, and operator inspection.
+- `⨯`, `⫰`, and `Σ` remain specified and inactive until their dedicated
+  algorithm lattices pass.
+- The next bounded evolution after alpha.5 remote attestation is Verified Map
+  alpha.6.

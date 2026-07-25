@@ -1,5 +1,12 @@
 ﻿Set-StrictMode -Version 2.0
 
+if ($null -eq (Get-Command Get-AriaBytecodeEffectGraph -ErrorAction SilentlyContinue)) {
+    Import-Module `
+        (Join-Path $PSScriptRoot 'Aria.Effects.psm1') `
+        -Force `
+        -DisableNameChecking
+}
+
 function Get-AriaOpcodeRegistry { $path=Join-Path (Get-AriaRepositoryRoot) 'grammar/opcodes.json';$doc=Read-AriaUtf8Text $path|ConvertFrom-Json;if([string]$doc.format-ne'aria.opcode-registry'){throw 'ARIA opcode registry has an invalid format.'};$registry=[ordered]@{};foreach($opcode in @($doc.opcodes)){$id=[string]$opcode.id;if([string]::IsNullOrWhiteSpace($id)){throw 'ARIA opcode registry contains an empty id.'};if($registry.Contains($id)){throw "ARIA opcode registry contains duplicate id '$id'."};$registry[$id]=$opcode};return $registry }
 function Add-AriaConstant { param($Value,$Constants,[hashtable]$Index) $key=if($null-eq$Value){'null'}else{ConvertTo-AriaJson ([pscustomobject][ordered]@{value=$Value})};if($Index.ContainsKey($key)){return [int]$Index[$key]};$position=$Constants.Count;$Constants.Add($Value);$Index[$key]=$position;return $position }
 function Get-AriaBinaryOpcode { param([string]$Operator) switch($Operator){'+'{'ADD'}'-'{'SUB'}'*'{'MUL'}'/'{'DIV'}'=='{'EQ'}'!='{'NE'}'<'{'LT'}'<='{'LE'}'>'{'GT'}'>='{'GE'}'and'{'AND'}'or'{'OR'}default{throw "Unknown ARIA operator '$Operator'."}} }
@@ -89,12 +96,27 @@ function ConvertTo-AriaBytecodeModel {
     [object[]]$instructions=@(ConvertTo-AriaInstructionSequence @($entry.statements) $constants $constantIndex $functionMap)
     if($instructions.Count-eq0-or$instructions[$instructions.Count-1].op-ne'HALT'){$instructions+=,[pscustomobject][ordered]@{op='HALT';line=0}}
     $functions=New-Object System.Collections.Generic.List[object]
-    foreach($fn in $model.functions){[object[]]$body=@(ConvertTo-AriaInstructionSequence @($fn.statements) $constants $constantIndex $functionMap -FunctionBody);if($fn.returnType-eq'Null'-and($body.Count-eq0-or$body[$body.Count-1].op-ne'RETURN')){$body+=,[pscustomobject][ordered]@{op='RETURN';hasValue=$false;line=0}};$functions.Add([pscustomobject][ordered]@{name=$fn.name;parameters=$fn.parameters;returnType=$fn.returnType;instructions=$body})}
+    foreach($fn in $model.functions){
+        [object[]]$body=@(ConvertTo-AriaInstructionSequence @($fn.statements) $constants $constantIndex $functionMap -FunctionBody)
+        if($fn.returnType-eq'Null'-and($body.Count-eq0-or$body[$body.Count-1].op-ne'RETURN')){
+            $body+=,[pscustomobject][ordered]@{op='RETURN';hasValue=$false;line=0}
+        }
+        $effectSummary = Get-AriaEffectSummary `
+            -Graph $SemanticResult.effectGraph `
+            -Name ([string]$fn.name)
+        $functions.Add([pscustomobject][ordered]@{
+            name=$fn.name
+            parameters=$fn.parameters
+            returnType=$fn.returnType
+            effectSummary=$effectSummary
+            instructions=$body
+        })
+    }
     $memories=New-Object System.Collections.Generic.List[object]
     foreach($memory in $model.memories){$values=[ordered]@{};$types=[ordered]@{};foreach($entryValue in $memory.values){$values[$entryValue.key]=ConvertTo-AriaConstantValue $entryValue.expression;$types[$entryValue.key]=[string]$entryValue.inferredType};$memories.Add([pscustomobject][ordered]@{name=$memory.name;values=[pscustomobject]$values;types=[pscustomobject]$types})}
     $sourceHash=Get-AriaSha256Text $SourceText
     $ir=[pscustomobject][ordered]@{format=$model.format;specVersion=$model.specVersion;moduleName=$model.moduleName;moduleVersion=$model.moduleVersion;programName=$model.programName;programVersion=$model.programVersion;entry=$model.entry;memories=$model.memories;capabilities=$model.capabilities;agents=$model.agents;connections=$model.connections;graphs=$model.graphs;functions=$model.functions;flows=$model.flows}
-    return [pscustomobject][ordered]@{format='aria.bytecode';containerVersion=1;compilerVersion=Get-AriaCompilerVersion;specVersion=$model.specVersion;moduleName=$model.moduleName;moduleVersion=$model.moduleVersion;programName=$model.programName;programVersion=$model.programVersion;sourceHash=$sourceHash;irHash=(Get-AriaSha256Text (ConvertTo-AriaJson $ir));entry=$model.entry;constants=$constants.ToArray();memories=$memories.ToArray();capabilities=$model.capabilities;agents=$model.agents;connections=$model.connections;graphs=$model.graphs;functions=$functions.ToArray();instructions=$instructions}
+    return [pscustomobject][ordered]@{format='aria.bytecode';containerVersion=1;compilerVersion=Get-AriaCompilerVersion;specVersion=$model.specVersion;moduleName=$model.moduleName;moduleVersion=$model.moduleVersion;programName=$model.programName;programVersion=$model.programVersion;sourceHash=$sourceHash;irHash=(Get-AriaSha256Text (ConvertTo-AriaJson $ir));entry=$model.entry;constants=$constants.ToArray();memories=$memories.ToArray();capabilities=$model.capabilities;agents=$model.agents;connections=$model.connections;graphs=$model.graphs;effectGraph=$SemanticResult.effectGraph;functions=$functions.ToArray();instructions=$instructions}
 }
 
 function Test-AriaBytecodeIdentifier { param($Value) return (($Value-is[string])-and([string]$Value-match'^[A-Za-z_][A-Za-z0-9_.-]*$')) }
@@ -359,6 +381,69 @@ function Test-AriaBytecodeModel {
     $agentMap=@{};foreach($agent in @($BytecodeModel.agents)){$agentMap[[string]$agent.name]=$agent}
     $connectionMap=@{};foreach($connection in @($BytecodeModel.connections)){if($connectionMap.ContainsKey([string]$connection.name)){$errors.Add("Duplicate bytecode connection '$($connection.name)'.")}else{$connectionMap[[string]$connection.name]=$connection}}
     $functions=@{};foreach($fn in @($BytecodeModel.functions)){if($functions.ContainsKey([string]$fn.name)){$errors.Add("Duplicate bytecode function '$($fn.name)'.")}else{$functions[[string]$fn.name]=$fn}}
+
+    $declaredEffectGraph = Get-AriaEffectProperty `
+        -Object $BytecodeModel `
+        -Name 'effectGraph'
+
+    if ($null -eq $declaredEffectGraph) {
+        $errors.Add('Bytecode effect graph is missing.')
+    }
+    else {
+        $effectValidation = Test-AriaEffectGraph $declaredEffectGraph
+        if (-not $effectValidation.valid) {
+            $errors.Add(
+                'Bytecode effect graph is invalid: ' +
+                (@($effectValidation.errors) -join ', ')
+            )
+        }
+
+        try {
+            $derivedEffectGraph = Get-AriaBytecodeEffectGraph `
+                -BytecodeModel $BytecodeModel
+
+            if (-not (Test-AriaEffectGraphEquivalent `
+                -Left $declaredEffectGraph `
+                -Right $derivedEffectGraph)) {
+                $errors.Add('Effect graph does not match executable instructions.')
+            }
+
+            foreach ($fn in @($BytecodeModel.functions)) {
+                $declaredSummary = Get-AriaEffectProperty `
+                    -Object $fn `
+                    -Name 'effectSummary'
+
+                if ($null -eq $declaredSummary) {
+                    $errors.Add(
+                        "Function '$($fn.name)' has no effect summary."
+                    )
+                    continue
+                }
+
+                $expectedSummary = Get-AriaEffectSummary `
+                    -Graph $declaredEffectGraph `
+                    -Name ([string]$fn.name)
+
+                $declaredSummaryJson = ConvertTo-AriaJson (
+                    ConvertTo-AriaEffectSummaryCanonicalBody $declaredSummary
+                )
+                $expectedSummaryJson = ConvertTo-AriaJson (
+                    ConvertTo-AriaEffectSummaryCanonicalBody $expectedSummary
+                )
+
+                if ($declaredSummaryJson -ne $expectedSummaryJson -or
+                    [string]$declaredSummary.digest -ne
+                        [string]$expectedSummary.digest) {
+                    $errors.Add(
+                        "Function '$($fn.name)' effect summary does not match the effect graph."
+                    )
+                }
+            }
+        }
+        catch {
+            $errors.Add('Effect graph verification failed: ' + $_.Exception.Message)
+        }
+    }
     $max=0;foreach($fn in @($BytecodeModel.functions)){$vars=@{};foreach($param in @($fn.parameters)){$vars[[string]$param.name]=[string]$param.type};$result=Test-AriaInstructionSequence @($fn.instructions) $vars @{} $functions $memoryTypes $capabilityMap $agentMap $connectionMap $constants $errors ([string]$fn.returnType) $true $false;$max=[math]::Max($max,$result.maxStack);if(-not$result.terminated){$errors.Add("Function '$($fn.name)' does not terminate with RETURN.")}}
     $entryResult=Test-AriaInstructionSequence @($BytecodeModel.instructions) @{} @{} $functions $memoryTypes $capabilityMap $agentMap $connectionMap $constants $errors 'Null' $false $true;$max=[math]::Max($max,$entryResult.maxStack);if(-not$entryResult.terminated){$errors.Add('Entry instruction stream does not terminate with HALT.')}
     return [pscustomobject][ordered]@{valid=($errors.Count-eq0);errors=$errors.ToArray();maxStack=$max}

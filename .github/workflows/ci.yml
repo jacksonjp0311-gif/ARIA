@@ -37,6 +37,9 @@ jobs:
       - name: Sequence core gates
         shell: pwsh
         run: ./tests/Run-SequenceCoreTests.ps1
+      - name: Effect graph and purity gates
+        shell: pwsh
+        run: ./tests/Run-EffectPurityTests.ps1
       - name: Gate hello program
         shell: pwsh
         run: ./aria.ps1 gate ./examples/hello.aria -Strict
@@ -57,4 +60,5 @@ jobs:
           .\tests\Run-GlyphLoweringTests.ps1
           .\tests\Run-CompositionTests.ps1
           .\tests\Run-SequenceCoreTests.ps1
+          .\tests\Run-EffectPurityTests.ps1
           .\aria.ps1 run .\examples\hello.aria -Strict

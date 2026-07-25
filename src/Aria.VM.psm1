@@ -140,7 +140,7 @@ function Invoke-AriaContainer {
     $scopes=New-AriaScopeStack;$result=Invoke-AriaInstructionSequence @($bytecode.instructions) $context $scopes @{} 0;if($result.control-ne'halt'){throw 'ARIA entry flow terminated without HALT.'}
     foreach($name in @($connectionStates.Keys)){if([string]$connectionStates[$name].phase-ne'closed'){throw "ARIA connection '$name' terminated in phase '$($connectionStates[$name].phase)' instead of closed."}}
     if($context.memoryDirty){if(-not(Test-Path -LiteralPath $stateRoot)){New-Item -ItemType Directory -Path $stateRoot -Force|Out-Null};Save-AriaMemoryState $statePath $memories $policy}
-    return [pscustomobject][ordered]@{programName=$bytecode.programName;outputs=$outputs.ToArray();events=$events.ToArray();variables=$scopes[0];memories=$memories;connections=$connectionStates;graphs=$bytecode.graphs;statePath=$statePath;memoryPersisted=$context.memoryDirty}
+    return [pscustomobject][ordered]@{programName=$bytecode.programName;outputs=$outputs.ToArray();events=$events.ToArray();variables=$scopes[0];memories=$memories;connections=$connectionStates;graphs=$bytecode.graphs;effectGraph=$bytecode.effectGraph;statePath=$statePath;memoryPersisted=$context.memoryDirty}
 }
 function Invoke-AriaArtifact { param([string]$Path,[string]$PolicyPath,[string]$WorkspaceRoot=(Get-AriaRepositoryRoot),[switch]$PassThru) return(Invoke-AriaContainer (Read-AriaContainer $Path) $PolicyPath $WorkspaceRoot -PassThru:$PassThru) }
 Export-ModuleMember -Function Invoke-AriaContainer,Invoke-AriaArtifact

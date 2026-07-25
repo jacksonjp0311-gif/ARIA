@@ -228,9 +228,10 @@
                       "tests":  [
                                     "map preserves sequence order",
                                     "map validates transform types",
-                                    "map execution is deterministic"
+                                    "map execution is deterministic",
+                                    "transform purity is proven by deterministic effect graph"
                                 ],
-                      "digest":  "sha256:780032ce6498fe801ae2657880845710375c1becc36f6b4fd63da439eccadcfb"
+                      "digest":  "sha256:074a711ca8cc514c831a1cc6eb75b937782246d9f3c0a52c247243d6dea851ac"
                   },
                   {
                       "format":  "aria.glyph-card",
@@ -269,9 +270,10 @@
                       "tests":  [
                                     "filter preserves source order",
                                     "filter requires Bool predicate",
-                                    "filter execution is deterministic"
+                                    "filter execution is deterministic",
+                                    "predicate purity is proven by deterministic effect graph"
                                 ],
-                      "digest":  "sha256:0b8252646c8d2409cc124f1ab13289799fa1e90e80ee2a0a1734d88a96fc64ae"
+                      "digest":  "sha256:1a105a3c7b5ce0ddb0eb7bee8a6cc3090a8003a5b617054b7972f3fa1fbd971a"
                   },
                   {
                       "format":  "aria.glyph-card",
@@ -314,10 +316,11 @@
                       "tests":  [
                                     "reduce validates accumulator continuity",
                                     "reduce requires explicit initial value",
-                                    "reduce execution is deterministic"
+                                    "reduce execution is deterministic",
+                                    "reducer purity is proven by deterministic effect graph"
                                 ],
-                      "digest":  "sha256:eca8909c6e91febcf20eee5ee5bc18d05c0ef705f6aed320a85b30d5772a8027"
+                      "digest":  "sha256:ff909ec8e1b4963d10a8e95b10f882dba78f7a801f8d9c4311481abe288b27c2"
                   }
               ],
-    "digest":  "sha256:567ae7d6868f597942d1804b82a9f0b3ed2a69640d159a542c1c96f24da3a80a"
+    "digest":  "sha256:526db9635439dfb2bb82bd5e3736ee97ec728c8130e9685b0b6a1fe94725bda8"
 }

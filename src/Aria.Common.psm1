@@ -179,7 +179,292 @@ function ConvertTo-AriaHashtable {
     return $Value
 }
 
+function Get-AriaSequenceProperty {
+    param(
+        [Parameter(Mandatory=$true)]$Value,
+        [Parameter(Mandatory=$true)][string]$Name
+    )
+
+    if ($Value -is [System.Collections.IDictionary]) {
+        if (-not $Value.Contains($Name)) {
+            return $null
+        }
+
+        $propertyValue = $Value[$Name]
+    }
+    else {
+        $property = $Value.PSObject.Properties[$Name]
+
+        if ($null -eq $property) {
+            return $null
+        }
+
+        $propertyValue = $property.Value
+    }
+
+    if (
+        $propertyValue -is [System.Collections.IEnumerable] -and
+        $propertyValue -isnot [string]
+    ) {
+        return ,$propertyValue
+    }
+
+    return $propertyValue
+}
+
+function Test-AriaDeclaredTypeName {
+    param([Parameter(Mandatory=$true)][string]$Type)
+
+    if ($Type -in @('Any','Text','Number','Bool','Null')) {
+        return $true
+    }
+
+    return [bool](
+        $Type -match '^Sequence<(Text|Number|Bool|Null)>$'
+    )
+}
+
+function Test-AriaSequenceTypeName {
+    param([Parameter(Mandatory=$true)][string]$Type)
+
+    return [bool](
+        $Type -match '^Sequence<(Text|Number|Bool|Null|Empty)>$'
+    )
+}
+
+function Get-AriaSequenceElementType {
+    param([Parameter(Mandatory=$true)][string]$Type)
+
+    if ($Type -notmatch '^Sequence<(Text|Number|Bool|Null|Empty)>$') {
+        return $null
+    }
+
+    return [string]$matches[1]
+}
+
+function Get-AriaSequenceLimits {
+    $maxElements = 256
+    $maxBytes = 65536
+    $lock = Get-AriaLock
+    $limitsProperty = $lock.PSObject.Properties['limits']
+
+    if ($null -ne $limitsProperty -and $null -ne $limitsProperty.Value) {
+        $limits = $limitsProperty.Value
+        $elementsProperty = $limits.PSObject.Properties['sequenceMaxElements']
+        $bytesProperty = $limits.PSObject.Properties['sequenceMaxBytes']
+
+        if ($null -ne $elementsProperty) {
+            $maxElements = [int]$elementsProperty.Value
+        }
+
+        if ($null -ne $bytesProperty) {
+            $maxBytes = [int]$bytesProperty.Value
+        }
+    }
+
+    if ($maxElements -lt 1 -or $maxElements -gt 1048576) {
+        throw 'ARIA sequenceMaxElements lock value is invalid.'
+    }
+
+    if ($maxBytes -lt 32 -or $maxBytes -gt 67108864) {
+        throw 'ARIA sequenceMaxBytes lock value is invalid.'
+    }
+
+    return [pscustomobject][ordered]@{
+        maxElements = $maxElements
+        maxBytes = $maxBytes
+    }
+}
+
+function Get-AriaScalarValueType {
+    param($Value)
+
+    if ($null -eq $Value) { return 'Null' }
+    if ($Value -is [bool]) { return 'Bool' }
+    if ($Value -is [string]) { return 'Text' }
+
+    if (
+        $Value -is [byte] -or
+        $Value -is [sbyte] -or
+        $Value -is [int16] -or
+        $Value -is [uint16] -or
+        $Value -is [int32] -or
+        $Value -is [uint32] -or
+        $Value -is [int64] -or
+        $Value -is [uint64] -or
+        $Value -is [single] -or
+        $Value -is [double] -or
+        $Value -is [decimal]
+    ) {
+        return 'Number'
+    }
+
+    return 'Any'
+}
+
+function Test-AriaSequenceValue {
+    param([Parameter(Mandatory=$true)]$Value)
+
+    $errors = New-Object System.Collections.Generic.List[string]
+    $format = [string](Get-AriaSequenceProperty $Value 'format')
+    $version = Get-AriaSequenceProperty $Value 'version'
+    $elementType = [string](
+        Get-AriaSequenceProperty $Value 'elementType'
+    )
+    $rawValues = Get-AriaSequenceProperty $Value 'values'
+
+    if ($format -ne 'aria.sequence') {
+        $errors.Add('E_SEQUENCE_FORMAT')
+    }
+
+    if ($null -eq $version -or [int]$version -ne 1) {
+        $errors.Add('E_SEQUENCE_VERSION')
+    }
+
+    if ($elementType -notin @('Text','Number','Bool','Null','Empty')) {
+        $errors.Add('E_SEQUENCE_ELEMENT_TYPE')
+    }
+
+    if (
+        $null -eq $rawValues -or
+        $rawValues -is [string] -or
+        -not ($rawValues -is [System.Collections.IEnumerable])
+    ) {
+        $errors.Add('E_SEQUENCE_VALUES')
+        [object[]]$values = @()
+    }
+    else {
+        [object[]]$values = @($rawValues)
+    }
+
+    $limits = Get-AriaSequenceLimits
+
+    if ($values.Count -gt $limits.maxElements) {
+        $errors.Add('E_SEQUENCE_MAX_ELEMENTS')
+    }
+
+    if ($elementType -eq 'Empty' -and $values.Count -ne 0) {
+        $errors.Add('E_SEQUENCE_EMPTY_NONEMPTY')
+    }
+
+    if ($elementType -ne 'Empty') {
+        foreach ($item in $values) {
+            $actual = Get-AriaScalarValueType $item
+
+            if ($actual -ne $elementType) {
+                $errors.Add('E_SEQUENCE_HETEROGENEOUS')
+            }
+        }
+    }
+
+    $projection = [pscustomobject][ordered]@{
+        format = 'aria.sequence'
+        version = 1
+        elementType = $elementType
+        values = [object[]]@($values)
+    }
+
+    try {
+        $encoding = New-Object Text.UTF8Encoding($false)
+        $encodedBytes = $encoding.GetByteCount(
+            (ConvertTo-AriaJson $projection)
+        )
+
+        if ($encodedBytes -gt $limits.maxBytes) {
+            $errors.Add('E_SEQUENCE_MAX_BYTES')
+        }
+    }
+    catch {
+        $errors.Add('E_SEQUENCE_ENCODING')
+        $encodedBytes = 0
+    }
+
+    return [pscustomobject][ordered]@{
+        valid = ($errors.Count -eq 0)
+        errors = @($errors.ToArray() | Sort-Object -Unique)
+        elementType = $elementType
+        type = $(if ($elementType) {
+            'Sequence<' + $elementType + '>'
+        }
+        else {
+            'Any'
+        })
+        values = [object[]]@($values)
+        encodedBytes = $encodedBytes
+    }
+}
+
+function New-AriaSequenceValue {
+    param(
+        [Parameter(Mandatory=$true)][string]$ElementType,
+        [AllowEmptyCollection()][object[]]$Values = @()
+    )
+
+    $sequence = [pscustomobject][ordered]@{
+        format = 'aria.sequence'
+        version = 1
+        elementType = $ElementType
+        values = [object[]]@($Values)
+    }
+
+    $validation = Test-AriaSequenceValue -Value $sequence
+
+    if (-not $validation.valid) {
+        throw (
+            'Invalid ARIA sequence value: ' +
+            (@($validation.errors) -join ', ')
+        )
+    }
+
+    return $sequence
+}
+
+function Get-AriaCanonicalValueType {
+    param($Value)
+
+    $scalar = Get-AriaScalarValueType $Value
+
+    if ($scalar -ne 'Any') {
+        return $scalar
+    }
+
+    if (
+        $Value -is [System.Management.Automation.PSCustomObject] -or
+        $Value -is [System.Collections.IDictionary]
+    ) {
+        $validation = Test-AriaSequenceValue -Value $Value
+
+        if ($validation.valid) {
+            return [string]$validation.type
+        }
+    }
+
+    return 'Any'
+}
+
+function ConvertTo-AriaCanonicalValueProjection {
+    param($Value)
+
+    if (
+        $Value -is [System.Management.Automation.PSCustomObject] -or
+        $Value -is [System.Collections.IDictionary]
+    ) {
+        $validation = Test-AriaSequenceValue -Value $Value
+
+        if ($validation.valid) {
+            return [pscustomobject][ordered]@{
+                format = 'aria.sequence'
+                version = 1
+                elementType = [string]$validation.elementType
+                values = [object[]]@($validation.values)
+            }
+        }
+    }
+
+    return $Value
+}
 function Test-AriaSemanticVersion {
+
     param([Parameter(Mandatory=$true)][string]$Version)
     $core = '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
     $identifier = '(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
@@ -613,4 +898,4 @@ function Test-AriaManifest {
     }
 }
 
-Export-ModuleMember -Function Get-AriaRepositoryRoot, Read-AriaUtf8Text, Get-AriaCompilerVersion, Get-AriaLock, Normalize-AriaText, Get-AriaSourceText, Write-AriaUtf8NoBom, Get-AriaSha256Bytes, Get-AriaSha256Text, Get-AriaSha256File, ConvertTo-AriaJson, ConvertTo-AriaHashtable, Test-AriaSemanticVersion, New-AriaDiagnostic, Get-AriaErrorDiagnostics, Resolve-AriaConfinedPath, Get-AriaManifestEntries, Test-AriaManifestByteIdentity, Update-AriaManifest, Test-AriaManifest
+Export-ModuleMember -Function Get-AriaRepositoryRoot, Read-AriaUtf8Text, Get-AriaCompilerVersion, Get-AriaLock, Normalize-AriaText, Get-AriaSourceText, Write-AriaUtf8NoBom, Get-AriaSha256Bytes, Get-AriaSha256Text, Get-AriaSha256File, ConvertTo-AriaJson, ConvertTo-AriaHashtable, Test-AriaDeclaredTypeName, Test-AriaSequenceTypeName, Get-AriaSequenceElementType, Get-AriaSequenceLimits, Get-AriaScalarValueType, Test-AriaSequenceValue, New-AriaSequenceValue, Get-AriaCanonicalValueType, ConvertTo-AriaCanonicalValueProjection, Test-AriaSemanticVersion, New-AriaDiagnostic, Get-AriaErrorDiagnostics, Resolve-AriaConfinedPath, Get-AriaManifestEntries, Test-AriaManifestByteIdentity, Update-AriaManifest, Test-AriaManifest

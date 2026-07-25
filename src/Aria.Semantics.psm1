@@ -52,7 +52,27 @@ function Test-AriaPolicyAllowsCapability {
 function Test-AriaPolicyAllowsEffect { param($Policy,[string]$Effect,[string]$Scope='.') return (Test-AriaPolicyAllowsCapability $Policy ([pscustomobject]@{effect=$Effect;scope=$Scope})) }
 function Get-AriaGlyphRegistry { $path=Join-Path (Get-AriaRepositoryRoot) 'grammar/glyphs.json';$doc=Read-AriaUtf8Text $path|ConvertFrom-Json;if([string]$doc.format-ne'aria.glyph-registry'){throw 'ARIA glyph registry has an invalid format.'};$registry=[ordered]@{};$symbols=@{};foreach($glyph in @($doc.glyphs)){$id=[string]$glyph.id;$symbol=[string]$glyph.symbol;if([string]::IsNullOrWhiteSpace($id)-or[string]::IsNullOrWhiteSpace($symbol)){throw 'ARIA glyph registry contains an empty id or symbol.'};if($registry.Contains($id)){throw "ARIA glyph registry contains duplicate id '$id'."};if($symbols.ContainsKey($symbol)){throw "ARIA glyph registry contains duplicate symbol '$symbol'."};$registry[$id]=$symbol;$symbols[$symbol]=$true};return $registry }
 
-function Test-AriaTypeAssignable { param([string]$Expected,[string]$Actual) return ($Expected-eq'Any'-or$Actual-eq'Any'-or$Expected-eq$Actual) }
+function Test-AriaTypeAssignable {
+    param([string]$Expected,[string]$Actual)
+
+    if (
+        $Expected -eq 'Any' -or
+        $Actual -eq 'Any' -or
+        $Expected -eq $Actual
+    ) {
+        return $true
+    }
+
+    if (
+        $Actual -eq 'Sequence<Empty>' -and
+        (Test-AriaSequenceTypeName -Type $Expected) -and
+        $Expected -ne 'Sequence<Empty>'
+    ) {
+        return $true
+    }
+
+    return $false
+}
 function Copy-AriaTable { param([hashtable]$Table) $copy=@{};foreach($key in $Table.Keys){$copy[$key]=$Table[$key]};return $copy }
 function Get-AriaScopedType { param([object[]]$Scopes,[string]$Name) for($i=$Scopes.Count-1;$i-ge0;$i--){if($Scopes[$i].ContainsKey($Name)){return [string]$Scopes[$i][$Name]}};return $null }
 function Add-AriaTypeDiagnostic { param($Diagnostics,[string]$Code,[string]$Message,[int]$Line) $Diagnostics.Add((New-AriaDiagnostic error $Code $Message $Line)) }
@@ -64,6 +84,115 @@ function Get-AriaExpressionType {
     $type='Any'
     switch($Expression.kind){
         'literal'{$type=[string]$Expression.valueType}
+        'sequence'{
+            $limits = Get-AriaSequenceLimits
+            [object[]]$elements = @($Expression.elements)
+
+            if ($elements.Count -gt $limits.maxElements) {
+                Add-AriaTypeDiagnostic `
+                    $Diagnostics `
+                    'ARIA2110' `
+                    "Sequence literal exceeds $($limits.maxElements) elements." `
+                    $Line
+            }
+
+            if ($elements.Count -eq 0) {
+                $elementType = 'Empty'
+                $type = 'Sequence<Empty>'
+            }
+            else {
+                $elementTypes = New-Object System.Collections.Generic.List[string]
+                $values = New-Object System.Collections.Generic.List[object]
+                $allLiteral = $true
+
+                foreach ($element in $elements) {
+                    $elementTypes.Add(
+                        (Get-AriaExpressionType `
+                            $element `
+                            $Scopes `
+                            $Functions `
+                            $Diagnostics `
+                            $Line)
+                    )
+
+                    if ([string]$element.kind -eq 'literal') {
+                        $values.Add($element.value)
+                    }
+                    elseif (
+                        [string]$element.kind -eq 'unary' -and
+                        [string]$element.operator -eq 'neg' -and
+                        [string]$element.operand.kind -eq 'literal' -and
+                        [string]$element.operand.valueType -eq 'Number'
+                    ) {
+                        $values.Add((-1 * $element.operand.value))
+                    }
+                    else {
+                        $allLiteral = $false
+                    }
+                }
+
+                if (-not $allLiteral) {
+                    Add-AriaTypeDiagnostic `
+                        $Diagnostics `
+                        'ARIA2111' `
+                        'Sequence elements must be scalar literals in alpha.4.' `
+                        $Line
+                }
+
+                $elementType = [string]$elementTypes[0]
+
+                if ($elementType -notin @('Text','Number','Bool','Null')) {
+                    Add-AriaTypeDiagnostic `
+                        $Diagnostics `
+                        'ARIA2112' `
+                        "Sequence element type '$elementType' is not an alpha.4 scalar." `
+                        $Line
+                    $type = 'Any'
+                }
+                else {
+                    $heterogeneous = $false
+
+                    foreach ($candidate in $elementTypes) {
+                        if ([string]$candidate -ne $elementType) {
+                            $heterogeneous = $true
+                        }
+                    }
+
+                    if ($heterogeneous) {
+                        Add-AriaTypeDiagnostic `
+                            $Diagnostics `
+                            'ARIA2113' `
+                            'Sequence literal elements must have one exact type.' `
+                            $Line
+                        $type = 'Any'
+                    }
+                    else {
+                        $type = 'Sequence<' + $elementType + '>'
+
+                        if ($allLiteral) {
+                            try {
+                                $null = New-AriaSequenceValue `
+                                    -ElementType $elementType `
+                                    -Values $values.ToArray()
+                            }
+                            catch {
+                                Add-AriaTypeDiagnostic `
+                                    $Diagnostics `
+                                    'ARIA2114' `
+                                    $_.Exception.Message `
+                                    $Line
+                            }
+                        }
+                    }
+                }
+            }
+
+            $Expression |
+                Add-Member `
+                    -NotePropertyName elementType `
+                    -NotePropertyValue $elementType `
+                    -Force
+        }
         'identifier'{$found=Get-AriaScopedType $Scopes ([string]$Expression.value);if($null-eq$found){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2060' "Unknown variable '$($Expression.value)'." $Line;$type='Any'}else{$type=$found}}
         'call'{
             $name=[string]$Expression.name
@@ -98,7 +227,57 @@ function Test-AriaStatementSequence {
         switch($statement.op){
             'emit'{Add-AriaDeniedEffectDiagnostic $Policy 'console.emit' $statement.line $Diagnostics;$null=Get-AriaExpressionType $statement.expression $Scopes $Functions $Diagnostics $statement.line}
             'signal'{Add-AriaDeniedEffectDiagnostic $Policy 'console.emit' $statement.line $Diagnostics;$null=Get-AriaExpressionType $statement.expression $Scopes $Functions $Diagnostics $statement.line}
-            'let'{$actual=Get-AriaExpressionType $statement.expression $Scopes $Functions $Diagnostics $statement.line;$expected=if($statement.declaredType){[string]$statement.declaredType}else{$actual};if($Scopes[$Scopes.Count-1].ContainsKey($statement.name)-or$null-ne(Get-AriaScopedType $Scopes $statement.name)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2072' "Variable '$($statement.name)' is already defined." $statement.line}elseif(-not(Test-AriaTypeAssignable $expected $actual)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2073' "Variable '$($statement.name)' expects $expected, received $actual." $statement.line}else{$Scopes[$Scopes.Count-1][$statement.name]=$expected;$statement | Add-Member -NotePropertyName inferredType -NotePropertyValue $expected -Force}}
+            'let'{
+                $actual = Get-AriaExpressionType `
+                    $statement.expression `
+                    $Scopes `
+                    $Functions `
+                    $Diagnostics `
+                    $statement.line
+
+                $expected = if ($statement.declaredType) {
+                    [string]$statement.declaredType
+                }
+                else {
+                    $actual
+                }
+
+                if (
+                    $actual -eq 'Sequence<Empty>' -and
+                    -not $statement.declaredType
+                ) {
+                    Add-AriaTypeDiagnostic `
+                        $Diagnostics `
+                        'ARIA2115' `
+                        'An empty sequence requires an explicit Sequence<T> type.' `
+                        $statement.line
+                }
+                elseif (
+                    $Scopes[$Scopes.Count-1].ContainsKey($statement.name) -or
+                    $null -ne (Get-AriaScopedType $Scopes $statement.name)
+                ) {
+                    Add-AriaTypeDiagnostic `
+                        $Diagnostics `
+                        'ARIA2072' `
+                        "Variable '$($statement.name)' is already defined." `
+                        $statement.line
+                }
+                elseif (-not (Test-AriaTypeAssignable $expected $actual)) {
+                    Add-AriaTypeDiagnostic `
+                        $Diagnostics `
+                        'ARIA2073' `
+                        "Variable '$($statement.name)' expects $expected, received $actual." `
+                        $statement.line
+                }
+                else {
+                    $Scopes[$Scopes.Count-1][$statement.name] = $expected
+                    $statement |
+                        Add-Member `
+                            -NotePropertyName inferredType `
+                            -NotePropertyValue $expected `
+                            -Force
+                }
+            }
             'set'{$expected=Get-AriaScopedType $Scopes $statement.name;$actual=Get-AriaExpressionType $statement.expression $Scopes $Functions $Diagnostics $statement.line;if($null-eq$expected){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2074' "Cannot set undefined variable '$($statement.name)'." $statement.line}elseif(-not(Test-AriaTypeAssignable $expected $actual)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2075' "Variable '$($statement.name)' expects $expected, received $actual." $statement.line}}
             'remember'{Add-AriaDeniedEffectDiagnostic $Policy 'memory.write' $statement.line $Diagnostics;if(-not$Memories.ContainsKey($statement.memory)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2041' "Unknown memory '$($statement.memory)'." $statement.line}elseif(-not$Memories[$statement.memory].ContainsKey($statement.key)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2046' "Unknown memory key '$($statement.memory).$($statement.key)'." $statement.line}else{$actual=Get-AriaExpressionType $statement.expression $Scopes $Functions $Diagnostics $statement.line;$expected=[string]$Memories[$statement.memory][$statement.key];if(-not(Test-AriaTypeAssignable $expected $actual)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2076' "Memory '$($statement.memory).$($statement.key)' expects $expected, received $actual." $statement.line}}}
             'recall'{Add-AriaDeniedEffectDiagnostic $Policy 'memory.read' $statement.line $Diagnostics;if(-not$Memories.ContainsKey($statement.memory)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2042' "Unknown memory '$($statement.memory)'." $statement.line}elseif(-not$Memories[$statement.memory].ContainsKey($statement.key)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2047' "Unknown memory key '$($statement.memory).$($statement.key)'." $statement.line}else{$actual=[string]$Memories[$statement.memory][$statement.key];$expected=if($statement.declaredType){[string]$statement.declaredType}else{$actual};if(-not(Test-AriaTypeAssignable $expected $actual)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2077' "Recall target '$($statement.name)' expects $expected, memory provides $actual." $statement.line}else{$Scopes[$Scopes.Count-1][$statement.name]=$expected;$statement | Add-Member -NotePropertyName inferredType -NotePropertyValue $expected -Force}}}
@@ -127,7 +306,7 @@ function Test-AriaSemantics {
     if($null-ne$model.programVersion-and-not(Test-AriaSemanticVersion $model.programVersion)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2002' "Invalid program version '$($model.programVersion)'." 0}
     if($null-ne$model.moduleVersion-and-not(Test-AriaSemanticVersion $model.moduleVersion)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2003' "Invalid module version '$($model.moduleVersion)'." 0}
 
-    $memories=@{};foreach($memory in $model.memories){if($memories.ContainsKey($memory.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2004' "Duplicate memory '$($memory.name)'." $memory.line;continue};$fields=@{};foreach($entry in $memory.values){if($fields.ContainsKey($entry.key)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2005' "Duplicate memory key '$($memory.name).$($entry.key)'." $entry.line;continue};if($entry.expression.kind-ne'literal'){Add-AriaTypeDiagnostic $diagnostics 'ARIA2006' 'Memory defaults must be literals.' $entry.line;$actual='Any'}else{$actual=[string]$entry.expression.valueType};$expected=if($entry.declaredType){[string]$entry.declaredType}else{$actual};if(-not(Test-AriaTypeAssignable $expected $actual)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2007' "Memory '$($memory.name).$($entry.key)' expects $expected, received $actual." $entry.line};$entry | Add-Member -NotePropertyName inferredType -NotePropertyValue $expected -Force;$fields[$entry.key]=$expected};$memories[$memory.name]=$fields}
+    $memories=@{};foreach($memory in $model.memories){if($memories.ContainsKey($memory.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2004' "Duplicate memory '$($memory.name)'." $memory.line;continue};$fields=@{};foreach($entry in $memory.values){if($fields.ContainsKey($entry.key)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2005' "Duplicate memory key '$($memory.name).$($entry.key)'." $entry.line;continue};if($entry.expression.kind-notin@('literal','sequence')){Add-AriaTypeDiagnostic $diagnostics 'ARIA2006' 'Memory defaults must be scalar or sequence literals.' $entry.line;$actual='Any'}else{$actual=Get-AriaExpressionType $entry.expression @(@{}) @{} $diagnostics $entry.line};$expected=if($entry.declaredType){[string]$entry.declaredType}else{$actual};if($actual-eq'Sequence<Empty>'-and-not$entry.declaredType){Add-AriaTypeDiagnostic $diagnostics 'ARIA2115' 'An empty sequence requires an explicit Sequence<T> type.' $entry.line;$expected='Any'};if(-not(Test-AriaTypeAssignable $expected $actual)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2007' "Memory '$($memory.name).$($entry.key)' expects $expected, received $actual." $entry.line};$entry | Add-Member -NotePropertyName inferredType -NotePropertyValue $expected -Force;$fields[$entry.key]=$expected};$memories[$memory.name]=$fields}
     $capabilities=@{};foreach($cap in $model.capabilities){if($capabilities.ContainsKey($cap.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2010' "Duplicate capability '$($cap.name)'." $cap.line;continue};$capabilities[$cap.name]=$cap;if(-not($cap.effect-is[string])-or-not($cap.scope-is[string])){Add-AriaTypeDiagnostic $diagnostics 'ARIA2011' "Capability '$($cap.name)' requires string effect and scope properties." $cap.line;continue};if([IO.Path]::IsPathRooted([string]$cap.scope)-or[string]$cap.scope-match'(^|[\\/])\.\.([\\/]|$)'){Add-AriaTypeDiagnostic $diagnostics 'ARIA2013' "Capability '$($cap.name)' scope must be repository-relative and cannot contain '..'." $cap.line;continue};$decision=Test-AriaPolicyAllowsCapability $Policy $cap;if(-not$decision.allowed){Add-AriaTypeDiagnostic $diagnostics 'ARIA2012' "Capability '$($cap.name)' rejected: $($decision.reason)" $cap.line}}
     $agents=@{};foreach($agent in $model.agents){if($agents.ContainsKey($agent.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2020' "Duplicate agent '$($agent.name)'." $agent.line}else{$agents[$agent.name]=$agent};foreach($grant in $agent.grants){if(-not$capabilities.ContainsKey($grant.capability)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2021' "Agent '$($agent.name)' grants unknown capability '$($grant.capability)'." $grant.line}}}
     $connections=@{};foreach($connection in @($model.connections)){if($connections.ContainsKey($connection.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2100' "Duplicate connection '$($connection.name)'." $connection.line;continue};$connections[$connection.name]=$connection;if([string]::IsNullOrWhiteSpace([string]$connection.operator)-or[string]::IsNullOrWhiteSpace([string]$connection.agent)-or[string]::IsNullOrWhiteSpace([string]$connection.protocol)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2101' "Connection '$($connection.name)' requires operator, agent, and protocol Text properties." $connection.line;continue};if(-not$agents.ContainsKey([string]$connection.agent)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2102' "Connection '$($connection.name)' references unknown agent '$($connection.agent)'." $connection.line};if([string]$connection.protocol-ne'intent-proposal-consent'){Add-AriaTypeDiagnostic $diagnostics 'ARIA2103' "Connection '$($connection.name)' protocol must be 'intent-proposal-consent'." $connection.line}}

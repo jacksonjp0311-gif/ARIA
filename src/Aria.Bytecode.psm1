@@ -4,10 +4,46 @@ function Get-AriaOpcodeRegistry { $path=Join-Path (Get-AriaRepositoryRoot) 'gram
 function Add-AriaConstant { param($Value,$Constants,[hashtable]$Index) $key=if($null-eq$Value){'null'}else{ConvertTo-AriaJson ([pscustomobject][ordered]@{value=$Value})};if($Index.ContainsKey($key)){return [int]$Index[$key]};$position=$Constants.Count;$Constants.Add($Value);$Index[$key]=$position;return $position }
 function Get-AriaBinaryOpcode { param([string]$Operator) switch($Operator){'+'{'ADD'}'-'{'SUB'}'*'{'MUL'}'/'{'DIV'}'=='{'EQ'}'!='{'NE'}'<'{'LT'}'<='{'LE'}'>'{'GT'}'>='{'GE'}'and'{'AND'}'or'{'OR'}default{throw "Unknown ARIA operator '$Operator'."}} }
 
+function ConvertTo-AriaConstantValue {
+    param([Parameter(Mandatory=$true)]$Expression)
+
+    if ([string]$Expression.kind -eq 'literal') {
+        return $Expression.value
+    }
+
+    if ([string]$Expression.kind -eq 'sequence') {
+        $values = New-Object System.Collections.Generic.List[object]
+
+        foreach ($element in @($Expression.elements)) {
+            if ([string]$element.kind -eq 'literal') {
+                $values.Add($element.value)
+            }
+            elseif (
+                [string]$element.kind -eq 'unary' -and
+                [string]$element.operator -eq 'neg' -and
+                [string]$element.operand.kind -eq 'literal' -and
+                [string]$element.operand.valueType -eq 'Number'
+            ) {
+                $values.Add((-1 * $element.operand.value))
+            }
+            else {
+                throw 'Sequence bytecode requires verified scalar literal elements.'
+            }
+        }
+
+        return New-AriaSequenceValue `
+            -ElementType ([string]$Expression.elementType) `
+            -Values $values.ToArray()
+    }
+
+    throw "Expression kind '$($Expression.kind)' is not a constant."
+}
+
 function Add-AriaExpressionInstructions {
     param($Expression,$Instructions,$Constants,[hashtable]$ConstantIndex,[hashtable]$FunctionMap,[int]$Line)
     switch($Expression.kind){
         'literal'{$constant=Add-AriaConstant $Expression.value $Constants $ConstantIndex;$Instructions.Add([pscustomobject][ordered]@{op='PUSH_CONST';arg=$constant;type=[string]$Expression.valueType;line=$Line})}
+        'sequence'{$value=ConvertTo-AriaConstantValue $Expression;$constant=Add-AriaConstant $value $Constants $ConstantIndex;$Instructions.Add([pscustomobject][ordered]@{op='PUSH_CONST';arg=$constant;type=[string]$Expression.inferredType;line=$Line})}
         'identifier'{$Instructions.Add([pscustomobject][ordered]@{op='LOAD';arg=[string]$Expression.value;line=$Line})}
         'unary'{Add-AriaExpressionInstructions $Expression.operand $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op=$(if($Expression.operator-eq'not'){'NOT'}else{'NEG'});line=$Line})}
         'binary'{Add-AriaExpressionInstructions $Expression.left $Instructions $Constants $ConstantIndex $FunctionMap $Line;Add-AriaExpressionInstructions $Expression.right $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op=(Get-AriaBinaryOpcode $Expression.operator);line=$Line})}
@@ -55,7 +91,7 @@ function ConvertTo-AriaBytecodeModel {
     $functions=New-Object System.Collections.Generic.List[object]
     foreach($fn in $model.functions){[object[]]$body=@(ConvertTo-AriaInstructionSequence @($fn.statements) $constants $constantIndex $functionMap -FunctionBody);if($fn.returnType-eq'Null'-and($body.Count-eq0-or$body[$body.Count-1].op-ne'RETURN')){$body+=,[pscustomobject][ordered]@{op='RETURN';hasValue=$false;line=0}};$functions.Add([pscustomobject][ordered]@{name=$fn.name;parameters=$fn.parameters;returnType=$fn.returnType;instructions=$body})}
     $memories=New-Object System.Collections.Generic.List[object]
-    foreach($memory in $model.memories){$values=[ordered]@{};$types=[ordered]@{};foreach($entryValue in $memory.values){$values[$entryValue.key]=$entryValue.expression.value;$types[$entryValue.key]=[string]$entryValue.inferredType};$memories.Add([pscustomobject][ordered]@{name=$memory.name;values=[pscustomobject]$values;types=[pscustomobject]$types})}
+    foreach($memory in $model.memories){$values=[ordered]@{};$types=[ordered]@{};foreach($entryValue in $memory.values){$values[$entryValue.key]=ConvertTo-AriaConstantValue $entryValue.expression;$types[$entryValue.key]=[string]$entryValue.inferredType};$memories.Add([pscustomobject][ordered]@{name=$memory.name;values=[pscustomobject]$values;types=[pscustomobject]$types})}
     $sourceHash=Get-AriaSha256Text $SourceText
     $ir=[pscustomobject][ordered]@{format=$model.format;specVersion=$model.specVersion;moduleName=$model.moduleName;moduleVersion=$model.moduleVersion;programName=$model.programName;programVersion=$model.programVersion;entry=$model.entry;memories=$model.memories;capabilities=$model.capabilities;agents=$model.agents;connections=$model.connections;graphs=$model.graphs;functions=$model.functions;flows=$model.flows}
     return [pscustomobject][ordered]@{format='aria.bytecode';containerVersion=1;compilerVersion=Get-AriaCompilerVersion;specVersion=$model.specVersion;moduleName=$model.moduleName;moduleVersion=$model.moduleVersion;programName=$model.programName;programVersion=$model.programVersion;sourceHash=$sourceHash;irHash=(Get-AriaSha256Text (ConvertTo-AriaJson $ir));entry=$model.entry;constants=$constants.ToArray();memories=$memories.ToArray();capabilities=$model.capabilities;agents=$model.agents;connections=$model.connections;graphs=$model.graphs;functions=$functions.ToArray();instructions=$instructions}
@@ -63,9 +99,9 @@ function ConvertTo-AriaBytecodeModel {
 
 function Test-AriaBytecodeIdentifier { param($Value) return (($Value-is[string])-and([string]$Value-match'^[A-Za-z_][A-Za-z0-9_.-]*$')) }
 function Test-AriaBytecodeInteger { param($Value) return ($Value-is[byte]-or$Value-is[sbyte]-or$Value-is[int16]-or$Value-is[uint16]-or$Value-is[int32]-or$Value-is[uint32]-or$Value-is[int64]-or$Value-is[uint64]) }
-function Test-AriaBytecodeScalar { param($Value) if($null-eq$Value){return $true};return($Value-is[string]-or$Value-is[bool]-or$Value-is[byte]-or$Value-is[sbyte]-or$Value-is[int16]-or$Value-is[uint16]-or$Value-is[int32]-or$Value-is[uint32]-or$Value-is[int64]-or$Value-is[uint64]-or$Value-is[single]-or$Value-is[double]-or$Value-is[decimal]) }
+function Test-AriaBytecodeScalar { param($Value) if($null-eq$Value){return $true};if($Value-is[string]-or$Value-is[bool]-or$Value-is[byte]-or$Value-is[sbyte]-or$Value-is[int16]-or$Value-is[uint16]-or$Value-is[int32]-or$Value-is[uint32]-or$Value-is[int64]-or$Value-is[uint64]-or$Value-is[single]-or$Value-is[double]-or$Value-is[decimal]){return $true};if($Value-is[Management.Automation.PSCustomObject]-or$Value-is[Collections.IDictionary]){return [bool](Test-AriaSequenceValue -Value $Value).valid};return $false }
 function Test-AriaInstructionHasProperty { param($Instruction,[string]$Name) return ($null-ne$Instruction-and$null-ne($Instruction.PSObject.Properties|Where-Object{$_.Name-eq$Name}|Select-Object -First 1)) }
-function Get-AriaValueType { param($Value) if($null-eq$Value){return 'Null'};if($Value-is[bool]){return 'Bool'};if($Value-is[string]){return 'Text'};if($Value-is[byte]-or$Value-is[sbyte]-or$Value-is[int16]-or$Value-is[uint16]-or$Value-is[int32]-or$Value-is[uint32]-or$Value-is[int64]-or$Value-is[uint64]-or$Value-is[single]-or$Value-is[double]-or$Value-is[decimal]){return 'Number'};return 'Any' }
+function Get-AriaValueType { param($Value) return (Get-AriaCanonicalValueType -Value $Value) }
 function Copy-AriaVerifierTable { param([hashtable]$Table) $copy=@{};foreach($key in $Table.Keys){$copy[$key]=$Table[$key]};return $copy }
 function Pop-AriaVerifierType { param($Stack,$Errors,[string]$Context) if($Stack.Count-eq0){$Errors.Add("Stack underflow at $Context.");return 'Any'};$index=$Stack.Count-1;$value=[string]$Stack[$index];$Stack.RemoveAt($index);return $value }
 function Push-AriaVerifierType { param($Stack,[string]$Type,[ref]$Maximum) $null=$Stack.Add($Type);if($Stack.Count-gt$Maximum.Value){$Maximum.Value=$Stack.Count} }
@@ -130,7 +166,7 @@ function Test-AriaInstructionSequence {
             'STORE' {
                 $actual = Pop-AriaVerifierType $stack $Errors "STORE instruction $index"
                 $type = [string]$instruction.type
-                if ($type -notin @('Any','Text','Number','Bool','Null')) { $Errors.Add("STORE at $index has invalid type '$type'.") }
+                if (-not (Test-AriaDeclaredTypeName -Type $type)) { $Errors.Add("STORE at $index has invalid type '$type'.") }
                 if (-not (Test-AriaTypeAssignable $type $actual)) { $Errors.Add("STORE at $index expects $type, received $actual.") }
                 $Variables[[string]$instruction.arg] = $type
             }
@@ -317,7 +353,7 @@ function Test-AriaBytecodeModel {
     param($BytecodeModel)
     $errors=New-Object System.Collections.Generic.List[string];if($null-eq$BytecodeModel){$errors.Add('Bytecode model is null.');return [pscustomobject]@{valid=$false;errors=$errors.ToArray();maxStack=0}}
     $lock=Get-AriaLock;if([string]$BytecodeModel.format-ne'aria.bytecode'){$errors.Add("Invalid bytecode format '$($BytecodeModel.format)'.")};if([string]$BytecodeModel.compilerVersion-ne[string]$lock.compilerVersion){$errors.Add('Bytecode compiler version does not match lock.')};if([string]$BytecodeModel.specVersion-ne[string]$lock.specVersion){$errors.Add('Bytecode spec version does not match lock.')};if(-not(Test-AriaBytecodeIdentifier $BytecodeModel.programName)){$errors.Add('Bytecode program name is invalid.')}
-    [object[]]$constants=@($BytecodeModel.constants);foreach($constant in $constants){if(-not(Test-AriaBytecodeScalar $constant)){$errors.Add('Constant pool contains a non-scalar value.')}}
+    [object[]]$constants=@($BytecodeModel.constants);foreach($constant in $constants){if(-not(Test-AriaBytecodeScalar $constant)){$errors.Add('Constant pool contains an unsupported or invalid value.')}}
     $memoryTypes=@{};foreach($memory in @($BytecodeModel.memories)){$fields=@{};foreach($property in $memory.types.PSObject.Properties){$fields[$property.Name]=[string]$property.Value};$memoryTypes[[string]$memory.name]=$fields}
     $capabilityMap=@{};foreach($cap in @($BytecodeModel.capabilities)){$capabilityMap[[string]$cap.name]=$cap}
     $agentMap=@{};foreach($agent in @($BytecodeModel.agents)){$agentMap[[string]$agent.name]=$agent}

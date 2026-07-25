@@ -140,6 +140,8 @@ function Get-AriaExpressionTokens {
         }
         if ($ch -eq '(') { $tokens.Add([pscustomobject][ordered]@{ kind='lparen'; text='(' }); $index++; continue }
         if ($ch -eq ')') { $tokens.Add([pscustomobject][ordered]@{ kind='rparen'; text=')' }); $index++; continue }
+        if ($ch -eq '[') { $tokens.Add([pscustomobject][ordered]@{ kind='lbracket'; text='[' }); $index++; continue }
+        if ($ch -eq ']') { $tokens.Add([pscustomobject][ordered]@{ kind='rbracket'; text=']' }); $index++; continue }
         if ($ch -eq ',') { $tokens.Add([pscustomobject][ordered]@{ kind='comma'; text=',' }); $index++; continue }
         throw "Unexpected expression character '$ch' on line ${Line}."
     }
@@ -190,6 +192,31 @@ function Parse-AriaPrimaryExpression {
             kind = 'call'
             name = $name
             arguments = $arguments.ToArray()
+        }
+    }
+
+    if (Test-AriaExpressionToken $State 'lbracket') {
+        Move-AriaExpressionToken $State
+        $elements = New-Object System.Collections.Generic.List[object]
+
+        if (-not (Test-AriaExpressionToken $State 'rbracket')) {
+            while ($true) {
+                $elements.Add((Parse-AriaPipeExpression $State))
+
+                if (Test-AriaExpressionToken $State 'comma') {
+                    Move-AriaExpressionToken $State
+                    continue
+                }
+
+                break
+            }
+        }
+
+        $null = Read-AriaExpressionToken $State 'rbracket'
+
+        return [pscustomobject][ordered]@{
+            kind = 'sequence'
+            elements = $elements.ToArray()
         }
     }
 

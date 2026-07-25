@@ -1,6 +1,9 @@
 ﻿Set-StrictMode -Version 2.0
 
-function Test-AriaTypeName { param([string]$Type) return ($Type -in @('Any','Text','Number','Bool','Null')) }
+function Test-AriaTypeName {
+    param([string]$Type)
+    return (Test-AriaDeclaredTypeName -Type $Type)
+}
 
 function ConvertFrom-AriaParameterList {
     param([AllowEmptyString()][string]$Text,[int]$Line)
@@ -8,7 +11,7 @@ function ConvertFrom-AriaParameterList {
     if ([string]::IsNullOrWhiteSpace($Text)) { return $parameters.ToArray() }
     foreach ($part in @($Text -split ',')) {
         $trimmed = $part.Trim()
-        if ($trimmed -notmatch '^([A-Za-z_][A-Za-z0-9_.]*)\s*:\s*(Any|Text|Number|Bool|Null)$') { throw "Invalid function parameter '$trimmed' on line ${Line}." }
+        if ($trimmed -notmatch '^([A-Za-z_][A-Za-z0-9_.]*)\s*:\s*(Any|Text|Number|Bool|Null|Sequence<(?:Text|Number|Bool|Null)>)$') { throw "Invalid function parameter '$trimmed' on line ${Line}." }
         $parameters.Add([pscustomobject][ordered]@{ name=$matches[1]; type=$matches[2]; line=$Line })
     }
     return $parameters.ToArray()
@@ -199,15 +202,15 @@ function Read-AriaStatementSequence {
                 continue
             }
             # Alchemical glyph surface: syntax sugar lowered into established ARIA operations.
-            if ($text -match '^🜁\s+([A-Za-z_][A-Za-z0-9_.-]*)\.([A-Za-z_][A-Za-z0-9_.-]*)\s*->\s*([A-Za-z_][A-Za-z0-9_.]*)(?:\s*:\s*(Any|Text|Number|Bool|Null))?$') { $statements.Add([pscustomobject][ordered]@{ op='recall'; memory=$matches[1]; key=$matches[2]; name=$matches[3]; declaredType=$(if($matches[4]){$matches[4]}else{$null}); surface='🜁'; line=$number }); $State.index++; continue }
-            if ($text -match '^🜁\s+([A-Za-z_][A-Za-z0-9_.]*)(?:\s*:\s*(Any|Text|Number|Bool|Null))?\s*=\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='let'; name=$matches[1]; declaredType=$(if($matches[2]){$matches[2]}else{$null}); expression=(ConvertFrom-AriaExpression $matches[3] $number); surface='🜁'; line=$number }); $State.index++; continue }
+            if ($text -match '^🜁\s+([A-Za-z_][A-Za-z0-9_.-]*)\.([A-Za-z_][A-Za-z0-9_.-]*)\s*->\s*([A-Za-z_][A-Za-z0-9_.]*)(?:\s*:\s*(Any|Text|Number|Bool|Null|Sequence<(?:Text|Number|Bool|Null)>))?$') { $statements.Add([pscustomobject][ordered]@{ op='recall'; memory=$matches[1]; key=$matches[2]; name=$matches[3]; declaredType=$(if($matches[4]){$matches[4]}else{$null}); surface='🜁'; line=$number }); $State.index++; continue }
+            if ($text -match '^🜁\s+([A-Za-z_][A-Za-z0-9_.]*)(?:\s*:\s*(Any|Text|Number|Bool|Null|Sequence<(?:Text|Number|Bool|Null)>))?\s*=\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='let'; name=$matches[1]; declaredType=$(if($matches[2]){$matches[2]}else{$null}); expression=(ConvertFrom-AriaExpression $matches[3] $number); surface='🜁'; line=$number }); $State.index++; continue }
             if ($text -match '^🜂\s+(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='emit'; expression=(ConvertFrom-AriaExpression $matches[1] $number); surface='🜂'; line=$number }); $State.index++; continue }
             if ($text -match '^🜄\s+([A-Za-z_][A-Za-z0-9_.-]*)\.([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='remember'; memory=$matches[1]; key=$matches[2]; expression=(ConvertFrom-AriaExpression $matches[3] $number); surface='🜄'; line=$number }); $State.index++; continue }            if ($text -match '^emit\s+(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='emit'; expression=(ConvertFrom-AriaExpression $matches[1] $number); line=$number }); $State.index++; continue }
             if ($text -match '^signal\s+(pulse|pass|warn|fail|info)\s+(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='signal'; state=$matches[1]; expression=(ConvertFrom-AriaExpression $matches[2] $number); line=$number }); $State.index++; continue }
-            if ($text -match '^let\s+([A-Za-z_][A-Za-z0-9_.]*)(?:\s*:\s*(Any|Text|Number|Bool|Null))?\s*=\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='let'; name=$matches[1]; declaredType=$(if($matches[2]){$matches[2]}else{$null}); expression=(ConvertFrom-AriaExpression $matches[3] $number); line=$number }); $State.index++; continue }
+            if ($text -match '^let\s+([A-Za-z_][A-Za-z0-9_.]*)(?:\s*:\s*(Any|Text|Number|Bool|Null|Sequence<(?:Text|Number|Bool|Null)>))?\s*=\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='let'; name=$matches[1]; declaredType=$(if($matches[2]){$matches[2]}else{$null}); expression=(ConvertFrom-AriaExpression $matches[3] $number); line=$number }); $State.index++; continue }
             if ($text -match '^set\s+([A-Za-z_][A-Za-z0-9_.]*)\s*=\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='set'; name=$matches[1]; expression=(ConvertFrom-AriaExpression $matches[2] $number); line=$number }); $State.index++; continue }
             if ($text -match '^remember\s+([A-Za-z_][A-Za-z0-9_.-]*)\.([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='remember'; memory=$matches[1]; key=$matches[2]; expression=(ConvertFrom-AriaExpression $matches[3] $number); line=$number }); $State.index++; continue }
-            if ($text -match '^recall\s+([A-Za-z_][A-Za-z0-9_.-]*)\.([A-Za-z_][A-Za-z0-9_.-]*)\s*->\s*([A-Za-z_][A-Za-z0-9_.]*)(?:\s*:\s*(Any|Text|Number|Bool|Null))?$') { $statements.Add([pscustomobject][ordered]@{ op='recall'; memory=$matches[1]; key=$matches[2]; name=$matches[3]; declaredType=$(if($matches[4]){$matches[4]}else{$null}); line=$number }); $State.index++; continue }
+            if ($text -match '^recall\s+([A-Za-z_][A-Za-z0-9_.-]*)\.([A-Za-z_][A-Za-z0-9_.-]*)\s*->\s*([A-Za-z_][A-Za-z0-9_.]*)(?:\s*:\s*(Any|Text|Number|Bool|Null|Sequence<(?:Text|Number|Bool|Null)>))?$') { $statements.Add([pscustomobject][ordered]@{ op='recall'; memory=$matches[1]; key=$matches[2]; name=$matches[3]; declaredType=$(if($matches[4]){$matches[4]}else{$null}); line=$number }); $State.index++; continue }
             if ($text -match '^require\s+([A-Za-z_][A-Za-z0-9_.-]*)$') { $statements.Add([pscustomobject][ordered]@{ op='require'; capability=$matches[1]; line=$number }); $State.index++; continue }
             if ($text -match '^assert\s+(.+)$') { $statements.Add([pscustomobject][ordered]@{ op='assert'; expression=(ConvertFrom-AriaExpression $matches[1] $number); line=$number }); $State.index++; continue }
             if ($text -match '^read\s+(.+?)\s*->\s*([A-Za-z_][A-Za-z0-9_.]*)(?:\s*:\s*Text)?$') { $statements.Add([pscustomobject][ordered]@{ op='read'; path=(ConvertFrom-AriaExpression $matches[1] $number); name=$matches[2]; line=$number }); $State.index++; continue }
@@ -244,7 +247,7 @@ function Parse-AriaSource {
             if ($text -match '^module\s+([A-Za-z_][A-Za-z0-9_.-]*)\s+version\s+([^\s]+)$') { if($null-ne$model.moduleName){throw 'Module declaration may appear only once.'}; $model.moduleName=$matches[1]; $model.moduleVersion=$matches[2]; $index++; continue }
             if ($text -match '^program\s+([A-Za-z_][A-Za-z0-9_.-]*)\s+version\s+([^\s]+)$') { if($null-ne$model.programName){throw 'Program declaration may appear only once.'}; $model.programName=$matches[1]; $model.programVersion=$matches[2]; $index++; continue }
             if ($text -match '^entry\s+([A-Za-z_][A-Za-z0-9_.-]*)$') { if($null-ne$model.entry){throw 'Entry declaration may appear only once.'}; $model.entry=$matches[1]; $index++; continue }
-            if ($text -match '^function\s+([A-Za-z_][A-Za-z0-9_.]*)\s*\((.*)\)\s*->\s*(Any|Text|Number|Bool|Null)\s*\{$') {
+            if ($text -match '^function\s+([A-Za-z_][A-Za-z0-9_.]*)\s*\((.*)\)\s*->\s*(Any|Text|Number|Bool|Null|Sequence<(?:Text|Number|Bool|Null)>)\s*\{$') {
                 $name=$matches[1]; $parameters=ConvertFrom-AriaParameterList $matches[2] $number; $returnType=$matches[3]; $state=[pscustomobject]@{index=($index+1)}; $body=Read-AriaStatementSequence -Lines $lines -State $state -Diagnostics $diagnostics; $index=$state.index; if($body.terminator-ne'close'){throw "Unterminated function '$name'."}; $model.functions += ,[pscustomobject][ordered]@{name=$name;line=$number;parameters=@($parameters);returnType=$returnType;statements=@($body.statements)}; continue
             }
             if ($text -match '^flow\s+([A-Za-z_][A-Za-z0-9_.-]*)\s*\{$') { $name=$matches[1]; $state=[pscustomobject]@{index=($index+1)}; $body=Read-AriaStatementSequence -Lines $lines -State $state -Diagnostics $diagnostics; $index=$state.index; if($body.terminator-ne'close'){throw "Unterminated flow '$name'."}; $model.flows += ,[pscustomobject][ordered]@{name=$name;line=$number;statements=@($body.statements)}; continue }
@@ -254,7 +257,7 @@ function Parse-AriaSource {
                     $inner=$lines[$index]; $innerText=[string]$inner.text; $innerLine=[int]$inner.number
                     try {
                         switch ($kind) {
-                            'memory' { if($innerText-notmatch '^([A-Za-z_][A-Za-z0-9_.-]*)(?:\s*:\s*(Any|Text|Number|Bool|Null))?\s*=\s*(.+)$'){throw "Invalid memory entry: $innerText"}; $entries.Add([pscustomobject][ordered]@{key=$matches[1];declaredType=$(if($matches[2]){$matches[2]}else{$null});expression=(ConvertFrom-AriaExpression $matches[3] $innerLine);line=$innerLine}) }
+                            'memory' { if($innerText-notmatch '^([A-Za-z_][A-Za-z0-9_.-]*)(?:\s*:\s*(Any|Text|Number|Bool|Null|Sequence<(?:Text|Number|Bool|Null)>))?\s*=\s*(.+)$'){throw "Invalid memory entry: $innerText"}; $entries.Add([pscustomobject][ordered]@{key=$matches[1];declaredType=$(if($matches[2]){$matches[2]}else{$null});expression=(ConvertFrom-AriaExpression $matches[3] $innerLine);line=$innerLine}) }
                             'capability' { if($innerText-notmatch '^(effect|scope)\s*=\s*(.+)$'){throw "Invalid capability property: $innerText"}; $expr=ConvertFrom-AriaExpression $matches[2] $innerLine; if($expr.kind-ne'literal'-or-not($expr.value-is[string])){throw 'Capability effect and scope must be strings.'}; $entries.Add([pscustomobject][ordered]@{key=$matches[1];expression=$expr;line=$innerLine}) }
                             'agent' { if($innerText-notmatch '^grant\s+([A-Za-z_][A-Za-z0-9_.-]*)$'){throw "Invalid agent statement: $innerText"}; $entries.Add([pscustomobject][ordered]@{capability=$matches[1];line=$innerLine}) }
                             'connection' { if($innerText-notmatch '^(operator|agent|protocol)\s*=\s*(.+)$'){throw "Invalid connection property: $innerText"}; $expr=ConvertFrom-AriaExpression $matches[2] $innerLine; if($expr.kind-ne'literal'-or-not($expr.value-is[string])){throw 'Connection operator, agent, and protocol must be Text literals.'}; $entries.Add([pscustomobject][ordered]@{key=$matches[1];value=[string]$expr.value;line=$innerLine}) }

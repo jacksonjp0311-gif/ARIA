@@ -23,7 +23,9 @@ flow-block       = "flow", whitespace, identifier, whitespace?, "{", newline,
 
 parameters       = parameter, { whitespace?, ",", whitespace?, parameter } ;
 parameter        = identifier, whitespace?, ":", whitespace?, type ;
-type             = "Any" | "Text" | "Number" | "Bool" | "Null" ;
+type             = "Any" | "Text" | "Number" | "Bool" | "Null" | sequence-type ;
+sequence-type    = "Sequence<", sequence-element-type, ">" ;
+sequence-element-type = "Text" | "Number" | "Bool" | "Null" ;
 typed-assignment = identifier, [ whitespace?, ":", whitespace?, type ], whitespace?, "=", whitespace?, expression, newline ;
 capability-effect= "effect", whitespace?, "=", whitespace?, string, newline ;
 capability-scope = "scope", whitespace?, "=", whitespace?, string, newline ;
@@ -71,7 +73,8 @@ comparison       = additive, { whitespace?, ( "<" | "<=" | ">" | ">=" ), whitesp
 additive         = multiplicative, { whitespace?, ( "+" | "-" ), whitespace?, multiplicative } ;
 multiplicative   = unary, { whitespace?, ( "*" | "/" ), whitespace?, unary } ;
 unary            = [ "not" | "-" ], primary ;
-primary          = string | number | boolean | null | identifier | call | glyph-call | "(", expression, ")" ;
+primary          = string | number | boolean | null | sequence-literal | identifier | call | glyph-call | "(", expression, ")" ;
+sequence-literal = "[", [ expression, { whitespace?, ",", whitespace?, expression } ], "]" ;
 call             = identifier, "(", [ expression, { ",", expression } ], ")" ;
 glyph-call       = "▷", whitespace?, identifier, "(", [ expression, { ",", expression } ], ")" ;
 node-kind        = "operator" | "agent" | "repository" | "service" | "surface" |

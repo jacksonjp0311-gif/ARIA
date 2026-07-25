@@ -2,8 +2,26 @@
 
 function Get-AriaCapabilityMapFromBytecode { param($Bytecode) $map=@{};foreach($cap in @($Bytecode.capabilities)){$map[[string]$cap.name]=$cap};return $map }
 function Assert-AriaRuntimeEffect { param($Policy,[string]$Effect,[string]$Scope='.') $decision=Test-AriaPolicyAllowsEffect $Policy $Effect $Scope;if(-not$decision.allowed){throw "ARIA VM denied effect '$Effect': $($decision.reason)"} }
-function Get-AriaRuntimeValueType { param($Value) if($null-eq$Value){return 'Null'};if($Value-is[bool]){return 'Bool'};if($Value-is[string]){return 'Text'};if($Value-is[byte]-or$Value-is[sbyte]-or$Value-is[int16]-or$Value-is[uint16]-or$Value-is[int32]-or$Value-is[uint32]-or$Value-is[int64]-or$Value-is[uint64]-or$Value-is[single]-or$Value-is[double]-or$Value-is[decimal]){return 'Number'};return 'Any' }
+function Get-AriaRuntimeValueType { param($Value) return (Get-AriaCanonicalValueType -Value $Value) }
 function Assert-AriaRuntimeType { param([string]$Expected,$Value,[string]$Context) $actual=Get-AriaRuntimeValueType $Value;if(-not(Test-AriaTypeAssignable $Expected $actual)){throw "ARIA VM type error in ${Context}: expected $Expected, received $actual."} }
+function ConvertTo-AriaRuntimeText {
+    param($Value)
+
+    if (
+        $Value -is [Management.Automation.PSCustomObject] -or
+        $Value -is [Collections.IDictionary]
+    ) {
+        $validation = Test-AriaSequenceValue -Value $Value
+
+        if ($validation.valid) {
+            return ConvertTo-AriaJson `
+                -Value ([object[]]@($validation.values))
+        }
+    }
+
+    return [string]$Value
+}
+
 function Copy-AriaRuntimeTable { param([hashtable]$Table) $copy=@{};foreach($key in $Table.Keys){$copy[$key]=$Table[$key]};return $copy }
 function New-AriaScopeStack { $scopes=New-Object Collections.ArrayList;$null=$scopes.Add(@{});return,$scopes }
 function Get-AriaScopedValue { param($Scopes,[string]$Name) for($i=$Scopes.Count-1;$i-ge0;$i--){if($Scopes[$i].ContainsKey($Name)){return [pscustomobject]@{found=$true;value=$Scopes[$i][$Name]}}};return [pscustomobject]@{found=$false;value=$null} }
@@ -61,8 +79,8 @@ function Invoke-AriaBinaryRuntime {
             if ([double]$Right -eq 0) { throw "ARIA division by zero at source line $Line." }
             return ([double]$Left / [double]$Right)
         }
-        'EQ' { return ((ConvertTo-AriaJson ([pscustomobject]@{ v = $Left })) -eq (ConvertTo-AriaJson ([pscustomobject]@{ v = $Right }))) }
-        'NE' { return ((ConvertTo-AriaJson ([pscustomobject]@{ v = $Left })) -ne (ConvertTo-AriaJson ([pscustomobject]@{ v = $Right }))) }
+        'EQ' { $leftValue=ConvertTo-AriaCanonicalValueProjection $Left;$rightValue=ConvertTo-AriaCanonicalValueProjection $Right;return ((ConvertTo-AriaJson ([pscustomobject]@{ v = $leftValue })) -eq (ConvertTo-AriaJson ([pscustomobject]@{ v = $rightValue }))) }
+        'NE' { $leftValue=ConvertTo-AriaCanonicalValueProjection $Left;$rightValue=ConvertTo-AriaCanonicalValueProjection $Right;return ((ConvertTo-AriaJson ([pscustomobject]@{ v = $leftValue })) -ne (ConvertTo-AriaJson ([pscustomobject]@{ v = $rightValue }))) }
         'LT' { Assert-AriaRuntimeType 'Number' $Left "LT line $Line"; Assert-AriaRuntimeType 'Number' $Right "LT line $Line"; return ([double]$Left -lt [double]$Right) }
         'LE' { Assert-AriaRuntimeType 'Number' $Left "LE line $Line"; Assert-AriaRuntimeType 'Number' $Right "LE line $Line"; return ([double]$Left -le [double]$Right) }
         'GT' { Assert-AriaRuntimeType 'Number' $Left "GT line $Line"; Assert-AriaRuntimeType 'Number' $Right "GT line $Line"; return ([double]$Left -gt [double]$Right) }
@@ -86,8 +104,8 @@ function Invoke-AriaInstructionSequence {
             {$_-in@('ADD','SUB','MUL','DIV','EQ','NE','LT','LE','GT','GE','AND','OR')}{$right=Pop-AriaRuntime $stack "$op line $($ins.line)";$left=Pop-AriaRuntime $stack "$op line $($ins.line)";$stack.Push((Invoke-AriaBinaryRuntime $op $left $right ([int]$ins.line)))}
             'NOT'{$value=Pop-AriaRuntime $stack "NOT line $($ins.line)";Assert-AriaRuntimeType 'Bool' $value "NOT line $($ins.line)";$stack.Push(-not[bool]$value)}
             'NEG'{$value=Pop-AriaRuntime $stack "NEG line $($ins.line)";Assert-AriaRuntimeType 'Number' $value "NEG line $($ins.line)";$stack.Push(-$value)}
-            'EMIT'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$text=[string](Pop-AriaRuntime $stack "EMIT line $($ins.line)");Assert-AriaTextEffectLimit $Context.policy 'console.emit' $text 262144;$Context.outputs.Add($text);if(-not$Context.passThru){if(Get-Command Write-AriaStream -ErrorAction SilentlyContinue){Write-AriaStream $text}else{Write-Host "∿ $text"}}}
-            'SIGNAL'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$text=[string](Pop-AriaRuntime $stack "SIGNAL line $($ins.line)");Assert-AriaTextEffectLimit $Context.policy 'console.emit' $text 262144;$state=[string]$ins.state;$Context.events.Add([pscustomobject][ordered]@{kind='signal';state=$state;text=$text;line=[int]$ins.line});if(-not$Context.passThru){$render=switch($state){'pulse'{'Pulse'}'pass'{'Pass'}'warn'{'Warn'}'fail'{'Fail'}default{'Info'}};if(Get-Command Write-AriaTreeStage -ErrorAction SilentlyContinue){Write-AriaTreeStage -Name $text -State $render -Depth 1}}}
+            'EMIT'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$value=Pop-AriaRuntime $stack "EMIT line $($ins.line)";$text=ConvertTo-AriaRuntimeText $value;Assert-AriaTextEffectLimit $Context.policy 'console.emit' $text 262144;$Context.outputs.Add($text);if(-not$Context.passThru){if(Get-Command Write-AriaStream -ErrorAction SilentlyContinue){Write-AriaStream $text}else{Write-Host "∿ $text"}}}
+            'SIGNAL'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$value=Pop-AriaRuntime $stack "SIGNAL line $($ins.line)";$text=ConvertTo-AriaRuntimeText $value;Assert-AriaTextEffectLimit $Context.policy 'console.emit' $text 262144;$state=[string]$ins.state;$Context.events.Add([pscustomobject][ordered]@{kind='signal';state=$state;text=$text;line=[int]$ins.line});if(-not$Context.passThru){$render=switch($state){'pulse'{'Pulse'}'pass'{'Pass'}'warn'{'Warn'}'fail'{'Fail'}default{'Info'}};if(Get-Command Write-AriaTreeStage -ErrorAction SilentlyContinue){Write-AriaTreeStage -Name $text -State $render -Depth 1}}}
             'MEM_SET'{Assert-AriaRuntimeEffect $Context.policy 'memory.write';$value=Pop-AriaRuntime $stack "MEM_SET line $($ins.line)";$expected=[string]$Context.memoryTypes[[string]$ins.memory][[string]$ins.key];Assert-AriaRuntimeType $expected $value "memory $($ins.memory).$($ins.key)";$Context.memories[[string]$ins.memory][[string]$ins.key]=$value;$Context.memoryDirty=$true}
             'MEM_GET'{Assert-AriaRuntimeEffect $Context.policy 'memory.read';if(-not$Context.memories.ContainsKey([string]$ins.memory)-or-not$Context.memories[[string]$ins.memory].ContainsKey([string]$ins.key)){throw "ARIA VM missing memory '$($ins.memory).$($ins.key)'."};$stack.Push($Context.memories[[string]$ins.memory][[string]$ins.key])}
             'REQUIRE_CAP'{$name=[string]$ins.arg;if(-not$Context.capabilityMap.ContainsKey($name)){throw "ARIA VM unknown capability '$name'."};$decision=Test-AriaPolicyAllowsCapability $Context.policy $Context.capabilityMap[$name];if(-not$decision.allowed){throw "ARIA VM denied capability '$name': $($decision.reason)"};$ActiveCapabilities[$name]=$true}

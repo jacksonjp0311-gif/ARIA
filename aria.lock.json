@@ -5,5 +5,9 @@
   "containerVersion": 1,
   "bootstrap": "Windows PowerShell 5.1+",
   "canonicalEncoding": "UTF-8",
-  "compression": "gzip"
+  "compression": "gzip",
+  "limits": {
+    "sequenceMaxElements": 256,
+    "sequenceMaxBytes": 65536
+  }
 }

@@ -33,6 +33,8 @@ Import-Module (Join-Path $root 'src/Aria.Effects.psm1') -Force -DisableNameCheck
 Import-Module (Join-Path $root 'src/Aria.Transmission.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.SignalSubset.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.EventSpine.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.SemanticProjection.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.GlyphMemory.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Gitflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
@@ -59,6 +61,7 @@ function Show-AriaHelp {
   aria profile
   aria transmit <provider.json>
   aria events
+  aria cue list|explain|verify [cue-id] [--json]
   aria glyph list|verify|activate|memory [card-id]
   aria pull|push|sync
   aria gate|check <program.aria> [-Workspace <repository>] [-Strict]
@@ -375,6 +378,66 @@ try {
                 Write-AriaKeyValue -Key 'artifact' -Value $artifact
                 Write-AriaKeyValue -Key 'compressed bytes' -Value ([string]$bytes.Length)
             }
+        }        'cue' {
+            $registry = Import-AriaSemanticCueRegistry
+            switch ([string]$Path) {
+                'list' {
+                    if ($Json) {
+                        [pscustomobject][ordered]@{
+                            format='aria.semantic-cue-list'
+                            version=1
+                            registryDigest=$registry.digest
+                            cues=@($registry.cues | ForEach-Object {
+                                [pscustomobject][ordered]@{id=$_.id;glyph=$_.glyph;label=$_.label;meaning=$_.meaning;digest=$_.digest}
+                            })
+                        } | ConvertTo-Json -Depth 20
+                    }
+                    else {
+                        Write-AriaBanner -Title 'ARIA / SEMANTIC CUES' -Subtitle 'one verified state · human and machine projections'
+                        foreach ($cue in @($registry.cues)) {
+                            $cueColor = switch ([string]$cue.colorRole) {
+                                'signal.pass' { 'Green' }
+                                'signal.warning' { 'Yellow' }
+                                'signal.failure' { 'Red' }
+                                'signal.information' { 'Cyan' }
+                                'signal.closure' { 'Green' }
+                                default { 'Magenta' }
+                            }
+                            Write-AriaPaint -Text $cue.glyph -Color $cueColor -Bold -NoNewline
+                            Write-AriaPaint -Text ('  {0,-22} ' -f $cue.id) -Color White -NoNewline
+                            Write-AriaPaint -Text $cue.label -Color $cueColor -Bold -NoNewline
+                            Write-AriaPaint -Text (' · ' + $cue.meaning) -Color Gray
+                        }
+                    }
+                }
+                'explain' {
+                    if (-not $RequestPath) { throw 'cue explain requires a cue identity.' }
+                    $matches = @($registry.cues | Where-Object { $_.id -eq $RequestPath })
+                    if ($matches.Count -ne 1) { throw "Unknown or ambiguous semantic cue '$RequestPath'." }
+                    $cue = $matches[0]
+                    if ($Json) { $cue | ConvertTo-Json -Depth 30 }
+                    else {
+                        Write-AriaBanner -Title ('ARIA / CUE / ' + $cue.id) -Subtitle 'meaning and its interpretation boundary'
+                        Write-AriaKeyValue -Key 'glyph' -Value ($cue.glyph + ' ' + $cue.label)
+                        Write-AriaKeyValue -Key 'means' -Value $cue.meaning
+                        Write-AriaKeyValue -Key 'does not mean' -Value $cue.nonMeaning
+                        Write-AriaKeyValue -Key 'motion' -Value ("{0} when {1}" -f $cue.motion.kind,$cue.motion.trigger)
+                        Write-AriaKeyValue -Key 'rhythm' -Value $cue.rhythm.basis
+                        Write-AriaKeyValue -Key 'static' -Value $cue.staticFallback
+                        Write-AriaKeyValue -Key 'identity' -Value $cue.digest
+                    }
+                }
+                'verify' {
+                    $verification = Test-AriaSemanticCueRegistry -Registry $registry
+                    if ($Json) { $verification | ConvertTo-Json -Depth 20 }
+                    else {
+                        Write-AriaBanner -Title 'ARIA / CUE VERIFICATION'
+                        Write-AriaSummary -Title $(if ($verification.valid) {'CUES COHERENT'} else {'CUES FRACTURED'}) -Passed:$verification.valid -Detail ("{0} cues · {1}" -f @($registry.cues).Count,$verification.digest)
+                    }
+                    if (-not $verification.valid) { throw ('Semantic cue registry rejected: ' + ($verification.errors -join '; ')) }
+                }
+                default { throw "cue supports 'list', 'explain', or 'verify'." }
+            }
         }        'events' {
             $events = @(Read-AriaEventLedger -WorkspaceRoot $workspaceRoot)
             if ($events.Count -eq 0) {
@@ -443,7 +506,8 @@ try {
                 'Run-CompositionTests.ps1',
                 'Run-SequenceCoreTests.ps1',
                 'Run-EffectPurityTests.ps1',
-                'Run-IntegrationClosureTests.ps1'
+                'Run-IntegrationClosureTests.ps1',
+                'Run-SemanticProjectionTests.ps1'
             )
             foreach($suite in $suites){
                 $suitePath=Join-Path $root ('tests/'+$suite)
@@ -452,7 +516,7 @@ try {
                 }
                 else{& $suitePath}
             }
-            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '276/276 gates'
+            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '296/296 gates'
         }
         { $_ -in @('gate','check') } {
             if (-not $Path) { throw 'gate requires a .aria source path.' }

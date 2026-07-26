@@ -11,7 +11,7 @@
   ],
   "properties": {
     "format": { "const": "aria.event" },
-    "version": { "const": 1 },
+    "version": { "enum": [1, 2] },
     "sequence": { "type": "integer", "minimum": 1 },
     "domain": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$" },
     "phase": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$" },

@@ -244,7 +244,22 @@ Exit gates:
 - capability-summary parity;
 - no policy expansion.
 
-### alpha.6 — Verified Map
+### alpha.6 — Semantic Projection Core
+
+Interposed by the governing human semantic-interface intent after Integration
+Closure alpha.5.1.
+
+- Bind glyph, motion/rhythm, machine record, and explanation to one verified
+  event state.
+- Give every cue a stable identity, digest, meaning, and non-meaning boundary.
+- Record actual transition deltas and measured-only timing.
+- Preserve reduced-motion and static semantic equivalence.
+- Bound and redact event-journal detail before persistence.
+- Prohibit false progress and manipulative engagement mechanics.
+- Make the cue vocabulary self-teaching through the CLI.
+- Add no capability, policy permission, opcode, or execution authority.
+
+### alpha.7 — Verified Map
 
 Activate `⨯ algorithm.map` as the first sequence algorithm.
 
@@ -277,7 +292,7 @@ Preferred runtime direction:
 - invoke the established function body for each element;
 - never bypass existing argument and return verification.
 
-### alpha.7 — Verified Filter
+### alpha.8 — Verified Filter
 
 Activate `⫰ algorithm.filter`.
 
@@ -302,7 +317,7 @@ Required behavior:
 - bounded allocation;
 - no mutation of the input sequence.
 
-### alpha.8 — Verified Reduce
+### alpha.9 — Verified Reduce
 
 Activate `Σ algorithm.reduce`.
 
@@ -351,7 +366,7 @@ No algorithm may use a semantic shortcut unavailable to its textual equivalent.
 **Objective:** allow ARIA to remember not only what a card means, but where and
 under what evidence it executed.
 
-### alpha.9 — Per-Card Execution Evidence
+### alpha.10 — Per-Card Execution Evidence
 
 Emit a bounded evidence event whenever a verified card is exercised.
 
@@ -371,7 +386,7 @@ Integrate evidence through Event Spine and SignalSubset.
 
 Evidence is observational. It grants no authority.
 
-### alpha.10 — Semantic Proposal Bundles
+### alpha.11 — Semantic Proposal Bundles
 
 Introduce `aria.semantic-proposal/1`.
 
@@ -390,7 +405,7 @@ A proposal bundle may contain:
 
 An AI may construct this bundle but may not mark it approved.
 
-### alpha.11 — Consent and Admission Receipts
+### alpha.12 — Consent and Admission Receipts
 
 Bind proposal admission to:
 
@@ -415,7 +430,7 @@ Requirements:
 - no force push;
 - remote failure uses a normal reversal commit.
 
-### alpha.12 — Deterministic Semantic Replay
+### alpha.13 — Deterministic Semantic Replay
 
 Given the same baseline commit, proposal bundle, consent receipt, toolchain lock,
 source inputs, policy, and test evidence, ARIA should reproduce the same admitted
@@ -733,13 +748,14 @@ The next canonical sequence is:
 ```text
 alpha.4  Sequence Core
 alpha.5  Effect and Purity Core
-alpha.6  Verified Map
-alpha.7  Verified Filter
-alpha.8  Verified Reduce
-alpha.9  Per-Card Execution Evidence
-alpha.10 Semantic Proposal Bundles
-alpha.11 Consent and Admission Receipts
-alpha.12 Deterministic Semantic Replay
+alpha.6  Semantic Projection Core
+alpha.7  Verified Map
+alpha.8  Verified Filter
+alpha.9  Verified Reduce
+alpha.10 Per-Card Execution Evidence
+alpha.11 Semantic Proposal Bundles
+alpha.12 Consent and Admission Receipts
+alpha.13 Deterministic Semantic Replay
 beta.1   Native Rust Front End
 beta.2   Native Bytecode, Verifier, and VM
 beta.3   Differential Equivalence and Bootstrap Freeze
@@ -846,8 +862,9 @@ verified layers beneath it.
   proof obligations, CI, and operator inspection.
 - `⨯`, `⫰`, and `Σ` remain specified and inactive until their dedicated
   algorithm lattices pass.
-- The next bounded evolution after alpha.5 remote attestation is Verified Map
-  alpha.6.
+- Semantic Projection Core alpha.6 interposes the governing human/machine
+  projection contract before sequence algorithms.
+- The next bounded evolution is Verified Map alpha.7.
 - Integration Closure alpha.5.1 completes entry-flow effect coverage, derives
   intent authority from admitted artifacts, unifies all local lattices, and
-  synchronizes release discovery before Verified Map alpha.6.
+  synchronizes release discovery before Semantic Projection Core alpha.6.

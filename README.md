@@ -33,10 +33,10 @@ brutally rigorous underneath
 
 | Layer | State |
 |---|---|
-| Compiler | `0.1.0-alpha.6` |
+| Compiler | `0.1.0-alpha.7` |
 | Language specification | `0.4.0` |
 | Source Core | bounded sequences + glyph composition + whole-program effect proofs |
-| Conformance | `276/276` deterministic gates across seven lattices |
+| Conformance | `296/296` deterministic gates across eight lattices |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
@@ -44,8 +44,8 @@ brutally rigorous underneath
 | Evolution | Persistent plans + verified authorization + rollback proof |
 | Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
 | Effect verification | Entry flow + function call closure + independently reconstructed bytecode graph |
-| Event model | Typed Event Spine + append-only NDJSON ledger |
-| Operator UI | Etherflow + Bufferflow + Signalflow |
+| Event model | Typed Event Spine v2 + deterministic semantic projections + append-only NDJSON ledger |
+| Operator UI | Content-addressed cues + Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
 | External AI provider | Not connected yet |
 
@@ -91,6 +91,45 @@ ARIA does **not** claim that glyph density is security. Obscurity is not cryptog
 
 ---
 
+## Shared semantic projections
+
+ARIA's Event Spine now binds the human and machine views of a runtime fact:
+
+```text
+actual state S_t
+  ├─ glyph G_t
+  ├─ motion and rhythm contract M_t
+  ├─ canonical machine record R_t
+  └─ explanation and interpretation boundary E_t
+```
+
+Each `aria.event` version 2 contains a deterministic, digested semantic
+projection. The terminal renders that projection; the NDJSON journal stores the
+same projection. A seal means the declared checks for that event passed—it does
+not mean universal truth or unlimited authority. A transmission wave means
+information crossed a bounded stage—it does not mean acceptance. An authority
+clamp means permission is being evaluated—it does not mean permission was
+granted.
+
+The cue registry is content-addressed, color-independent, reduced-motion
+equivalent, privacy-bounded, and explicit about prohibited interpretations.
+ARIA records measured timing only when timing evidence exists; otherwise it
+labels motion as an event-boundary expression and claims no false percentage.
+
+Learn or inspect the shared vocabulary:
+
+```powershell
+.\aria.cmd cue list
+.\aria.cmd cue explain verification.seal
+.\aria.cmd cue explain authority.evaluate --json
+.\aria.cmd cue verify
+```
+
+See [Semantic Projection Core alpha.6](docs/45-semantic-projection-core-alpha6.md)
+for the full event, accessibility, privacy, and non-manipulation contract.
+
+---
+
 ## Quick start
 
 ### Requirements
@@ -110,7 +149,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ ALL LATTICES COHERENT PASS   276/276 gates
+◆ ALL LATTICES COHERENT PASS   296/296 gates
 ```
 
 ### Run an ordinary ARIA program
@@ -147,6 +186,9 @@ Common operations:
 .\aria.cmd test
 .\aria.cmd manifest
 .\aria.cmd events
+.\aria.cmd cue list
+.\aria.cmd cue explain verification.seal
+.\aria.cmd cue verify --json
 .\aria.cmd profile
 .\aria.cmd pull
 .\aria.cmd push
@@ -168,6 +210,10 @@ Disable terminal animation:
 ```powershell
 $env:ARIA_NO_ANIMATION = "1"
 ```
+
+`ARIA_REDUCED_MOTION=1`, `ARIA_MOTION=off`, and `ARIA_ANIMATION=0` select the
+same semantic information without temporal frames. Glyph, label, state,
+metrics, cue identity, explanation, and interpretation boundary remain present.
 
 ---
 
@@ -807,7 +853,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ ALL LATTICES COHERENT PASS 276/276 gates
+◆ ALL LATTICES COHERENT PASS 296/296 gates
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.

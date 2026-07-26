@@ -1,5 +1,7 @@
 ﻿Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'Aria.Common.psm1') -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot 'Aria.SemanticProjection.psm1') -DisableNameChecking
 
 $script:AriaEventSequence = 0
 $script:AriaEventBuffer = New-Object System.Collections.Generic.List[object]
@@ -7,6 +9,7 @@ $script:AriaEventSubscribers = New-Object System.Collections.Generic.List[script
 $script:AriaEventWorkspace = $null
 $script:AriaEventProfile = 'compact'
 $script:AriaEventPersist = $false
+$script:AriaPreviousStateIdentity = ''
 
 function Initialize-AriaEventSpine {
     [CmdletBinding()]
@@ -20,6 +23,7 @@ function Initialize-AriaEventSpine {
     $script:AriaEventProfile = $Profile
     $script:AriaEventPersist = [bool]$Persist
     $script:AriaEventSequence = 0
+    $script:AriaPreviousStateIdentity = ''
     $script:AriaEventBuffer.Clear()
     $script:AriaEventSubscribers.Clear()
 
@@ -71,6 +75,9 @@ function Get-AriaEventDigest {
         }
         data = $Event.data
     }
+    if ([int]$Event.version -ge 2) {
+        $body | Add-Member -NotePropertyName projection -NotePropertyValue $Event.projection
+    }
     $json = ConvertTo-AriaJson -Value $body
     Get-AriaSha256Bytes -Bytes ([Text.Encoding]::UTF8.GetBytes($json))
 }
@@ -92,19 +99,22 @@ function New-AriaEvent {
     $script:AriaEventSequence++
     $event = [pscustomobject][ordered]@{
         format = 'aria.event'
-        version = 1
+        version = 2
         sequence = $script:AriaEventSequence
         domain = $Domain.ToLowerInvariant()
         phase = $Phase.ToLowerInvariant()
         state = $State.ToUpperInvariant()
-        energy = $Energy
-        information = $Information
-        coherence = $Coherence
-        source = $Source
+        energy = ConvertTo-AriaBoundedSignalText -Value $Energy -Role energy
+        information = ConvertTo-AriaBoundedSignalText -Value $Information -Role information
+        coherence = ConvertTo-AriaBoundedSignalText -Value $Coherence -Role coherence
+        source = ConvertTo-AriaBoundedSignalText -Value $Source -Role source
         occurredAt = $OccurredAt.ToUniversalTime().ToString('o')
-        data = $Data
+        data = ConvertTo-AriaBoundedSignalData -Value $Data
+        projection = $null
         digest = ''
     }
+    $event.projection = New-AriaSemanticProjection -Event $event -PreviousStateIdentity $script:AriaPreviousStateIdentity
+    $script:AriaPreviousStateIdentity = [string]$event.projection.stateIdentity
     $event.digest = Get-AriaEventDigest -Event $event
     $event
 }
@@ -115,11 +125,20 @@ function Test-AriaEvent {
 
     $errors = New-Object System.Collections.Generic.List[string]
     if ([string]$Event.format -ne 'aria.event') { $errors.Add('format must be aria.event') }
-    if ([int]$Event.version -ne 1) { $errors.Add('version must be 1') }
+    if ([int]$Event.version -notin @(1,2)) { $errors.Add('version must be 1 or 2') }
     if ([int]$Event.sequence -lt 1) { $errors.Add('sequence must be positive') }
     if ([string]$Event.domain -notmatch '^[a-z][a-z0-9._-]*$') { $errors.Add('domain is invalid') }
     if ([string]$Event.phase -notmatch '^[a-z][a-z0-9._-]*$') { $errors.Add('phase is invalid') }
     if ([string]$Event.state -notin @('ACTIVE','PASS','REJECT','WARN','FAIL','INFO')) { $errors.Add('state is invalid') }
+    if ([int]$Event.version -ge 2 -and -not $Event.PSObject.Properties['projection']) {
+        $errors.Add('semantic projection is required')
+    }
+    elseif ([int]$Event.version -ge 2) {
+        $projectionVerification = Test-AriaSemanticProjection -Projection $Event.projection
+        if (-not $projectionVerification.valid) { $errors.Add('semantic projection rejected: ' + ($projectionVerification.errors -join ', ')) }
+        if ([int]$Event.projection.sequence -ne [int]$Event.sequence) { $errors.Add('projection sequence mismatch') }
+        if ([string]$Event.projection.state -ne [string]$Event.state) { $errors.Add('projection state mismatch') }
+    }
 
     $expected = ''
     try { $expected = Get-AriaEventDigest -Event $Event }
@@ -151,6 +170,7 @@ function ConvertTo-AriaEtherEvent {
         energy = $Event.energy
         information = $Event.information
         coherence = $Event.coherence
+        projection = if ($Event.PSObject.Properties['projection']) { $Event.projection } else { $null }
     }
 }
 
@@ -231,4 +251,4 @@ function Read-AriaEventLedger {
     $events.ToArray()
 }
 
-Export-ModuleMember -Function Initialize-AriaEventSpine,New-AriaEvent,Test-AriaEvent,Register-AriaEventSubscriber,ConvertTo-AriaEtherEvent,Publish-AriaEvent,Send-AriaEvent,Get-AriaEventBuffer,Read-AriaEventLedger
+Export-ModuleMember -Function Initialize-AriaEventSpine,Get-AriaEventDigest,New-AriaEvent,Test-AriaEvent,Register-AriaEventSubscriber,ConvertTo-AriaEtherEvent,Publish-AriaEvent,Send-AriaEvent,Get-AriaEventBuffer,Read-AriaEventLedger

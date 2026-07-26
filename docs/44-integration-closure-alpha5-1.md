@@ -66,7 +66,7 @@ remain specified and inactive.
 
 ## Next bounded evolution
 
-Verified Map alpha.6 may now consume:
+Verified Map (renumbered alpha.7 after Semantic Projection Core alpha.6) may consume:
 
 - bounded immutable `Sequence<T>`;
 - a verified transform-function summary;

@@ -81,8 +81,6 @@ function Write-AriaBanner {
 
     Write-Host ''
 
-    Invoke-AriaGlyphMotion -Style $style
-
     Write-AriaPaint `
         -Text $style.glyph `
         -Color $style.color `
@@ -532,6 +530,8 @@ function Get-AriaMotionPolicy {
     $requested = [string]$env:ARIA_MOTION
     $reduced = (
         $env:ARIA_REDUCED_MOTION -eq '1' -or
+        $env:ARIA_NO_ANIMATION -eq '1' -or
+        $env:ARIA_ANIMATION -eq '0' -or
         $requested -eq '0' -or
         $requested -eq 'off'
     )
@@ -1875,4 +1875,4 @@ Export-ModuleMember -Function `
     Write-AriaTransmissionReceipt, `
     Invoke-AriaBufferedItem, `
     Invoke-AriaBufferedSequence
-Export-ModuleMember -Function Get-AriaGlyphRegistry, Get-AriaSignalStyle, Get-AriaDisplayProfile, Get-AriaMotionPolicy, Write-AriaSignal
+Export-ModuleMember -Function Get-AriaGlyphRegistry, Get-AriaSignalStyle, Get-AriaDisplayProfile, Get-AriaMotionPolicy, Get-AriaMotionFrames, Invoke-AriaGlyphMotion, Write-AriaSignal

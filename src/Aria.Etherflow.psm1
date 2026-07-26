@@ -8,7 +8,7 @@ function Get-AriaEtherPalette {
         Pass = "Green"
         Warn = "DarkYellow"
         Fail = "Red"
-        Active = "Blue"
+        Active = "Magenta"
         Meta = "Gray"
     }
 }
@@ -43,12 +43,22 @@ function Format-AriaTriadicTransmission {
     $coherence = if ($Event.coherence) { [string]$Event.coherence } else { $state }
 
     $glyph = "◈"
-    if ($state -eq "PASS") { $glyph = "◆" }
-    if ($state -eq "FAIL") { $glyph = "⬗" }
-    if ($state -eq "WARN") { $glyph = "⬖" }
+    $cueId = ''
+    $boundary = ''
+    if ($Event.PSObject.Properties['projection'] -and $Event.projection) {
+        $glyph = [string]$Event.projection.glyph.symbol
+        $cueId = [string]$Event.projection.cue.id
+        $boundary = [string]$Event.projection.explanation.boundary
+    }
+    else {
+        if ($state -eq "PASS") { $glyph = "◆" }
+        if ($state -eq "FAIL" -or $state -eq "REJECT") { $glyph = "⬗" }
+        if ($state -eq "WARN") { $glyph = "⬖" }
+    }
 
     if ($Profile -eq "ci" -or $Profile -eq "compact") {
-        return "{0}  {1} │ 🜂 {2} │ ∿ {3} │ 🜄 {4}" -f $glyph,$phase,$energy,$info,$coherence
+        $suffix = if ($cueId) { " │ cue $cueId" } else { '' }
+        return ("{0}  {1} │ 🜂 {2} │ ∿ {3} │ 🜄 {4}{5}" -f $glyph,$phase,$energy,$info,$coherence,$suffix)
     }
 
     return [PSCustomObject]@{
@@ -58,6 +68,8 @@ function Format-AriaTriadicTransmission {
         Information = $info
         Coherence = $coherence
         State = $state
+        CueId = $cueId
+        Boundary = $boundary
     }
 }
 
@@ -68,12 +80,30 @@ function Write-AriaTriadicTransmission {
     )
 
     $palette = Get-AriaEtherPalette
+    if ($Event.PSObject.Properties['projection'] -and $Event.projection -and (Get-Command Invoke-AriaGlyphMotion -ErrorAction SilentlyContinue)) {
+        $color = switch ([string]$Event.projection.glyph.colorRole) {
+            'signal.pass' { 'Green' }
+            'signal.warning' { 'Yellow' }
+            'signal.failure' { 'Red' }
+            'signal.information' { 'Cyan' }
+            'signal.closure' { 'Green' }
+            default { 'Magenta' }
+        }
+        $style = [pscustomobject][ordered]@{
+            mode = [string]$Event.projection.cue.id
+            glyph = [string]$Event.projection.glyph.symbol
+            color = $color
+            motion = [string]$Event.projection.motion.kind
+        }
+        Invoke-AriaGlyphMotion -Style $style
+    }
     $formatted = Format-AriaTriadicTransmission -Event $Event -Profile $Profile
 
     if ($formatted -is [string]) {
         $color = $palette.Meta
         if ($Event.state -eq 'PASS') { $color = $palette.Pass }
-        if ($Event.state -eq 'FAIL') { $color = $palette.Fail }
+        if ($Event.state -eq 'WARN') { $color = $palette.Warn }
+        if ($Event.state -eq 'FAIL' -or $Event.state -eq 'REJECT') { $color = $palette.Fail }
         if ($Event.state -eq 'ACTIVE') { $color = $palette.Active }
         Write-Host $formatted -ForegroundColor $color
         return
@@ -87,9 +117,13 @@ function Write-AriaTriadicTransmission {
     Write-Host -NoNewline " │ " -ForegroundColor DarkGray
     $stateColor = $palette.Coherence
     if ($formatted.State -eq 'PASS') { $stateColor = $palette.Pass }
-    if ($formatted.State -eq 'FAIL') { $stateColor = $palette.Fail }
+    if ($formatted.State -eq 'WARN') { $stateColor = $palette.Warn }
+    if ($formatted.State -eq 'FAIL' -or $formatted.State -eq 'REJECT') { $stateColor = $palette.Fail }
     if ($formatted.State -eq 'ACTIVE') { $stateColor = $palette.Active }
     Write-Host ("🜄 {0}" -f $formatted.Coherence) -ForegroundColor $stateColor
+    if ($formatted.CueId) {
+        Write-Host ("   cue {0} · boundary: {1}" -f $formatted.CueId,$formatted.Boundary) -ForegroundColor DarkGray
+    }
 }
 
 function Get-AriaTriadicEventsFromTransmission {

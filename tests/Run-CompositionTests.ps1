@@ -351,7 +351,7 @@ try {
 
     Test-CompositionCase 'composition adds no opcode or capability' {
         $opcodes = Get-AriaOpcodeRegistry
-        Assert-Equal 37 $opcodes.Count 'Opcode registry changed.'
+        Assert-Equal 38 $opcodes.Count 'Opcode registry changed.'
         Assert-Equal 0 @($glyphGate.bytecode.capabilities).Count `
             'Composition introduced a capability.'
         Assert-Equal 0 @($glyphGate.bytecode.instructions |
@@ -361,7 +361,7 @@ try {
         }).Count 'Composition emitted an unexpected top-level opcode.'
     }
 
-    Test-CompositionCase 'verified pipe activates while algorithms remain bounded' {
+    Test-CompositionCase 'verified pipe remains active beside bounded map' {
         $registry = Read-AriaGlyphCardRegistry -Root $root
         $pipe = Get-AriaGlyphCard -Id 'composition.pipe' -Registry $registry
         $map = Get-AriaGlyphCard -Id 'algorithm.map' -Registry $registry
@@ -376,20 +376,16 @@ try {
 
         Assert-True (Test-AriaGlyphActivation $activation).valid `
             'Verified pipe activation was rejected.'
-        Assert-Equal 'specified' $map.status `
-            'Map advanced without implementation evidence.'
-
-        $mapRejected = $false
-        try {
-            $null = New-AriaGlyphActivation `
-                -Card $map `
-                -ContextDigest $context `
-                -TestsPassed 15
-        }
-        catch {
-            $mapRejected = $true
-        }
-        Assert-True $mapRejected 'Specified map card activated early.'
+        Assert-Equal 'verified' $map.status `
+            'Verified map card is not visible beside composition.'
+        $mapActivation = New-AriaGlyphActivation `
+            -Card $map `
+            -ContextDigest $context `
+            -TestsPassed 15 `
+            -TestsFailed 0 `
+            -Source 'tests'
+        Assert-True (Test-AriaGlyphActivation $mapActivation).valid `
+            'Verified map activation was rejected.'
     }
 
     if (($script:Passed + $script:Failed) -ne $script:Expected) {

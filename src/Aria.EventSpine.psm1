@@ -13,6 +13,8 @@ $script:AriaPreviousStateIdentity = ''
 $script:AriaPreviousEventDigest = ''
 $script:AriaOperationId = ''
 $script:AriaOperationSequence = 0
+$script:AriaEventLedgerHash = ''
+$script:AriaEmptyLedgerHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 
 function New-AriaOperationIdentity {
     param([string]$Name = 'aria.operation')
@@ -37,6 +39,7 @@ function Initialize-AriaEventSpine {
     $script:AriaPreviousEventDigest = ''
     $script:AriaOperationId = if ($OperationId) { $OperationId } else { New-AriaOperationIdentity -Name 'aria.cli' }
     $script:AriaOperationSequence = 0
+    $script:AriaEventLedgerHash = ''
     $script:AriaEventBuffer.Clear()
     $script:AriaEventSubscribers.Clear()
 
@@ -47,6 +50,13 @@ function Initialize-AriaEventSpine {
         if ($existing.Count -gt 0) {
             $script:AriaEventSequence = $existing.Count
             $script:AriaPreviousEventDigest = [string]$existing[$existing.Count - 1].digest
+        }
+        $ledger = Join-Path $folder 'aria.events.ndjson'
+        if (Test-Path -LiteralPath $ledger -PathType Leaf) {
+            $script:AriaEventLedgerHash = Get-AriaSha256File -Path $ledger
+        }
+        else {
+            $script:AriaEventLedgerHash = $script:AriaEmptyLedgerHash
         }
     }
 
@@ -266,37 +276,46 @@ function Add-AriaEventLedgerRecord {
     )
     try {
         $existingText = ''
+        [byte[]]$existingBytes = @()
         if ($stream.Length -gt 0) {
-            [byte[]]$existingBytes = New-Object byte[] ([int]$stream.Length)
+            $existingBytes = New-Object byte[] ([int]$stream.Length)
             $stream.Position = 0
             $read = $stream.Read($existingBytes,0,$existingBytes.Length)
             if ($read -ne $existingBytes.Length) { throw 'ARIA event ledger could not be read completely under lock.' }
             $existingText = [Text.Encoding]::UTF8.GetString($existingBytes)
         }
 
-        $lines = @($existingText -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        $priorDigest = ''
-        $lineNumber = 0
-        $operationSequences = @{}
-        foreach ($line in $lines) {
-            $lineNumber++
-            $prior = $line | ConvertFrom-Json
-            $verification = Test-AriaEvent -Event $prior
-            if (-not $verification.valid) { throw ('ARIA event ledger rejected under append lock at line {0}: {1}' -f $lineNumber,($verification.errors -join '; ')) }
-            Assert-AriaEventLedgerContinuity -Event $prior -LineNumber $lineNumber -PriorDigest $priorDigest -OperationSequences $operationSequences
-            $priorDigest = [string]$prior.digest
+        $existingHash = if ($existingBytes.Length -eq 0) {
+            $script:AriaEmptyLedgerHash
+        }
+        else {
+            Get-AriaSha256Bytes -Bytes $existingBytes
+        }
+        if ($script:AriaEventLedgerHash -and $existingHash -ne $script:AriaEventLedgerHash) {
+            throw 'ARIA event append rejected changed ledger bytes after initialization.'
         }
 
+        $lines = @($existingText -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         $expectedSequence = $lines.Count + 1
         if ([int]$Event.sequence -ne $expectedSequence) { throw "ARIA event append expected ledger sequence $expectedSequence, received $($Event.sequence)." }
+        $priorDigest = ''
+        if ($lines.Count -gt 0) {
+            $tail = $lines[$lines.Count - 1] | ConvertFrom-Json
+            $tailVerification = Test-AriaEvent -Event $tail
+            if (-not $tailVerification.valid) { throw ('ARIA event ledger tail rejected under append lock: ' + ($tailVerification.errors -join '; ')) }
+            $priorDigest = [string]$tail.digest
+        }
         if ([string]$Event.previousDigest -ne $priorDigest) { throw 'ARIA event append rejected a stale previous digest.' }
-        Assert-AriaEventLedgerContinuity -Event $Event -LineNumber $expectedSequence -PriorDigest $priorDigest -OperationSequences $operationSequences
 
         $json = $Event | ConvertTo-Json -Depth 100 -Compress
         [byte[]]$recordBytes = [Text.UTF8Encoding]::new($false).GetBytes($json + [Environment]::NewLine)
         $stream.Position = $stream.Length
         $stream.Write($recordBytes,0,$recordBytes.Length)
         $stream.Flush()
+        [byte[]]$sealedBytes = New-Object byte[] ($existingBytes.Length + $recordBytes.Length)
+        if ($existingBytes.Length -gt 0) { [Array]::Copy($existingBytes,0,$sealedBytes,0,$existingBytes.Length) }
+        [Array]::Copy($recordBytes,0,$sealedBytes,$existingBytes.Length,$recordBytes.Length)
+        $script:AriaEventLedgerHash = Get-AriaSha256Bytes -Bytes $sealedBytes
     }
     finally {
         $stream.Dispose()

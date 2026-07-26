@@ -34,9 +34,12 @@ previousDigest
 resumes across CLI processes. `operationSequence` starts at one for each
 operation. `previousDigest` binds the complete prior event.
 
-Appending opens the ledger with exclusive file sharing, revalidates every
-existing record under that lock, rejects stale sequence or digest state, and
-then appends one UTF-8 record.
+Initialization and replay revalidate every existing record. Appending opens the
+ledger with exclusive file sharing, compares its exact bytes with the identity
+established by that validation, verifies the tail and next sequence, rejects
+changed or stale state, and then appends one UTF-8 record. This keeps repeated
+semantic events bounded by one initial history validation rather than reparsing
+the complete ledger for every event.
 
 Replay rejects:
 
@@ -124,7 +127,8 @@ legacy replay, truthful waiting, reduced-motion parity, receipt privacy,
 VM identities, consent rejection, static/evidence separation, and inactive
 algorithm cards.
 
-Aggregate conformance is `322/322`.
+Aggregate conformance at alpha.6.1 admission was `322/322`; the current
+aggregate is recorded in the README and runtime test command.
 
 ## Authority boundary
 
@@ -133,6 +137,7 @@ algorithm card. Event records observe decisions; they do not make them.
 
 ## Next boundary
 
-Verified Map alpha.7 may now become the first iterable language operation whose
-start, measured iteration, completion, fracture, and evidence history use the
-same human/machine semantic spine.
+Verified Map alpha.7 now uses this substrate as the first iterable language
+operation whose start, measured iteration, completion, fracture, and evidence
+history share the same human/machine semantic spine. Verified Filter alpha.8 is
+the next bounded language boundary.

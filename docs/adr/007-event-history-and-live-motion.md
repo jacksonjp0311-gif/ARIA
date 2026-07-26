@@ -14,8 +14,10 @@ continuous and motion could claim transitions that had not occurred.
 ## Decision
 
 New events use `aria.event` version 3 with a workspace ledger sequence,
-operation identity, operation sequence, and previous-event digest. Appends
-revalidate and extend the chain under an exclusive file lock.
+operation identity, operation sequence, and previous-event digest. A process
+fully validates history once, retains its exact byte identity, and appends only
+when the locked ledger still has that identity and a valid tail. Replay always
+performs full validation.
 
 Bufferflow exposes one live `pending` state. Its heartbeat is allowed only while
 the underlying process remains alive. Richer phase names require explicit

@@ -176,6 +176,9 @@ Test-Case 'ledger rejects event content tampering' {
         $line = $originalLine.Replace('"information":"bounded"','"information":"mutated"')
         [IO.File]::WriteAllText($path,$line,[Text.UTF8Encoding]::new($false))
         Assert-LedgerRejected $workspace 'Tampered ledger event was accepted.'
+        $appendRejected = $false
+        try { $null = Send-ProbeEvent -Phase after-tamper } catch { $appendRejected = $true }
+        Assert-True $appendRejected 'Append accepted ledger bytes changed after initialization.'
 
         $event = $originalLine | ConvertFrom-Json
         $event.operationSequence = 2
@@ -346,7 +349,10 @@ Test-Case 'static signal writing does not advance semantic event history' {
 }
 Test-Case 'signal integrity closure grants no algorithm authority' {
     $registry = Read-AriaUtf8Text -Path (Join-Path $root 'grammar/glyph-cards.json') | ConvertFrom-Json
-    foreach ($id in @('algorithm.map','algorithm.filter','algorithm.reduce')) {
+    $map = @($registry.cards | Where-Object { $_.id -eq 'algorithm.map' })[0]
+    Assert-Equal 'verified' $map.status 'Map was not admitted.'
+    Assert-Equal 0 @($map.capabilities).Count 'Map introduced authority.'
+    foreach ($id in @('algorithm.filter','algorithm.reduce')) {
         $card = @($registry.cards | Where-Object { $_.id -eq $id })[0]
         Assert-Equal 'specified' $card.status "Algorithm card '$id' activated early."
     }

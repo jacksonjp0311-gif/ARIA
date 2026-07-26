@@ -207,7 +207,7 @@ Import-Module (Join-Path $root 'src/Aria.IntentVerifier.psm1') -Force -DisableNa
 
 Test-Case 'opcode registry is machine-readable and complete' {
     $registry = Get-AriaOpcodeRegistry
-    Assert-Equal 37 $registry.Count 'Opcode registry size mismatch.'
+    Assert-Equal 38 $registry.Count 'Opcode registry size mismatch.'
     Assert-Equal 1 $registry['EMIT'].pops 'EMIT stack contract mismatch.'
 }
 

@@ -55,6 +55,7 @@ function Add-AriaExpressionInstructions {
         'unary'{Add-AriaExpressionInstructions $Expression.operand $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op=$(if($Expression.operator-eq'not'){'NOT'}else{'NEG'});line=$Line})}
         'binary'{Add-AriaExpressionInstructions $Expression.left $Instructions $Constants $ConstantIndex $FunctionMap $Line;Add-AriaExpressionInstructions $Expression.right $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op=(Get-AriaBinaryOpcode $Expression.operator);line=$Line})}
         'call'{foreach($argument in @($Expression.arguments)){Add-AriaExpressionInstructions $argument $Instructions $Constants $ConstantIndex $FunctionMap $Line};$fn=$FunctionMap[[string]$Expression.name];$Instructions.Add([pscustomobject][ordered]@{op='CALL';name=[string]$Expression.name;argCount=@($Expression.arguments).Count;returnType=[string]$fn.returnType;line=$Line})}
+        'map'{Add-AriaExpressionInstructions $Expression.sequence $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op='MAP';transform=[string]$Expression.transform;inputType=[string]$Expression.sequence.inferredType;outputType=[string]$Expression.inferredType;line=$Line})}
         default{throw "Cannot compile expression kind '$($Expression.kind)'."}
     }
 }
@@ -334,6 +335,35 @@ function Test-AriaInstructionSequence {
                     # CALL always leaves one result on the operand stack, including Null.
                     Push-AriaVerifierType $stack ([string]$fn.returnType) ([ref]$maximum)
                 }
+            }
+            'MAP' {
+                $actual = Pop-AriaVerifierType $stack $Errors "MAP instruction $index"
+                $transformName = if (Test-AriaInstructionHasProperty $instruction 'transform') { [string]$instruction.transform } else { '' }
+                $inputType = if (Test-AriaInstructionHasProperty $instruction 'inputType') { [string]$instruction.inputType } else { '' }
+                $outputType = if (Test-AriaInstructionHasProperty $instruction 'outputType') { [string]$instruction.outputType } else { '' }
+                $inputElement = Get-AriaSequenceElementType -Type $inputType
+                $outputElement = Get-AriaSequenceElementType -Type $outputType
+
+                if (-not (Test-AriaBytecodeIdentifier $transformName)) { $Errors.Add("MAP at $index has an invalid transform identity.") }
+                if (-not (Test-AriaDeclaredTypeName -Type $inputType) -or -not $inputElement) { $Errors.Add("MAP at $index has invalid input type '$inputType'.") }
+                if (-not (Test-AriaDeclaredTypeName -Type $outputType) -or -not $outputElement) { $Errors.Add("MAP at $index has invalid output type '$outputType'.") }
+                if ($actual -ne $inputType) { $Errors.Add("MAP at $index expects $inputType, received $actual.") }
+
+                if (-not $Functions.ContainsKey($transformName)) {
+                    $Errors.Add("MAP at $index references unknown transform '$transformName'.")
+                }
+                else {
+                    $fn = $Functions[$transformName]
+                    $parameters = @($fn.parameters)
+                    if ($parameters.Count -ne 1) { $Errors.Add("MAP at $index transform '$transformName' must be unary.") }
+                    elseif ([string]$parameters[0].type -ne $inputElement) { $Errors.Add("MAP at $index transform input does not match $inputType.") }
+                    if ([string]$fn.returnType -ne $outputElement) { $Errors.Add("MAP at $index transform output does not match $outputType.") }
+                    $summaryProperty = $fn.PSObject.Properties['effectSummary']
+                    if ($null -eq $summaryProperty -or [string]$summaryProperty.Value.purity -ne 'pure') {
+                        $Errors.Add("MAP at $index transform '$transformName' is not proven pure.")
+                    }
+                }
+                Push-AriaVerifierType $stack $(if($outputType){$outputType}else{'Any'}) ([ref]$maximum)
             }
             'IF' {
                 $condition = Pop-AriaVerifierType $stack $Errors "IF instruction $index"

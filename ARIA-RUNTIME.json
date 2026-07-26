@@ -1,7 +1,7 @@
 {
     "schema":  "aria.runtime/1",
-    "release":  "0.1.0-alpha.8",
-    "languageEvolution":  "signal-integrity-closure-alpha.6.1",
+    "release":  "0.1.0-alpha.9",
+    "languageEvolution":  "verified-map-alpha.7",
     "status":  "experimental",
     "repository":  {
                        "name":  "ARIA",
@@ -31,7 +31,9 @@
                          "semanticProjection":  "src/Aria.SemanticProjection.psm1",
                          "semanticCues":  "grammar/semantic-cues.json",
                          "eventSpine":  "src/Aria.EventSpine.psm1",
-                         "signalIntegrityPlan":  "plans/signal-integrity-closure-alpha6-1.aria"
+                         "signalIntegrityPlan":  "plans/signal-integrity-closure-alpha6-1.aria",
+                         "verifiedMap":  "src/Aria.VM.psm1",
+                         "verifiedMapPlan":  "plans/verified-map-alpha7.aria"
                      },
     "continuity":  {
                        "stableTag":  "aria-alpha21-stable",

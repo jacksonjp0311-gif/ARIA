@@ -125,11 +125,14 @@ Test-ClosureCase 'intent derivation rejects corrupt artifact bytes' {
     Assert-True $rejected 'Corrupt artifact produced an intent summary.'
 }
 
-Test-ClosureCase 'integration closure grants no algorithm authority' {
-    Assert-Equal 37 (Get-AriaOpcodeRegistry).Count `
-        'Integration closure changed the opcode registry.'
+Test-ClosureCase 'integration closure remains authority-stable after map' {
+    Assert-Equal 38 (Get-AriaOpcodeRegistry).Count `
+        'Verified map opcode is missing.'
     $registry = Read-AriaGlyphCardRegistry -Root $root
-    foreach ($id in @('algorithm.map','algorithm.filter','algorithm.reduce')) {
+    $map = Get-AriaGlyphCard -Id 'algorithm.map' -Registry $registry
+    Assert-Equal 'verified' $map.status 'Map was not admitted.'
+    Assert-Equal 0 @($map.capabilities).Count 'Map introduced authority.'
+    foreach ($id in @('algorithm.filter','algorithm.reduce')) {
         $card = Get-AriaGlyphCard -Id $id -Registry $registry
         Assert-Equal 'specified' $card.status `
             "Algorithm '$id' activated during integration closure."

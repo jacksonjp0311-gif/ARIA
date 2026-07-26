@@ -33,10 +33,10 @@ brutally rigorous underneath
 
 | Layer | State |
 |---|---|
-| Compiler | `0.1.0-alpha.8` |
+| Compiler | `0.1.0-alpha.9` |
 | Language specification | `0.4.0` |
-| Source Core | bounded sequences + glyph composition + whole-program effect proofs |
-| Conformance | `322/322` deterministic gates across nine lattices |
+| Source Core | bounded sequences + verified map + glyph composition + whole-program effect proofs |
+| Conformance | `344/344` deterministic gates across ten lattices |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
@@ -44,7 +44,7 @@ brutally rigorous underneath
 | Evolution | Persistent plans + verified authorization + rollback proof |
 | Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
 | Effect verification | Entry flow + function call closure + independently reconstructed bytecode graph |
-| Event model | Hash-chained Event Spine v3 + operation continuity + deterministic semantic projections |
+| Event model | Hash-chained Event Spine v3 + operation continuity + measured map iteration projections |
 | Operator UI | Content-addressed cues + Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
 | External AI provider | Not connected yet |
@@ -144,6 +144,8 @@ Learn or inspect the shared vocabulary:
 
 See [Semantic Projection Core alpha.6](docs/45-semantic-projection-core-alpha6.md)
 for the full event, accessibility, privacy, and non-manipulation contract.
+See [Verified Map alpha.7](docs/47-verified-map-alpha7.md) for the first
+language operation built directly on that shared signal history.
 
 ---
 
@@ -166,7 +168,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ ALL LATTICES COHERENT PASS   322/322 gates
+◆ ALL LATTICES COHERENT PASS   344/344 gates
 ```
 
 ### Run an ordinary ARIA program
@@ -189,6 +191,37 @@ emit answer;
 ```
 
 The result is statically checked, evaluated without ambient effects, lowered to deterministic `aria.source-ir/0.7`, and assigned a SHA-256 identity.
+
+### Use ARIA's verified map
+
+```aria
+aria 0.4.0
+module VerifiedMapExample version 0.7.0
+program VerifiedMapExample version 0.7.0
+entry Main
+
+function Double(value: Number) -> Number {
+  ↩ value * 2
+}
+
+flow Main {
+  let values: Sequence<Number> = [1, 2, 3, 4]
+  let doubled: Sequence<Number> = ⨯(values, Double)
+  emit doubled
+  halt
+}
+```
+
+Run it through the normal compiler, verifier, policy gate, and VM:
+
+```powershell
+.\aria.cmd run .\examples\verified-map.aria
+```
+
+`⨯` accepts only a compile-time unary pure transform. It preserves order and
+length, reuses existing sequence limits, and emits start, actual completed
+iterations, completion, or fracture through Event Spine v3 without recording
+element values.
 
 ### Discover the CLI
 
@@ -883,7 +916,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ ALL LATTICES COHERENT PASS 322/322 gates
+◆ ALL LATTICES COHERENT PASS 344/344 gates
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
@@ -900,7 +933,7 @@ Start here:
 | `docs/21-runtime-spine.md` | Compiler-to-VM causal runtime |
 | `docs/23-gitflow-membrane.md` | Buffered and SHA-verified Git transport |
 | `docs/24-oscillator-buffer.md` | Original oscillator primitive |
-| `docs/25-bufferflow.md` | Interlocking buffering phases |
+| `docs/25-bufferflow.md` | Truthful live pending state and measured receipts |
 | `docs/26-signalflow.md` | Receipts and per-item signal feedback |
 | `docs/27-typed-authority-core.md` | Type lattice, immutable scope and typed IR |
 | `docs/28-graph-execution.md` | Guarded transactional graph rewriting |
@@ -916,6 +949,9 @@ Start here:
 | `docs/42-sequence-core-alpha4.md` | Bounded immutable sequence values |
 | `docs/43-effect-purity-core-alpha5.md` | Deterministic effect graph and purity proofs |
 | `docs/44-integration-closure-alpha5-1.md` | Entry effects, artifact-derived intent authority and unified conformance |
+| `docs/45-semantic-projection-core-alpha6.md` | Shared human/machine cue projections |
+| `docs/46-signal-integrity-closure-alpha6-1.md` | Continuous event history and truthful temporal signals |
+| `docs/47-verified-map-alpha7.md` | Typed pure map and measured iteration evidence |
 
 Earlier documents record the architectural evolution and remain useful context.
 

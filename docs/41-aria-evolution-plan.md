@@ -95,6 +95,7 @@ contract is explicitly proposed and admitted.
 | Glyph Memory alpha.1 | Complete | Content-addressed semantic cards and activation memory |
 | Glyph Lowering alpha.2 | Complete | `▷` and `↩` lower to existing `CALL` and `RETURN` |
 | Typed Composition alpha.3 | Complete | `≫` lowers left-to-right into typed nested calls |
+| Verified Map alpha.7 | Complete | `⨯` applies a compile-time unary pure transform with measured iteration evidence |
 | Core conformance | Complete | 202-test established language lattice |
 | Cross-platform attestation | Complete | Windows PowerShell 5.1, PowerShell 7 Windows, PowerShell 7 Linux |
 
@@ -106,10 +107,9 @@ Verified executable cards:
 ≫  composition.pipe
 ```
 
-Specified and inactive cards:
+Specified and inactive cards after alpha.7:
 
 ```text
-⨯  algorithm.map
 ⫰  algorithm.filter
 Σ  algorithm.reduce
 ```
@@ -274,6 +274,10 @@ Closure alpha.5.1.
 ### alpha.7 — Verified Map
 
 Activate `⨯ algorithm.map` as the first sequence algorithm.
+
+**State: complete.** The admitted surface, bytecode, verifier, runtime, signal
+history, and evidence are specified by ADR-008 and
+`docs/47-verified-map-alpha7.md`.
 
 Candidate surface:
 
@@ -791,58 +795,42 @@ data substrate
 
 # 9. Immediate Next Evolution Contract
 
-## Sequence Core alpha.4
+## Verified Filter alpha.8
 
 ### Intent
 
-Give ARIA its first bounded structured value while preserving immutability,
-determinism, provenance, and authority containment.
+Select values from a bounded immutable sequence with a compile-time unary pure
+predicate while preserving source order, deterministic evidence, and authority
+containment.
 
 ### Explicitly in scope
 
-- `Sequence<T>` type parsing;
-- flat immutable scalar sequences;
-- sequence literals;
-- homogeneous element verification;
-- typed empty sequences;
-- deterministic encoding and equality;
-- bytecode and VM support;
-- resource ceilings;
+- exact `⫰(sequence, Predicate)` surface locked by ADR;
+- `Sequence<T> × PureFunction<T,Bool> → Sequence<T>`;
+- stable source order and deterministic cardinality;
+- verifier-visible predicate identity and purity;
+- measured input, completed iteration, and selected-count evidence;
+- existing sequence, call-depth, and byte ceilings;
 - documentation, examples, tests, CI, and manifest.
 
 ### Explicitly out of scope
 
-- map;
-- filter;
 - reduce;
 - nested sequences;
 - mutable collections;
 - indexing mutation;
-- iterators;
 - closures;
 - implicit element coercion;
-- algorithm-card activation;
+- reduce-card activation;
 - new capability or policy permission.
 
 ### Admission target
 
-A dedicated sequence lattice should contain at least fifteen gates proving:
-
-1. generic type parsing;
-2. homogeneous literal inference;
-3. declared-type agreement;
-4. mixed-type rejection;
-5. empty sequence with declared type;
-6. untyped empty-sequence rejection;
-7. deterministic AST;
-8. deterministic IR;
-9. deterministic artifact;
-10. container round-trip;
-11. runtime output;
-12. sequence equality;
-13. resource-bound rejection;
-14. no algorithm activation;
-15. full scalar regression parity.
+A dedicated filter lattice must prove predicate identity, unary arity, exact
+input type, exact `Bool` return, direct and transitive purity, stable order,
+zero/all/some cardinality, empty input, deterministic artifacts, verifier
+tamper rejection, value-free iteration evidence, runtime fracture, unchanged
+authority, and continued reduce inactivity.
 
 ---
 
@@ -873,13 +861,16 @@ verified layers beneath it.
 - Effect Graph & Purity Core alpha.5 connects source semantics, call topology,
   bytecode metadata, independent verifier reconstruction, VM admission, glyph
   proof obligations, CI, and operator inspection.
-- `⨯`, `⫰`, and `Σ` remain specified and inactive until their dedicated
-  algorithm lattices pass.
+- `⨯ algorithm.map` is verified through its dedicated 22-gate lattice.
+- `⫰ algorithm.filter` and `Σ algorithm.reduce` remain specified and inactive
+  until their dedicated algorithm lattices pass.
 - Semantic Projection Core alpha.6 interposes the governing human/machine
   projection contract before sequence algorithms.
 - Signal Integrity Closure alpha.6.1 gives that contract continuous history,
   truthful live waiting, VM adoption, and governance adoption.
-- The next bounded evolution is Verified Map alpha.7.
+- Verified Map alpha.7 connects typed sequences, purity proofs, explicit MAP
+  bytecode, deterministic VM iteration, and Event Spine evidence.
+- The next bounded evolution is Verified Filter alpha.8.
 - Integration Closure alpha.5.1 completes entry-flow effect coverage, derives
   intent authority from admitted artifacts, unifies all local lattices, and
   synchronizes release discovery before Semantic Projection Core alpha.6.

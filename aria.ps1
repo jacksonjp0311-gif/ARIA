@@ -515,7 +515,8 @@ try {
                 'Run-EffectPurityTests.ps1',
                 'Run-IntegrationClosureTests.ps1',
                 'Run-SemanticProjectionTests.ps1',
-                'Run-SignalIntegrityClosureTests.ps1'
+                'Run-SignalIntegrityClosureTests.ps1',
+                'Run-VerifiedMapTests.ps1'
             )
             foreach($suite in $suites){
                 $suitePath=Join-Path $root ('tests/'+$suite)
@@ -524,8 +525,8 @@ try {
                 }
                 else{& $suitePath}
             }
-            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '322/322 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=322;failedCount=0}) -Render
-            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '322/322 gates'
+            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '344/344 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=344;failedCount=0}) -Render
+            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '344/344 gates'
         }
         { $_ -in @('gate','check') } {
             if (-not $Path) { throw 'gate requires a .aria source path.' }

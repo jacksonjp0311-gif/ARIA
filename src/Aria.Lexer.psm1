@@ -93,6 +93,17 @@ function Get-AriaExpressionTokens {
             continue
         }
 
+        if ($ch -eq '⨯') {
+            $tokens.Add(
+                [pscustomobject][ordered]@{
+                    kind = 'map'
+                    text = '⨯'
+                }
+            )
+            $index++
+            continue
+        }
+
         if ([char]::IsDigit($ch)) {
             $start = $index
             while ($index -lt $Text.Length -and [char]::IsDigit($Text[$index])) { $index++ }
@@ -192,6 +203,20 @@ function Parse-AriaPrimaryExpression {
             kind = 'call'
             name = $name
             arguments = $arguments.ToArray()
+        }
+    }
+
+    if ($token.kind -eq 'map') {
+        Move-AriaExpressionToken $State
+        $null = Read-AriaExpressionToken -State $State -Kind 'lparen'
+        $sequence = Parse-AriaPipeExpression $State
+        $null = Read-AriaExpressionToken -State $State -Kind 'comma'
+        $transform = Read-AriaExpressionToken -State $State -Kind 'identifier'
+        $null = Read-AriaExpressionToken -State $State -Kind 'rparen'
+        return [pscustomobject][ordered]@{
+            kind = 'map'
+            sequence = $sequence
+            transform = [string]$transform.value
         }
     }
 

@@ -2,6 +2,17 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Verified Map alpha.7
+
+- Activated the sealed `⨯ algorithm.map` card as ARIA's first sequence algorithm.
+- Added the exact `⨯(sequence, Transform)` surface with compile-time transform identity.
+- Added independent semantic, effect-graph, bytecode, verifier, and VM contracts for unary pure transforms.
+- Added the pure `MAP` opcode without adding a capability or policy permission.
+- Preserved sequence order, cardinality, scalar element types, deterministic execution, and existing resource ceilings.
+- Emitted value-free map start, measured iteration, completion, and fracture evidence through Event Spine v3.
+- Replaced repeated full-ledger append parsing with validated ledger-byte identity and locked tail verification.
+- Added a 22-gate Verified Map lattice and expanded aggregate conformance to `344/344`.
+
 ## Integration Closure alpha.5.1
 
 - Extended the deterministic effect graph with a reserved `$entry` node covering the executable entry flow.

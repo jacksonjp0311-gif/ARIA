@@ -73,10 +73,11 @@ comparison       = additive, { whitespace?, ( "<" | "<=" | ">" | ">=" ), whitesp
 additive         = multiplicative, { whitespace?, ( "+" | "-" ), whitespace?, multiplicative } ;
 multiplicative   = unary, { whitespace?, ( "*" | "/" ), whitespace?, unary } ;
 unary            = [ "not" | "-" ], primary ;
-primary          = string | number | boolean | null | sequence-literal | identifier | call | glyph-call | "(", expression, ")" ;
+primary          = string | number | boolean | null | sequence-literal | identifier | call | glyph-call | map-call | "(", expression, ")" ;
 sequence-literal = "[", [ expression, { whitespace?, ",", whitespace?, expression } ], "]" ;
 call             = identifier, "(", [ expression, { ",", expression } ], ")" ;
 glyph-call       = "▷", whitespace?, identifier, "(", [ expression, { ",", expression } ], ")" ;
+map-call         = "⨯", whitespace?, "(", expression, ",", whitespace?, identifier, ")" ;
 node-kind        = "operator" | "agent" | "repository" | "service" | "surface" |
                    "memory" | "artifact" | "policy" | "stream" | "system" ;
 glyph            = ? one non-whitespace Unicode grapheme ? ;

@@ -15,6 +15,7 @@ ARIA 0.4.0 lowers typed source into structured stack bytecode. The bytecode is i
 | Filesystem | `FS_READ`, `FS_WRITE` | Perform policy-gated, workspace-confined text I/O. |
 | Agents | `AGENT_DISPATCH` | Emit a deterministic agent task event. |
 | Functions | `CALL`, `RETURN` | Enter a typed local frame and return exactly one scalar result, including `Null`. |
+| Pure sequence algorithms | `MAP` | Apply one compile-time unary pure transform to a bounded sequence while preserving order and length. |
 | Structured control | `IF`, `REPEAT` | Execute nested verified instruction sequences without arbitrary jump offsets. |
 | Termination | `HALT` | Stop the entry flow. |
 
@@ -34,6 +35,7 @@ The verifier checks:
 - operand-stack underflow and terminal stack depth;
 - arithmetic, comparison, Boolean, call, return, memory, and dispatch types;
 - function argument counts and return contracts;
+- `MAP` transform identity, unary arity, purity, and exact sequence element contracts;
 - lexical variable definitions;
 - memory, capability, function, and agent references;
 - capability activation before host effects;
@@ -41,6 +43,11 @@ The verifier checks:
 - function `RETURN` and entry-flow `HALT` termination.
 
 The VM repeats runtime type, policy, path, memory, call-depth, and loop-bound checks rather than trusting the compiler.
+
+`MAP` stores the transform identity and input/output sequence types directly in
+the instruction. The transform is not a runtime function value. The VM invokes
+the already verified function body once per element and constructs the result
+through the existing sequence validator and resource ceilings.
 
 ## Binary envelope
 

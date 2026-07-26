@@ -224,14 +224,14 @@
                                        "kind":  "builtin",
                                        "target":  "sequence.map"
                                    },
-                      "status":  "specified",
+                      "status":  "verified",
                       "tests":  [
                                     "map preserves sequence order",
                                     "map validates transform types",
                                     "map execution is deterministic",
                                     "transform purity is proven by deterministic effect graph"
                                 ],
-                      "digest":  "sha256:074a711ca8cc514c831a1cc6eb75b937782246d9f3c0a52c247243d6dea851ac"
+                      "digest":  "sha256:db5f26dd38ad6e2aefe7659fc6883fff9f2cdbc111c32679fc0af5043cee156b"
                   },
                   {
                       "format":  "aria.glyph-card",
@@ -322,5 +322,5 @@
                       "digest":  "sha256:ff909ec8e1b4963d10a8e95b10f882dba78f7a801f8d9c4311481abe288b27c2"
                   }
               ],
-    "digest":  "sha256:526db9635439dfb2bb82bd5e3736ee97ec728c8130e9685b0b6a1fe94725bda8"
+    "digest":  "sha256:3a5f137842e2258388158c011725ec41b2ec1a27294ee8a54203951521067426"
 }

@@ -315,7 +315,7 @@ try {
 
     Test-SequenceCase 'sequence uses structured constants without opcode expansion' {
         $opcodes = Get-AriaOpcodeRegistry
-        Assert-Equal 37 $opcodes.Count 'Opcode registry changed.'
+        Assert-Equal 38 $opcodes.Count 'Opcode registry changed.'
 
         $sequences = @(
             $validGate.bytecode.constants |
@@ -418,13 +418,11 @@ try {
             'Empty sequence memory type changed.'
     }
 
-    Test-SequenceCase 'algorithms remain inactive and scalar behavior regresses cleanly' {
+    Test-SequenceCase 'map is verified while later algorithms remain inactive' {
         $registry = Read-AriaGlyphCardRegistry -Root $root
-        foreach ($id in @(
-            'algorithm.map',
-            'algorithm.filter',
-            'algorithm.reduce'
-        )) {
+        $map = Get-AriaGlyphCard -Id 'algorithm.map' -Registry $registry
+        Assert-Equal 'verified' $map.status 'Map card was not admitted.'
+        foreach ($id in @('algorithm.filter','algorithm.reduce')) {
             $card = Get-AriaGlyphCard -Id $id -Registry $registry
             Assert-Equal 'specified' $card.status `
                 "Algorithm card '$id' advanced without evidence."

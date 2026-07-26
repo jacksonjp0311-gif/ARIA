@@ -83,6 +83,98 @@ function Add-AriaVmRuntimeEvent {
     $Context.events.Add($LegacyEvent)
 }
 
+function Invoke-AriaVmFunction {
+    param(
+        $Context,
+        [Parameter(Mandatory=$true)][string]$Name,
+        [AllowEmptyCollection()][object[]]$Arguments = @(),
+        [int]$CallDepth,
+        [int]$Line
+    )
+    if (-not $Context.functionMap.ContainsKey($Name)) {
+        throw "ARIA VM unknown function '$Name'."
+    }
+    $fn = $Context.functionMap[$Name]
+    if ($Arguments.Count -ne @($fn.parameters).Count) {
+        throw "ARIA VM function '$Name' expected $(@($fn.parameters).Count) argument(s), received $($Arguments.Count)."
+    }
+    $fnScopes = New-AriaScopeStack
+    for ($index=0;$index-lt$Arguments.Count;$index++) {
+        $parameter = $fn.parameters[$index]
+        Assert-AriaRuntimeType ([string]$parameter.type) $Arguments[$index] "argument $($index+1) to $Name"
+        $fnScopes[0][[string]$parameter.name] = $Arguments[$index]
+    }
+    $result = Invoke-AriaInstructionSequence @($fn.instructions) $Context $fnScopes @{} ($CallDepth + 1)
+    if ($result.control -ne 'return') {
+        throw "ARIA function '$Name' terminated without return."
+    }
+    Assert-AriaRuntimeType ([string]$fn.returnType) $result.value "return from $Name"
+    return $result.value
+}
+
+function Invoke-AriaVmMap {
+    param($Context,$SequenceValue,$Instruction,[int]$CallDepth)
+    $validation = Test-AriaSequenceValue -Value $SequenceValue
+    if (-not $validation.valid) { throw 'ARIA VM MAP requires a valid sequence value.' }
+    $transformName = [string]$Instruction.transform
+    if (-not $Context.functionMap.ContainsKey($transformName)) {
+        throw "ARIA VM MAP references unknown transform '$transformName'."
+    }
+    $transform = $Context.functionMap[$transformName]
+    $parameters = @($transform.parameters)
+    $summary = $transform.PSObject.Properties['effectSummary']
+    if ($parameters.Count -ne 1 -or $null -eq $summary -or [string]$summary.Value.purity -ne 'pure') {
+        throw "ARIA VM MAP transform '$transformName' is not an admitted unary pure function."
+    }
+    $declaredInputElement = Get-AriaSequenceElementType -Type ([string]$Instruction.inputType)
+    if (
+        [string]$parameters[0].type -ne $declaredInputElement -or
+        (
+            [string]$validation.elementType -ne 'Empty' -and
+            [string]$validation.elementType -ne $declaredInputElement
+        )
+    ) {
+        throw "ARIA VM MAP transform '$transformName' does not accept the declared input sequence."
+    }
+
+    if (Get-Command Start-AriaEventOperation -ErrorAction SilentlyContinue) {
+        $null = Start-AriaEventOperation -Name ('algorithm.map.' + $transformName)
+    }
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $iterations = @($validation.values).Count
+    $completed = 0
+    $resultValues = New-Object System.Collections.Generic.List[object]
+    $startRecord = [pscustomobject][ordered]@{kind='map';state='start';transform=$transformName;iterations=$iterations;line=[int]$Instruction.line}
+    Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $startRecord -Domain algorithm -Phase map.start -State ACTIVE -Energy execution -Information $transformName -Coherence 'map started'
+
+    try {
+        foreach ($value in @($validation.values)) {
+            $mapped = Invoke-AriaVmFunction -Context $Context -Name $transformName -Arguments @($value) -CallDepth $CallDepth -Line ([int]$Instruction.line)
+            $resultValues.Add($mapped)
+            $completed++
+            $iterationRecord = [pscustomobject][ordered]@{kind='map';state='iteration';transform=$transformName;iteration=$completed;iterations=$iterations;line=[int]$Instruction.line}
+            Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $iterationRecord -Domain algorithm -Phase map.iteration -State INFO -Energy iteration -Information $transformName -Coherence ("iteration {0} complete" -f $completed)
+        }
+        $result = New-AriaSequenceValue -ElementType ([string]$transform.returnType) -Values $resultValues.ToArray()
+        $clock.Stop()
+        $completeRecord = [pscustomobject][ordered]@{kind='map';state='complete';transform=$transformName;iteration=$completed;iterations=$iterations;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
+        Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase map.complete -State PASS -Energy completion -Information $transformName -Coherence 'map contract passed'
+        return $result
+    }
+    catch {
+        $originalError = $_
+        $clock.Stop()
+        try {
+            $fractureRecord = [pscustomobject][ordered]@{kind='map';state='fracture';transform=$transformName;iteration=$completed;iterations=$iterations;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
+            Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $fractureRecord -Domain algorithm -Phase map.fracture -State FAIL -Energy interruption -Information $transformName -Coherence 'map transform rejected'
+        }
+        catch {
+            # Preserve the runtime fracture when evidence publication is unavailable.
+        }
+        throw $originalError
+    }
+}
+
 function Resolve-AriaRuntimePathForEffect {
     param([hashtable]$Active,[hashtable]$CapabilityMap,$Policy,[string]$Effect,[string]$WorkspaceRoot,[string]$RequestedPath)
     [string[]]$names=@($Active.Keys|ForEach-Object{[string]$_});[Array]::Sort($names,[StringComparer]::Ordinal);$authorized=New-Object System.Collections.Generic.List[object]
@@ -215,7 +307,8 @@ function Invoke-AriaInstructionSequence {
             'CONNECT_PROPOSE'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'intent' ([int]$ins.line);$value=Pop-AriaRuntime $stack "CONNECT_PROPOSE line $($ins.line)";Assert-AriaRuntimeType 'Text' $value "connection proposal line $($ins.line)";$text=[string]$value;$state.phase='proposal';Add-AriaConnectionEvent $Context $name 'proposal' ([int]$ins.line) $text}
             'CONNECT_CONSENT'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'proposal' ([int]$ins.line);$value=Pop-AriaRuntime $stack "CONNECT_CONSENT line $($ins.line)";Assert-AriaRuntimeType 'Bool' $value "connection consent line $($ins.line)";$approved=[bool]$value;$state.phase='consent';$state.approved=$approved;Add-AriaConnectionEvent $Context $name 'consent' ([int]$ins.line) '' $approved}
             'CONNECT_CLOSE'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'consent' ([int]$ins.line);$approved=[bool]$state.approved;$state.phase='closed';Add-AriaConnectionEvent $Context $name 'closed' ([int]$ins.line) '' $approved}
-            'CALL'{$name=[string]$ins.name;if(-not $Context.functionMap.ContainsKey($name)){throw "ARIA VM unknown function '$name'."};$fn=$Context.functionMap[$name];$argCount=[int]$ins.argCount;if($argCount-eq0){[object[]]$args=@()}else{[object[]]$args=New-Object object[] $argCount};for($a=$args.Length-1;$a-ge0;$a--){$args[$a]=Pop-AriaRuntime $stack "CALL $name line $($ins.line)"};$fnScopes=New-AriaScopeStack;for($a=0;$a-lt$args.Length;$a++){$param=$fn.parameters[$a];Assert-AriaRuntimeType ([string]$param.type) $args[$a] "argument $($a+1) to $name";$fnScopes[0][[string]$param.name]=$args[$a]};$result=Invoke-AriaInstructionSequence @($fn.instructions) $Context $fnScopes @{} ($CallDepth+1);if($result.control-ne'return'){throw "ARIA function '$name' terminated without return."};Assert-AriaRuntimeType ([string]$fn.returnType) $result.value "return from $name";$stack.Push($result.value)}
+            'CALL'{$name=[string]$ins.name;$argCount=[int]$ins.argCount;if($argCount-eq0){[object[]]$args=@()}else{[object[]]$args=New-Object object[] $argCount};for($a=$args.Length-1;$a-ge0;$a--){$args[$a]=Pop-AriaRuntime $stack "CALL $name line $($ins.line)"};$stack.Push((Invoke-AriaVmFunction -Context $Context -Name $name -Arguments $args -CallDepth $CallDepth -Line ([int]$ins.line)))}
+            'MAP'{$sequenceValue=Pop-AriaRuntime $stack "MAP line $($ins.line)";$stack.Push((Invoke-AriaVmMap -Context $Context -SequenceValue $sequenceValue -Instruction $ins -CallDepth $CallDepth))}
             'IF'{$condition=Pop-AriaRuntime $stack "IF line $($ins.line)";Assert-AriaRuntimeType 'Bool' $condition "if line $($ins.line)";Add-AriaScope $Scopes;try{$branch=if([bool]$condition){@($ins.then)}else{@($ins.else)};$result=Invoke-AriaInstructionSequence $branch $Context $Scopes (Copy-AriaRuntimeTable $ActiveCapabilities) $CallDepth}finally{Remove-AriaScope $Scopes};if($result.control-ne'normal'){return $result}}
             'REPEAT'{$raw=Pop-AriaRuntime $stack "REPEAT line $($ins.line)";Assert-AriaRuntimeType 'Number' $raw "repeat line $($ins.line)";$count=[double]$raw;if($count-lt0-or$count-gt[int]$ins.max-or[math]::Floor($count)-ne$count){throw "ARIA repeat count must be an integer from 0 through $($ins.max) at source line $($ins.line)."};for($iteration=0;$iteration-lt[int]$count;$iteration++){Add-AriaScope $Scopes @{([string]$ins.iterator)=[long]$iteration};try{$result=Invoke-AriaInstructionSequence @($ins.body) $Context $Scopes (Copy-AriaRuntimeTable $ActiveCapabilities) $CallDepth}finally{Remove-AriaScope $Scopes};if($result.control-ne'normal'){return $result}}}
             'RETURN'{$value=if([bool]$ins.hasValue){Pop-AriaRuntime $stack "RETURN line $($ins.line)"}else{$null};if($stack.Count-ne0){throw "ARIA VM function return left $($stack.Count) operand(s) on the stack."};return [pscustomobject]@{control='return';value=$value}}

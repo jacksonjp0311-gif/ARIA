@@ -210,9 +210,9 @@ try {
             'Activation state mismatch.'
     }
 
-    Test-GlyphMemoryCase 'specified algorithm cannot activate early' {
+    Test-GlyphMemoryCase 'specified filter cannot activate early' {
         $card = Get-AriaGlyphCard `
-            -Id 'algorithm.map' `
+            -Id 'algorithm.filter' `
             -Registry $registry
 
         $context = 'sha256:' + (
@@ -233,7 +233,7 @@ try {
         }
 
         Assert-True $rejected `
-            'Specified algorithm activated before implementation.'
+            'Specified filter activated before implementation.'
     }
 
     Test-GlyphMemoryCase 'activation memory round-trips and detects tampering' {

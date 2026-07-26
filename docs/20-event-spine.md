@@ -29,6 +29,12 @@ event[n].sequence == physical ledger position
 Deletion, reordering, duplication, tampering, stale append attempts, and
 cross-session sequence resets are rejected.
 
+Full initialization and replay validate every record and establish the exact
+ledger-byte identity. Later appends take an exclusive lock and require those
+bytes plus the verified tail identity to remain unchanged. This lets iterable
+language operations record bounded per-iteration events without reparsing the
+complete history for each append.
+
 ## Authority boundary
 
 Events describe what happened. They do not grant authority. Policy and bytecode verification remain independent execution gates.

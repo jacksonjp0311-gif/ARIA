@@ -6,6 +6,12 @@ if ($null -eq (Get-Command Get-AriaSourceEffectGraph -ErrorAction SilentlyContin
         -Force `
         -DisableNameChecking
 }
+if ($null -eq (Get-Command Get-AriaGlyphCard -ErrorAction SilentlyContinue)) {
+    Import-Module `
+        (Join-Path $PSScriptRoot 'Aria.GlyphMemory.psm1') `
+        -Force `
+        -DisableNameChecking
+}
 
 function Get-AriaPolicy { param([Parameter(Mandatory=$true)][string]$PolicyPath) return (Read-AriaUtf8Text -Path $PolicyPath | ConvertFrom-Json) }
 function Get-AriaPolicyEffect { param([Parameter(Mandatory=$true)]$Policy,[Parameter(Mandatory=$true)][string]$Effect) return ($Policy.effects.PSObject.Properties | Where-Object{$_.Name-eq$Effect}|Select-Object -First 1) }
@@ -205,6 +211,54 @@ function Get-AriaExpressionType {
             $name=[string]$Expression.name
             if(-not$Functions.ContainsKey($name)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2061' "Unknown function '$name'." $Line;$type='Any'}else{$fn=$Functions[$name];$args=@($Expression.arguments);if($args.Count-ne$fn.parameters.Count){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2062' "Function '$name' expects $($fn.parameters.Count) argument(s), received $($args.Count)." $Line};for($i=0;$i-lt$args.Count;$i++){$actual=Get-AriaExpressionType $args[$i] $Scopes $Functions $Diagnostics $Line;if($i-lt$fn.parameters.Count-and-not(Test-AriaTypeAssignable ([string]$fn.parameters[$i].type) $actual)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2063' "Argument $($i+1) to '$name' expects $($fn.parameters[$i].type), received $actual." $Line}};$type=[string]$fn.returnType}
         }
+        'map' {
+            $sequenceType = Get-AriaExpressionType $Expression.sequence $Scopes $Functions $Diagnostics $Line
+            $transformName = [string]$Expression.transform
+            $elementType = Get-AriaSequenceElementType -Type $sequenceType
+
+            try {
+                $mapCard = Get-AriaGlyphCard -Id 'algorithm.map'
+                if ([string]$mapCard.status -ne 'verified') {
+                    Add-AriaTypeDiagnostic $Diagnostics 'ARIA2120' 'The algorithm.map glyph card is not verified.' $Line
+                }
+            }
+            catch {
+                Add-AriaTypeDiagnostic $Diagnostics 'ARIA2120' 'The algorithm.map glyph card is unavailable or invalid.' $Line
+            }
+
+            if (-not (Test-AriaDeclaredTypeName -Type $sequenceType) -or -not $elementType) {
+                Add-AriaTypeDiagnostic $Diagnostics 'ARIA2121' "Map requires Sequence<T>, received $sequenceType." $Line
+                $type = 'Any'
+            }
+            elseif (-not $Functions.ContainsKey($transformName)) {
+                Add-AriaTypeDiagnostic $Diagnostics 'ARIA2122' "Map references unknown transform '$transformName'." $Line
+                $type = 'Any'
+            }
+            else {
+                $transform = $Functions[$transformName]
+                $parameters = @($transform.parameters)
+                if ($parameters.Count -ne 1) {
+                    Add-AriaTypeDiagnostic $Diagnostics 'ARIA2123' "Map transform '$transformName' must have exactly one parameter." $Line
+                }
+                elseif ([string]$parameters[0].type -ne $elementType) {
+                    Add-AriaTypeDiagnostic $Diagnostics 'ARIA2124' "Map transform '$transformName' expects $($parameters[0].type), sequence provides $elementType." $Line
+                }
+
+                $returnType = [string]$transform.returnType
+                if ($returnType -notin @('Text','Number','Bool','Null')) {
+                    Add-AriaTypeDiagnostic $Diagnostics 'ARIA2125' "Map transform '$transformName' must return an established scalar type, received $returnType." $Line
+                    $type = 'Any'
+                }
+                else {
+                    $type = 'Sequence<' + $returnType + '>'
+                }
+
+                $summary = $transform.PSObject.Properties['effectSummary']
+                if ($null -eq $summary -or [string]$summary.Value.purity -ne 'pure') {
+                    Add-AriaTypeDiagnostic $Diagnostics 'ARIA2126' "Map transform '$transformName' must have a verified pure effect summary." $Line
+                }
+            }
+        }
         'unary'{$operand=Get-AriaExpressionType $Expression.operand $Scopes $Functions $Diagnostics $Line;if($Expression.operator-eq'not'){if(-not(Test-AriaTypeAssignable 'Bool' $operand)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2064' "Operator 'not' requires Bool, received $operand." $Line};$type='Bool'}else{if(-not(Test-AriaTypeAssignable 'Number' $operand)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2065' "Unary '-' requires Number, received $operand." $Line};$type='Number'}}
         'binary'{
             $left=Get-AriaExpressionType $Expression.left $Scopes $Functions $Diagnostics $Line;$right=Get-AriaExpressionType $Expression.right $Scopes $Functions $Diagnostics $Line;$op=[string]$Expression.operator
@@ -319,24 +373,11 @@ function Test-AriaSemantics {
     $connections=@{};foreach($connection in @($model.connections)){if($connections.ContainsKey($connection.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2100' "Duplicate connection '$($connection.name)'." $connection.line;continue};$connections[$connection.name]=$connection;if([string]::IsNullOrWhiteSpace([string]$connection.operator)-or[string]::IsNullOrWhiteSpace([string]$connection.agent)-or[string]::IsNullOrWhiteSpace([string]$connection.protocol)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2101' "Connection '$($connection.name)' requires operator, agent, and protocol Text properties." $connection.line;continue};if(-not$agents.ContainsKey([string]$connection.agent)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2102' "Connection '$($connection.name)' references unknown agent '$($connection.agent)'." $connection.line};if([string]$connection.protocol-ne'intent-proposal-consent'){Add-AriaTypeDiagnostic $diagnostics 'ARIA2103' "Connection '$($connection.name)' protocol must be 'intent-proposal-consent'." $connection.line}}
     $glyphs=Get-AriaGlyphRegistry;$graphs=@{};foreach($graph in $model.graphs){if($graphs.ContainsKey($graph.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2029' "Duplicate graph '$($graph.name)'." $graph.line;continue};$graphs[$graph.name]=$graph;$nodes=@{};foreach($node in $graph.nodes){if($nodes.ContainsKey($node.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2030' "Duplicate graph node '$($node.name)' in '$($graph.name)'." $node.line}else{$nodes[$node.name]=$node};$expected=$glyphs[[string]$node.nodeKind];if([string]$node.glyph-ne$expected){Add-AriaTypeDiagnostic $diagnostics 'ARIA2033' "Glyph for node kind '$($node.nodeKind)' must be '$expected'." $node.line}};foreach($link in $graph.links){if(-not$nodes.ContainsKey($link.source)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2031' "Unknown graph source '$($link.source)'." $link.line};if(-not$nodes.ContainsKey($link.target)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2032' "Unknown graph target '$($link.target)'." $link.line}}}
     $functions=@{};foreach($fn in $model.functions){if($functions.ContainsKey($fn.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2090' "Duplicate function '$($fn.name)'." $fn.line}else{$functions[$fn.name]=$fn};$params=@{};foreach($p in $fn.parameters){if($params.ContainsKey($p.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2091' "Duplicate parameter '$($p.name)' in function '$($fn.name)'." $p.line}else{$params[$p.name]=$p.type}}}
+    $effectGraph = Get-AriaSourceEffectGraph -Model $model -CapabilityMap $capabilities
+    foreach($fn in @($model.functions)){$fn|Add-Member -NotePropertyName effectSummary -NotePropertyValue (Get-AriaEffectSummary -Graph $effectGraph -Name ([string]$fn.name)) -Force}
     foreach($fn in $model.functions){$scope=@{};foreach($p in $fn.parameters){$scope[$p.name]=$p.type};Test-AriaStatementSequence @($fn.statements) @($scope) $functions $memories $capabilities $agents $connections $Policy $diagnostics ([string]$fn.returnType) $true @{};if($fn.returnType-ne'Null'-and-not(Test-AriaStatementsAlwaysReturn @($fn.statements))){Add-AriaTypeDiagnostic $diagnostics 'ARIA2092' "Function '$($fn.name)' does not return on every visible path." $fn.line}}
     $flows=@{};foreach($flow in $model.flows){if($flows.ContainsKey($flow.name)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2040' "Duplicate flow '$($flow.name)'." $flow.line;continue};$flows[$flow.name]=$flow;Test-AriaStatementSequence @($flow.statements) @(@{}) $functions $memories $capabilities $agents $connections $Policy $diagnostics 'Null' $false @{}}
     if($null-ne$model.entry-and-not$flows.ContainsKey($model.entry)){Add-AriaTypeDiagnostic $diagnostics 'ARIA2050' "Entry flow '$($model.entry)' does not exist." 0}
-    $effectGraph = Get-AriaSourceEffectGraph `
-        -Model $model `
-        -CapabilityMap $capabilities
-
-    foreach ($fn in @($model.functions)) {
-        $summary = Get-AriaEffectSummary `
-            -Graph $effectGraph `
-            -Name ([string]$fn.name)
-
-        $fn | Add-Member `
-            -NotePropertyName effectSummary `
-            -NotePropertyValue $summary `
-            -Force
-    }
-
     return [pscustomobject][ordered]@{model=$model;diagnostics=$diagnostics.ToArray();capabilityMap=$capabilities;functionMap=$functions;memoryTypes=$memories;connectionMap=$connections;effectGraph=$effectGraph}
 }
 

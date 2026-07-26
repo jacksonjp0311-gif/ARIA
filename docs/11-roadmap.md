@@ -1,5 +1,12 @@
 # ARIA Roadmap
 
+## Current verified frontier
+
+Verified Map alpha.7 is active. ARIA can apply a compile-time unary pure
+function to an immutable bounded sequence with deterministic order, exact type
+continuity, verifier-visible `MAP` bytecode, and Event Spine iteration evidence.
+Verified Filter alpha.8 is the next bounded language evolution.
+
 ## 0.1 — Bootstrap proof
 
 - deterministic parser, semantic validator, bytecode compiler, container, VM;

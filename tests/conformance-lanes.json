@@ -420,19 +420,19 @@
                   },
                   {
                       "ordinal":  69,
-                      "name":  "bufferflow cycles transmission phases",
+                      "name":  "bufferflow never invents internal process phases",
                       "lane":  "transmission",
                       "weight":  1
                   },
                   {
                       "ordinal":  70,
-                      "name":  "bufferflow geometry converges during alignment",
+                      "name":  "bufferflow heartbeat moves only while pending",
                       "lane":  "transmission",
                       "weight":  1
                   },
                   {
                       "ordinal":  71,
-                      "name":  "bufferflow completion frame locks geometry",
+                      "name":  "bufferflow frame states pending without false progress",
                       "lane":  "transmission",
                       "weight":  1
                   },

@@ -1,7 +1,7 @@
 {
     "schema":  "aria.runtime/1",
-    "release":  "0.1.0-alpha.7",
-    "languageEvolution":  "semantic-projection-core-alpha.6",
+    "release":  "0.1.0-alpha.8",
+    "languageEvolution":  "signal-integrity-closure-alpha.6.1",
     "status":  "experimental",
     "repository":  {
                        "name":  "ARIA",
@@ -29,7 +29,9 @@
                          "intentVerifier":  "src/Aria.IntentVerifier.psm1",
                          "glyphMemory":  "src/Aria.GlyphMemory.psm1",
                          "semanticProjection":  "src/Aria.SemanticProjection.psm1",
-                         "semanticCues":  "grammar/semantic-cues.json"
+                         "semanticCues":  "grammar/semantic-cues.json",
+                         "eventSpine":  "src/Aria.EventSpine.psm1",
+                         "signalIntegrityPlan":  "plans/signal-integrity-closure-alpha6-1.aria"
                      },
     "continuity":  {
                        "stableTag":  "aria-alpha21-stable",

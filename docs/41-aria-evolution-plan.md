@@ -259,6 +259,18 @@ Closure alpha.5.1.
 - Make the cue vocabulary self-teaching through the CLI.
 - Add no capability, policy permission, opcode, or execution authority.
 
+### alpha.6.1 — Signal Integrity Closure
+
+- Resume Event Spine sequence identity across CLI processes.
+- Hash-chain every new event to the prior workspace event.
+- Separate workspace ledger order from operation-local transition order.
+- Replace timer-generated Bufferflow phases with live pending state.
+- Project measured process receipts without raw stdout or stderr.
+- Bind VM signals, agent dispatch, and connection lifecycle to semantic events.
+- Prevent source-authored pass/fail signals from manufacturing verifier verdicts.
+- Keep static layout non-temporal and outside evidence history.
+- Add no opcode, capability, policy permission, or algorithm activation.
+
 ### alpha.7 — Verified Map
 
 Activate `⨯ algorithm.map` as the first sequence algorithm.
@@ -749,6 +761,7 @@ The next canonical sequence is:
 alpha.4  Sequence Core
 alpha.5  Effect and Purity Core
 alpha.6  Semantic Projection Core
+alpha.6.1 Signal Integrity Closure
 alpha.7  Verified Map
 alpha.8  Verified Filter
 alpha.9  Verified Reduce
@@ -864,6 +877,8 @@ verified layers beneath it.
   algorithm lattices pass.
 - Semantic Projection Core alpha.6 interposes the governing human/machine
   projection contract before sequence algorithms.
+- Signal Integrity Closure alpha.6.1 gives that contract continuous history,
+  truthful live waiting, VM adoption, and governance adoption.
 - The next bounded evolution is Verified Map alpha.7.
 - Integration Closure alpha.5.1 completes entry-flow effect coverage, derives
   intent authority from admitted artifacts, unifies all local lattices, and

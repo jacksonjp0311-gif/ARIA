@@ -1,10 +1,12 @@
-# Event Spine alpha.8
+# Event Spine v3
 
 Event Spine is ARIA's canonical internal event bus. Compiler, verifier, VM, policy, connection, and provider subsystems can now describe runtime facts with one typed object rather than writing provider-specific terminal text.
 
-Every `aria.event` contains:
+Every current `aria.event` contains:
 
-- a monotonic sequence;
+- a workspace-wide sequence that resumes across CLI processes;
+- a cryptographic operation identity and operation-local sequence;
+- the previous ledger event digest;
 - domain and phase identities;
 - execution state;
 - Etherflow's energy, information, and coherence lanes;
@@ -12,7 +14,20 @@ Every `aria.event` contains:
 - typed data;
 - a canonical SHA-256 digest.
 
-The spine supports in-memory subscribers, optional append-only NDJSON persistence under `.aria/events`, replay verification, and direct Etherflow rendering.
+The spine supports in-memory subscribers, append-only NDJSON persistence under
+`.aria/events`, replay verification, direct semantic-projection rendering, and
+an exclusive append boundary. Event versions 1 and 2 remain individually
+verifiable; all new events use version 3.
+
+The v3 ledger is a chain rather than a bag of records:
+
+```text
+event[n-1].digest == event[n].previousDigest
+event[n].sequence == physical ledger position
+```
+
+Deletion, reordering, duplication, tampering, stale append attempts, and
+cross-session sequence resets are rejected.
 
 ## Authority boundary
 

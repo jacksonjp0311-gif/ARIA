@@ -204,7 +204,7 @@ function New-AriaSemanticProjection {
     $stateIdentity = ('{0}.{1}:{2}' -f $Event.domain,$Event.phase,$Event.state)
     $metrics = [ordered]@{ sequence = [int]$Event.sequence }
     if ($Event.data) {
-        foreach ($metricName in @('durationMs','queueDepth','iteration','iterations','obligationCount','verifiedCount','failedCount','bytes')) {
+        foreach ($metricName in @('durationMs','queueDepth','iteration','iterations','obligationCount','verifiedCount','failedCount','bytes','totalBytes','stdoutBytes','stderrBytes','exitCode','heartbeatCount')) {
             $property = $Event.data.PSObject.Properties[$metricName]
             if ($property -and $property.Value -is [ValueType]) { $metrics[$metricName] = $property.Value }
         }

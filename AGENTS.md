@@ -16,7 +16,7 @@ A healthy baseline must report:
 
 - repository manifest integrity
 - `SYSTEM READY`
-- `296/296` aggregate conformance with zero failures
+- `322/322` aggregate conformance with zero failures
 
 ## Authoritative entrypoints
 
@@ -32,6 +32,7 @@ A healthy baseline must report:
 - `src/Aria.Effects.psm1` — whole-program effect graph and purity proof
 - `src/Aria.IntentVerifier.psm1` — intent obligations and artifact-derived program summaries
 - `src/Aria.SemanticProjection.psm1` — deterministic state-to-cue projections
+- `src/Aria.EventSpine.psm1` — cross-session hash-chained event and operation history
 - `grammar/semantic-cues.json` — content-addressed human/machine cue contracts
 - `grammar/alchemy.json` — executable triadic glyph syntax
 - `tests/Run-Tests.ps1` — conformance lattice

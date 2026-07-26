@@ -780,10 +780,6 @@ function Write-AriaSignal {
     $style = Get-AriaSignalStyle -Mode $Mode
     $durationText = Format-AriaDuration -Duration $Duration
 
-    Invoke-AriaGlyphMotion `
-        -Style $style `
-        -Prefix $Prefix
-
     if ($Prefix) {
         Write-AriaPaint `
             -Text $Prefix `
@@ -920,34 +916,6 @@ function Write-AriaStage {
             $color = 'Cyan'
             $label = 'INFO'
         }
-    }
-
-    if (
-        $State -eq 'Pulse' -and
-        $env:ARIA_ANIMATION -ne '0' -and
-        $env:CI -ne 'true' -and
-        [Environment]::UserInteractive
-    ) {
-        foreach ($frame in @('◇', '◈')) {
-            Write-Host "`r" -NoNewline
-
-            if ($Prefix) {
-                Write-AriaPaint `
-                    -Text $Prefix `
-                    -Color Gray `
-                    -NoNewline
-            }
-
-            Write-AriaPaint `
-                -Text $frame `
-                -Color Magenta `
-                -Bold `
-                -NoNewline
-
-            Start-Sleep -Milliseconds 38
-        }
-
-        Write-Host "`r" -NoNewline
     }
 
     $durationText = Format-AriaDuration -Duration $Duration
@@ -1288,7 +1256,14 @@ function Test-AriaInteractiveBuffer {
     [CmdletBinding()]
     param()
 
-    if ($env:CI -or $env:GITHUB_ACTIONS -eq 'true' -or $env:ARIA_NO_ANIMATION -eq '1') {
+    if (
+        $env:CI -or
+        $env:GITHUB_ACTIONS -eq 'true' -or
+        $env:ARIA_NO_ANIMATION -eq '1' -or
+        $env:ARIA_REDUCED_MOTION -eq '1' -or
+        $env:ARIA_ANIMATION -eq '0' -or
+        $env:ARIA_MOTION -in @('0','off')
+    ) {
         return $false
     }
 
@@ -1406,6 +1381,7 @@ function New-AriaTransmissionBuffer {
         width = $Width
         intervalMs = $IntervalMs
         tick = 0
+        heartbeatCount = 0
         position = 0
         direction = 1
         active = $true
@@ -1419,19 +1395,16 @@ function Get-AriaTransmissionPhase {
     [CmdletBinding()]
     param([Parameter(Mandatory=$true)]$State)
 
-    $cycle = [int]$State.tick % 16
-    if ($cycle -lt 4) { return 'mesh' }
-    if ($cycle -lt 9) { return 'transmit' }
-    if ($cycle -lt 13) { return 'align' }
-    return 'verify'
+    if ([bool]$State.active) { return 'pending' }
+    return 'closed'
 }
 
 function Get-AriaGearGlyphs {
     [CmdletBinding()]
     param([Parameter(Mandatory=$true)]$State)
 
-    $left = @('⚙','◈','⚙','◇')[[int]$State.tick % 4]
-    $right = @('◇','⚙','◈','⚙')[[int]$State.tick % 4]
+    $left = @('⧖','·','⧖','∙')[[int]$State.tick % 4]
+    $right = @('∙','⧖','·','⧖')[[int]$State.tick % 4]
     [pscustomobject][ordered]@{
         left = $left
         right = $right
@@ -1449,32 +1422,13 @@ function Get-AriaTransmissionFrame {
     for ($index = 0; $index -lt [int]$State.width; $index++) {
         $distance = [math]::Abs($index - [int]$State.position)
 
-        if ($phase -eq 'mesh') {
-            if ($distance -eq 0) { [void]$cells.Add('◆') }
-            elseif ($distance -eq 1) { [void]$cells.Add('◇') }
-            else { [void]$cells.Add('·') }
-        }
-        elseif ($phase -eq 'transmit') {
-            if ($distance -eq 0) { [void]$cells.Add('⬢') }
-            elseif (($index + [int]$State.tick) % 3 -eq 0) { [void]$cells.Add('∙') }
-            else { [void]$cells.Add('·') }
-        }
-        elseif ($phase -eq 'align') {
-            $centerLeft = [math]::Floor(([int]$State.width - 1) / 2)
-            $centerRight = [math]::Ceiling(([int]$State.width - 1) / 2)
-            if ($index -eq $centerLeft -or $index -eq $centerRight) { [void]$cells.Add('◈') }
-            elseif ($distance -eq 0) { [void]$cells.Add('◇') }
-            else { [void]$cells.Add('·') }
-        }
-        else {
-            if ($index -eq [math]::Floor(([int]$State.width - 1) / 2)) { [void]$cells.Add('◆') }
-            elseif ($index % 2 -eq 0) { [void]$cells.Add('─') }
-            else { [void]$cells.Add('·') }
-        }
+        if ($distance -eq 0) { [void]$cells.Add('⧖') }
+        elseif ($distance -eq 1) { [void]$cells.Add('·') }
+        else { [void]$cells.Add('∙') }
     }
 
     $elapsed = [math]::Max(0,([datetime]::UtcNow - [datetime]$State.startedAt).TotalSeconds)
-    "{0}{1} {2,-9} {3} ⟦{4}⟧ {5,4:N1}s" -f `
+    "{0}{1} {2,-9} {3} ⟦{4}⟧ elapsed:{5,4:N1}s" -f `
         $gears.left, `
         $gears.right, `
         $phase, `
@@ -1489,30 +1443,19 @@ function Step-AriaTransmissionBuffer {
 
     if (-not [bool]$State.active) { return $State }
 
-    $phase = Get-AriaTransmissionPhase -State $State
-    if ($phase -eq 'align' -or $phase -eq 'verify') {
-        $target = [int][math]::Floor(([int]$State.width - 1) / 2)
-        if ([int]$State.position -lt $target) {
-            [void]($State.position = [int]$State.position + 1)
-        }
-        elseif ([int]$State.position -gt $target) {
-            [void]($State.position = [int]$State.position - 1)
-        }
+    $next = [int]$State.position + [int]$State.direction
+    if ($next -ge ([int]$State.width - 1)) {
+        $next = [int]$State.width - 1
+        [void]($State.direction = -1)
     }
-    else {
-        $next = [int]$State.position + [int]$State.direction
-        if ($next -ge ([int]$State.width - 1)) {
-            $next = [int]$State.width - 1
-            [void]($State.direction = -1)
-        }
-        elseif ($next -le 0) {
-            $next = 0
-            [void]($State.direction = 1)
-        }
-        [void]($State.position = $next)
+    elseif ($next -le 0) {
+        $next = 0
+        [void]($State.direction = 1)
     }
+    [void]($State.position = $next)
 
     [void]($State.tick = [int]$State.tick + 1)
+    [void]($State.heartbeatCount = [int]$State.heartbeatCount + 1)
     return $State
 }
 
@@ -1542,24 +1485,7 @@ function Complete-AriaTransmissionBuffer {
     [void]($State.active = $false)
     if (-not [bool]$State.interactive) { return }
 
-    $center = [int][math]::Floor(([int]$State.width - 1) / 2)
-    $cells = New-Object 'System.Collections.Generic.List[string]'
-    for ($index = 0; $index -lt [int]$State.width; $index++) {
-        if ($index -eq $center) { [void]$cells.Add('◆') }
-        elseif ([math]::Abs($index - $center) -eq 1) { [void]$cells.Add('◈') }
-        else { [void]$cells.Add('─') }
-    }
-
-    $glyph = if ($Outcome -eq 'PASS') { '◆' } elseif ($Outcome -eq 'REJECT') { '◇' } elseif ($Outcome -eq 'WARN') { '⬖' } else { '⬗' }
-    $frame = "{0}  aligned   {1} ⟦{2}⟧" -f $glyph,[string]$State.label,($cells -join '')
-    $padding = ''
-    if ([int]$State.lastLength -gt $frame.Length) {
-        $padding = ' ' * ([int]$State.lastLength - $frame.Length)
-    }
-
-    Write-Host ("`r" + $frame + $padding) -NoNewline -ForegroundColor Green
-    Start-Sleep -Milliseconds 110
-    Write-Host ("`r" + (' ' * [math]::Max([int]$State.lastLength,$frame.Length)) + "`r") -NoNewline
+    Write-Host ("`r" + (' ' * [math]::Max([int]$State.lastLength,1)) + "`r") -NoNewline
 }
 
 function Invoke-AriaBufferedProcess {
@@ -1576,6 +1502,22 @@ function Invoke-AriaBufferedProcess {
     $stdout = [IO.Path]::GetTempFileName()
     $stderr = [IO.Path]::GetTempFileName()
     $buffer = New-AriaTransmissionBuffer -Label $Label -Mode $Mode
+    if (
+        (Get-Command Start-AriaEventOperation -ErrorAction SilentlyContinue) -and
+        (Get-Command Send-AriaEvent -ErrorAction SilentlyContinue)
+    ) {
+        $null = Start-AriaEventOperation -Name $Label
+        $null = Send-AriaEvent `
+            -Domain operation `
+            -Phase wait `
+            -State ACTIVE `
+            -Energy execution `
+            -Information $Label `
+            -Coherence 'process pending' `
+            -Source 'aria.bufferflow' `
+            -Data ([pscustomobject][ordered]@{mode=$Mode}) `
+            -Render
+    }
 
     try {
         $process = Start-Process `
@@ -1622,7 +1564,8 @@ function Invoke-AriaBufferedProcess {
             -StartedAt ([datetime]$buffer.startedAt) `
             -CompletedAt $completedAt `
             -Stdout $outText `
-            -Stderr $errText
+            -Stderr $errText `
+            -HeartbeatCount ([int]$buffer.heartbeatCount)
 
         Write-AriaTransmissionReceipt -Receipt $receipt
 
@@ -1658,7 +1601,8 @@ function New-AriaTransmissionReceipt {
         [Parameter(Mandatory=$true)][datetime]$StartedAt,
         [Parameter(Mandatory=$true)][datetime]$CompletedAt,
         [string]$Stdout = '',
-        [string]$Stderr = ''
+        [string]$Stderr = '',
+        [int]$HeartbeatCount = 0
     )
 
     $durationMs = [math]::Max(0,[int][math]::Round(($CompletedAt - $StartedAt).TotalMilliseconds))
@@ -1666,7 +1610,7 @@ function New-AriaTransmissionReceipt {
     $stderrBytes = [Text.Encoding]::UTF8.GetByteCount([string]$Stderr)
     $totalBytes = $stdoutBytes + $stderrBytes
     $outcome = if ($ExitCode -eq 0) { 'PASS' } else { 'FAIL' }
-    $coherence = if ($ExitCode -eq 0) { 'aligned' } else { 'fractured' }
+    $coherence = if ($ExitCode -eq 0) { 'exit code 0' } else { "exit code $ExitCode" }
 
     [pscustomobject][ordered]@{
         label = $Label
@@ -1678,6 +1622,7 @@ function New-AriaTransmissionReceipt {
         stdoutBytes = $stdoutBytes
         stderrBytes = $stderrBytes
         totalBytes = $totalBytes
+        heartbeatCount = $HeartbeatCount
         startedAt = $StartedAt.ToUniversalTime().ToString('o',[Globalization.CultureInfo]::InvariantCulture)
         completedAt = $CompletedAt.ToUniversalTime().ToString('o',[Globalization.CultureInfo]::InvariantCulture)
     }
@@ -1714,6 +1659,29 @@ function Write-AriaTransmissionReceipt {
     $profile = Get-AriaDisplayProfile
     $passed = ([string]$Receipt.outcome -eq 'PASS')
     $enumerating = ($null -ne $script:AriaEnumeration)
+    $projected = $false
+
+    if (Get-Command Send-AriaEvent -ErrorAction SilentlyContinue) {
+        $null = Send-AriaEvent `
+            -Domain operation `
+            -Phase complete `
+            -State $(if ($passed) { 'PASS' } else { 'FAIL' }) `
+            -Energy completion `
+            -Information $(if ($Receipt.label) { [string]$Receipt.label } else { 'operation' }) `
+            -Coherence $(if ($Receipt.coherence) { [string]$Receipt.coherence } else { [string]$Receipt.outcome }) `
+            -Source 'aria.signalflow' `
+            -Data ([pscustomobject][ordered]@{
+                mode = [string]$Receipt.mode
+                durationMs = [int64]$Receipt.durationMs
+                totalBytes = [int64]$Receipt.totalBytes
+                stdoutBytes = [int64]$Receipt.stdoutBytes
+                stderrBytes = [int64]$Receipt.stderrBytes
+                exitCode = [int]$Receipt.exitCode
+                heartbeatCount = if ($Receipt.PSObject.Properties['heartbeatCount']) { [int]$Receipt.heartbeatCount } else { 0 }
+            }) `
+            -Render
+        $projected = $true
+    }
 
     if ($enumerating) {
         $script:AriaEnumeration.TransmissionTotal++
@@ -1735,6 +1703,8 @@ function Write-AriaTransmissionReceipt {
                 [int64]$Receipt.totalBytes
         }
     }
+
+    if ($projected) { return }
 
     if (
         $profile.compact -and
@@ -1788,6 +1758,22 @@ function Invoke-AriaBufferedItem {
 
     $state = New-AriaTransmissionBuffer -Label $Name -Mode $Mode
     try {
+        if (
+            (Get-Command Start-AriaEventOperation -ErrorAction SilentlyContinue) -and
+            (Get-Command Send-AriaEvent -ErrorAction SilentlyContinue)
+        ) {
+            $null = Start-AriaEventOperation -Name $Name
+            $null = Send-AriaEvent `
+                -Domain operation `
+                -Phase wait `
+                -State ACTIVE `
+                -Energy execution `
+                -Information $Name `
+                -Coherence 'item pending' `
+                -Source 'aria.bufferflow' `
+                -Data ([pscustomobject][ordered]@{mode=$Mode}) `
+                -Render
+        }
         Write-AriaTransmissionFrame -State $state
         try {
             $output = & $Action 2>&1
@@ -1815,7 +1801,8 @@ function Invoke-AriaBufferedItem {
             -StartedAt $startedAt `
             -CompletedAt ([datetime]::UtcNow) `
             -Stdout $stdout `
-            -Stderr $stderr
+            -Stderr $stderr `
+            -HeartbeatCount ([int]$state.heartbeatCount)
 
         Write-AriaTransmissionReceipt -Receipt $receipt
 

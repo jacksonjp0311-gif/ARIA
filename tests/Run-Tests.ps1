@@ -1019,10 +1019,11 @@ Test-Case 'transmission container rejects tampering' {
     Assert-True $rejected 'Tampered transmission unexpectedly passed verification.'
 }
 Test-Case 'event digest is deterministic for fixed time' {
-    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    $operationId = 'aria.operation.test:' + ('a' * 64)
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact -OperationId $operationId
     $time = [datetime]'2026-01-01T00:00:00Z'
     $one = New-AriaEvent -Domain runtime -Phase probe -State PASS -Energy verify -Information stable -Coherence sealed -OccurredAt $time
-    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact
+    $null = Initialize-AriaEventSpine -WorkspaceRoot $root -Profile compact -OperationId $operationId
     $two = New-AriaEvent -Domain runtime -Phase probe -State PASS -Energy verify -Information stable -Coherence sealed -OccurredAt $time
     Assert-Equal $one.digest $two.digest 'Event digest changed for identical content.'
 }
@@ -1200,7 +1201,7 @@ Test-Case 'oscillator suppresses animation in CI' {
         $env:CI = $prior
     }
 }
-Test-Case 'bufferflow cycles transmission phases' {
+Test-Case 'bufferflow never invents internal process phases' {
     $state = New-AriaTransmissionBuffer -Label probe -Width 12
     $phases = New-Object 'System.Collections.Generic.HashSet[string]'
     for ($index = 0; $index -lt 16; $index++) {
@@ -1208,28 +1209,35 @@ Test-Case 'bufferflow cycles transmission phases' {
         $null = Step-AriaTransmissionBuffer -State $state
     }
 
-    Assert-True ($phases.Contains('mesh')) 'Bufferflow mesh phase missing.'
-    Assert-True ($phases.Contains('transmit')) 'Bufferflow transmit phase missing.'
-    Assert-True ($phases.Contains('align')) 'Bufferflow align phase missing.'
-    Assert-True ($phases.Contains('verify')) 'Bufferflow verify phase missing.'
+    Assert-Equal 1 $phases.Count 'Bufferflow invented more than one unobserved phase.'
+    Assert-True ($phases.Contains('pending')) 'Bufferflow did not preserve the honest pending state.'
+    foreach ($forbidden in @('mesh','transmit','align','verify')) {
+        Assert-True (-not $phases.Contains($forbidden)) "Bufferflow invented '$forbidden'."
+    }
 }
 
-Test-Case 'bufferflow geometry converges during alignment' {
+Test-Case 'bufferflow heartbeat moves only while pending' {
     $state = New-AriaTransmissionBuffer -Label probe -Width 12
     $state.tick = 9
     $state.position = 0
-    $before = [math]::Abs($state.position - 5)
+    $before = [int]$state.position
     $null = Step-AriaTransmissionBuffer -State $state
-    $after = [math]::Abs($state.position - 5)
-    Assert-True ($after -lt $before) 'Alignment phase did not converge toward center geometry.'
+    Assert-True ([int]$state.position -ne $before) 'Pending heartbeat did not move.'
+    Assert-Equal 1 ([int]$state.heartbeatCount) 'Pending heartbeat count mismatch.'
+    $state.active = $false
+    $frozen = [int]$state.position
+    $null = Step-AriaTransmissionBuffer -State $state
+    Assert-Equal $frozen ([int]$state.position) 'Closed buffer continued moving.'
 }
 
-Test-Case 'bufferflow completion frame locks geometry' {
+Test-Case 'bufferflow frame states pending without false progress' {
     $state = New-AriaTransmissionBuffer -Label probe -Width 12
     $state.interactive = $false
     $frame = Get-AriaTransmissionFrame -State $state
     Assert-True ($frame -match '⟦.{12}⟧') 'Transmission frame width changed.'
-    Assert-True ($frame -match 'mesh') 'Transmission phase label missing.'
+    Assert-True ($frame -match 'pending') 'Pending phase label missing.'
+    Assert-True ($frame -match 'elapsed:') 'Measured elapsed time missing.'
+    Assert-True ($frame -notmatch '%|mesh|transmit|align|verify') 'Frame contains false progress or an unobserved phase.'
 }
 
 Test-Case 'bufferflow process returns one typed result' {
@@ -1269,7 +1277,7 @@ Test-Case 'signal receipt reports duration bytes and coherence' {
         -Stdout 'abc' `
         -Stderr ''
 
-    Assert-Equal 'aligned' ([string]$receipt.coherence) 'Receipt coherence mismatch.'
+    Assert-Equal 'exit code 0' ([string]$receipt.coherence) 'Receipt coherence mismatch.'
     Assert-Equal '125' ([string][int]$receipt.durationMs) 'Receipt duration mismatch.'
     Assert-Equal '3' ([string][int]$receipt.totalBytes) 'Receipt byte count mismatch.'
 }
@@ -1286,7 +1294,7 @@ Test-Case 'signal receipt formats as a subordinate line' {
         -Stderr ''
 
     $line = Format-AriaTransmissionReceipt -Receipt $receipt
-    Assert-True ($line -match '^└─ ∿ verifier · aligned') 'Receipt is not subordinate transmission feedback.'
+    Assert-True ($line -match '^└─ ∿ verifier · exit code 0') 'Receipt is not subordinate transmission feedback.'
 }
 
 Test-Case 'buffered sequence activates every item' {
@@ -1334,7 +1342,7 @@ Test-Case 'buffered process carries transmission receipt' {
             -Mode verification
 
         Assert-True ($null -ne $result.receipt) 'Buffered process receipt missing.'
-        Assert-Equal 'aligned' ([string]$result.receipt.coherence) 'Buffered process receipt coherence mismatch.'
+        Assert-Equal 'exit code 0' ([string]$result.receipt.coherence) 'Buffered process receipt coherence mismatch.'
     }
     finally {
         $env:CI = $prior

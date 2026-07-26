@@ -7,7 +7,7 @@ Accepted for Semantic Projection Core alpha.6.
 ## Decision
 
 ARIA will not let a renderer independently infer the meaning of an event.
-`aria.event` version 2 contains a deterministic `aria.semantic-projection/1`
+`aria.event` version 2 introduced a deterministic `aria.semantic-projection/1`
 derived from the event state and the sealed semantic cue registry.
 
 The projection includes the cue identity, glyph, motion and rhythm contracts,
@@ -25,4 +25,5 @@ and digest. The event digest covers that projection.
 - Color is supplementary.
 - Semantic cues remain observational and grant no authority.
 - Legacy `aria.event` version 1 ledgers remain verifiable and render with their
-  established fallback, but all newly created events use version 2.
+  established fallback. ADR-007 later advances new events to version 3 while
+  retaining the projection contract.

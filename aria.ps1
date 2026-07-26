@@ -114,6 +114,7 @@ try {
                     $null=Assert-AriaGitClean -RepositoryRoot $workspaceRoot
                     $head=Get-AriaGitHead -RepositoryRoot $workspaceRoot
                     $result=Invoke-AriaEvolutionPlanFile -Path $RequestPath -WorkspaceRoot $workspaceRoot -BaseCommit $head
+                    $null = Send-AriaEvent -Domain evolution -Phase proposal -State PASS -Energy planning -Information $result.plan.proposal.id -Coherence 'proposal recorded without mutation' -Source 'aria.evolve.plan' -Data ([pscustomobject][ordered]@{proposalId=$result.plan.proposal.id;snapshotId=$result.plan.candidateSnapshot.id}) -Render
                     Write-AriaTreeStage -Name 'proposal identity' -State Pass -Detail $result.plan.proposal.id
                     Write-AriaTreeStage -Name 'candidate snapshot' -State Pass -Detail $result.plan.candidateSnapshot.id
                     Write-AriaTreeStage -Name 'rollback proof' -State Pass -Detail 'original snapshot reproduced'
@@ -138,6 +139,7 @@ try {
                         -CapabilityPath $Capability `
                         -AuthorizationPath $Authorization `
                         -VerificationPolicyPath $IssuerPolicy
+                    $null = Send-AriaEvent -Domain evolution -Phase authorization -State PASS -Energy verification -Information $result.verification.authorization.id -Coherence 'human authorization bound' -Source 'aria.evolve.verify' -Data ([pscustomobject][ordered]@{verificationId=$result.persisted.verificationId;authorityDecisionId=$result.verification.authorityDecision.id}) -Render
                     Write-AriaTreeStage -Name 'record integrity' -State Pass -Detail $result.plan.record.id
                     Write-AriaTreeStage -Name 'capability authority' -State Pass -Detail $result.verification.authorityDecision.id
                     Write-AriaTreeStage -Name 'human authorization' -State Pass -Detail $result.verification.authorization.id
@@ -162,6 +164,7 @@ try {
                         -CommitMessage $Message `
                         -Push:$Push `
                         -VerboseBuffer:$script:VerboseOutput
+                    $null = Send-AriaEvent -Domain evolution -Phase closure -State PASS -Energy completion -Information $result.receipt.commit -Coherence 'authorized evolution applied' -Source 'aria.evolve.apply' -Data ([pscustomobject][ordered]@{commit=$result.receipt.commit;pushed=[bool]$Push}) -Render
                     $clock.Stop()
                     Write-AriaSummary `
                         -Title $(if($Push){'EVOLUTION COMMITTED + PUSHED'}else{'EVOLUTION COMMITTED'}) `
@@ -178,6 +181,7 @@ try {
             Write-AriaBanner -Title 'ARIA / INTENT VERIFY' -Subtitle 'declared objective · independent challenge · evidence-derived verdict'
             Write-AriaTreeStage -Name 'artifact identities' -State Pulse -Detail $RequestPath
             $result=Invoke-AriaIntentVerificationFile -Path $RequestPath -WorkspaceRoot $workspaceRoot
+            $null = Send-AriaEvent -Domain intent -Phase verdict -State $(if($result.satisfied){'PASS'}else{'REJECT'}) -Energy verification -Information $result.proof.id -Coherence $(if($result.satisfied){'intent obligations satisfied'}else{'intent obligations rejected'}) -Source 'aria.intent.verify' -Data ([pscustomobject][ordered]@{proofId=$result.proof.id;obligationCount=@($result.proof.obligations).Count;satisfied=[bool]$result.satisfied}) -Render
             Write-AriaTreeStage -Name 'interpretation binding' -State $(if($result.satisfied){'Pass'}else{'Fail'}) -Detail $result.proof.interpretationId
             Write-AriaTreeStage -Name 'authority ceiling' -State $(if('E_INTENT_EXCESS_AUTHORITY'-in@($result.errors|ForEach-Object{$_.code})){'Fail'}else{'Pass'}) -Detail 'declared effects compared'
             Write-AriaTreeStage -Name 'ambiguity and challenge' -State $(if(@($result.errors|ForEach-Object{$_.code}|Where-Object{$_-like'E_INTENT_AMBIGUITY*'-or$_-like'E_INTENT_CHALLENGE*'}).Count){'Fail'}else{'Pass'}) -Detail 'material disagreement requires human resolution'
@@ -446,7 +450,7 @@ try {
             else {
                 $start = [Math]::Max(0,$events.Count - 20)
                 for($i=$start;$i-lt$events.Count;$i++){
-                    Publish-AriaEvent -Event $events[$i] -Render
+                    Publish-AriaEvent -Event $events[$i] -Render -Replay
                 }
             }
         }        'doctor' {
@@ -485,17 +489,20 @@ try {
             Write-AriaTreeStage -Name 'compressed container' -State Pass -Detail 'gzip + SHA-256 + bytecode'
             if ($Strict) { $null = Assert-AriaRepositoryManifest }
             $clock.Stop()
+            $null = Send-AriaEvent -Domain system -Phase doctor -State PASS -Energy verification -Information (Get-AriaCompilerVersion) -Coherence 'system gates online' -Source 'aria.doctor' -Data ([pscustomobject][ordered]@{durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);strict=[bool]$Strict}) -Render
             Write-AriaSummary -Title 'SYSTEM READY' -Passed $true -Detail 'all gates online' -Duration $clock.Elapsed
         }
         'verify' {
             Write-AriaBanner -Title 'ARIA / VERIFY'
             $null = Assert-AriaRepositoryManifest
+            $null = Send-AriaEvent -Domain repository -Phase integrity -State PASS -Energy verification -Information 'MANIFEST.sha256' -Coherence 'repository identity verified' -Source 'aria.verify' -Render
             Write-AriaSummary -Title 'INTEGRITY VERIFIED' -Passed $true
         }
         'manifest' {
             Write-AriaBanner -Title 'ARIA / MANIFEST'
             Write-AriaTreeStage -Name 'repository hashing' -State Pulse -Detail 'SHA-256 tree'
             $count = Update-AriaManifest -Root $root
+            $null = Send-AriaEvent -Domain repository -Phase manifest -State PASS -Energy hashing -Information ("{0} files" -f $count) -Coherence 'manifest sealed' -Source 'aria.manifest' -Data ([pscustomobject][ordered]@{verifiedCount=$count}) -Render
             Write-AriaSummary -Title 'MANIFEST SEALED' -Passed $true -Detail ("{0} files" -f $count)
         }
         'test' {
@@ -507,7 +514,8 @@ try {
                 'Run-SequenceCoreTests.ps1',
                 'Run-EffectPurityTests.ps1',
                 'Run-IntegrationClosureTests.ps1',
-                'Run-SemanticProjectionTests.ps1'
+                'Run-SemanticProjectionTests.ps1',
+                'Run-SignalIntegrityClosureTests.ps1'
             )
             foreach($suite in $suites){
                 $suitePath=Join-Path $root ('tests/'+$suite)
@@ -516,7 +524,8 @@ try {
                 }
                 else{& $suitePath}
             }
-            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '296/296 gates'
+            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '322/322 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=322;failedCount=0}) -Render
+            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '322/322 gates'
         }
         { $_ -in @('gate','check') } {
             if (-not $Path) { throw 'gate requires a .aria source path.' }
@@ -727,6 +736,15 @@ flow Main {
 catch {
     Write-Host ''
     Write-AriaTreeStage -Name 'ARIA pipeline' -State Fail -Detail $_.Exception.Message
-    if ($script:VerboseOutput) { Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray }
+    $originalError = $_
+    try {
+        if (Get-Command Send-AriaEvent -ErrorAction SilentlyContinue) {
+            $null = Send-AriaEvent -Domain cli -Phase failure -State FAIL -Energy interruption -Information $Command -Coherence $originalError.Exception.Message -Source 'aria.cli' -Render
+        }
+    }
+    catch {
+        # Preserve the original failure when the event ledger itself is unavailable.
+    }
+    if ($script:VerboseOutput) { Write-Host $originalError.ScriptStackTrace -ForegroundColor DarkGray }
     exit 1
 }

@@ -33,10 +33,10 @@ brutally rigorous underneath
 
 | Layer | State |
 |---|---|
-| Compiler | `0.1.0-alpha.7` |
+| Compiler | `0.1.0-alpha.8` |
 | Language specification | `0.4.0` |
 | Source Core | bounded sequences + glyph composition + whole-program effect proofs |
-| Conformance | `296/296` deterministic gates across eight lattices |
+| Conformance | `322/322` deterministic gates across nine lattices |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
@@ -44,7 +44,7 @@ brutally rigorous underneath
 | Evolution | Persistent plans + verified authorization + rollback proof |
 | Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
 | Effect verification | Entry flow + function call closure + independently reconstructed bytecode graph |
-| Event model | Typed Event Spine v2 + deterministic semantic projections + append-only NDJSON ledger |
+| Event model | Hash-chained Event Spine v3 + operation continuity + deterministic semantic projections |
 | Operator UI | Content-addressed cues + Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
 | External AI provider | Not connected yet |
@@ -103,7 +103,7 @@ actual state S_t
   └─ explanation and interpretation boundary E_t
 ```
 
-Each `aria.event` version 2 contains a deterministic, digested semantic
+Each `aria.event` version 3 contains a deterministic, digested semantic
 projection. The terminal renders that projection; the NDJSON journal stores the
 same projection. A seal means the declared checks for that event passed—it does
 not mean universal truth or unlimited authority. A transmission wave means
@@ -115,6 +115,23 @@ The cue registry is content-addressed, color-independent, reduced-motion
 equivalent, privacy-bounded, and explicit about prohibited interpretations.
 ARIA records measured timing only when timing evidence exists; otherwise it
 labels motion as an event-boundary expression and claims no false percentage.
+
+Event history is continuous across CLI processes. Every v3 event carries a
+workspace ledger sequence, operation identity, operation-local sequence, and
+the previous event digest. Reordering, deletion, duplication, tampering, stale
+append attempts, and cross-session chain fractures are rejected.
+
+Live buffering expresses only what ARIA can observe:
+
+```text
+operation started
+→ pending while the process remains alive · measured elapsed time
+→ measured completion receipt or fracture
+```
+
+Bufferflow no longer cycles through invented `mesh`, `transmit`, `align`, or
+`verify` phases. A producer may name a richer phase only by recording that
+actual transition.
 
 Learn or inspect the shared vocabulary:
 
@@ -149,7 +166,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ ALL LATTICES COHERENT PASS   296/296 gates
+◆ ALL LATTICES COHERENT PASS   322/322 gates
 ```
 
 ### Run an ordinary ARIA program
@@ -420,15 +437,26 @@ Runtime actions emit typed events through the Event Spine and operator feedback 
 
 Signal Intelligence is ARIA's language-level model for work that is active but not yet externally visible.
 
-Traditional CLIs show a spinner and then print logs. ARIA models buffering as a causal signal with phases, geometry, authority, volume, duration, and a terminal coherence result.
+Traditional CLIs show a spinner and then print logs. ARIA models buffering as a
+live predicate followed by measured evidence.
 
 ```text
-source → mesh → transmit → align → verify → receipt
+operation start → pending while live → measured receipt
 ```
 
 ## Live Bufferflow
 
-While a subprocess or logical item is buffering, ARIA renders a single moving line:
+Signal Integrity Closure alpha.6.1 renders one bounded heartbeat:
+
+```text
+⧖· pending   github.push ⟦∙∙∙·⧖·∙∙∙⟧ elapsed:1.8s
+```
+
+It means only that the underlying process remains alive. It claims no internal
+phase, percentage, acceptance, convergence, or verification.
+
+The following multi-phase display is retained as historical documentation of
+the pre-alpha.6.1 behavior and is no longer executable:
 
 ```text
 ⚙◇ mesh      github.push ⟦··◇◆◇············⟧  0.4s
@@ -437,7 +465,7 @@ While a subprocess or logical item is buffering, ARIA renders a single moving li
 ◇⚙ verify    github.push ⟦─·─·─·◆·─·─·─·─·⟧  2.3s
 ```
 
-The phases mean:
+Those retired phase labels previously meant:
 
 | Phase | Meaning |
 |---|---|
@@ -446,7 +474,8 @@ The phases mean:
 | `align` | Local and remote state converge toward common geometry |
 | `verify` | Terminal identity, exit state, and coherence are checked |
 
-The animation is suppressed in CI and redirected output, but the deterministic receipt remains.
+Current pending animation is suppressed in CI, redirected output, and
+reduced-motion profiles, but the deterministic receipt remains.
 
 ## Transmission receipt
 
@@ -454,14 +483,14 @@ After buffering completes, ARIA emits outcome and signal feedback:
 
 ```text
 ◆ github.push │ 🜂 transport │ ∿ origin/main · b8b3959 │ 🜄 remote identity verified
-└─ ∿ provider · aligned · 1912ms · 83B · exit:0
+└─ ∿ provider · exit code 0 · 1912ms · 83B · exit:0
 ```
 
 The primary line answers:
 
 > What verified operation completed?
 
-The subordinate receipt answers:
+The projected receipt answers:
 
 > What happened to the signal while it crossed the boundary?
 
@@ -470,12 +499,14 @@ Receipt fields:
 | Field | Meaning |
 |---|---|
 | authority | `local`, `provider`, `verifier`, or `runtime` |
-| coherence | `aligned` or `fractured` |
+| coherence | the measured process exit code |
 | duration | elapsed transmission time |
 | volume | UTF-8 bytes buffered from stdout and stderr |
 | exit | terminal process exit code |
+| heartbeats | bounded liveness observations before completion |
 
-A receipt is typed operational feedback, not decorative logging.
+A receipt is a hash-chained Event Spine record, not decorative logging. Raw
+stdout and stderr are excluded from the event.
 
 ## Per-item activation
 
@@ -483,11 +514,10 @@ Every buffered child item should receive its own lifecycle:
 
 ```text
 item
-  → activate Bufferflow
+  → record operation start
+  → remain pending while live
   → perform work
-  → align geometry
-  → verify terminal state
-  → emit receipt
+  → record measured receipt
 ```
 
 PowerShell modules can use:
@@ -534,7 +564,7 @@ $result = Invoke-AriaBufferedProcess `
 Any ARIA subsystem that intentionally captures or delays output should use the Signalflow primitives. It should not invent a private spinner, print raw progress by default, or hide child-item identity.
 
 ```text
-buffered work ⇒ Bufferflow animation + terminal verification + Signalflow receipt
+buffered work ⇒ live pending predicate + projected measured receipt
 ```
 
 ---
@@ -853,7 +883,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ ALL LATTICES COHERENT PASS 296/296 gates
+◆ ALL LATTICES COHERENT PASS 322/322 gates
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.

@@ -30,6 +30,59 @@ function Add-AriaScope { param($Scopes,[hashtable]$Values=@{}) $null=$Scopes.Add
 function Remove-AriaScope { param($Scopes) if($Scopes.Count-le1){throw 'ARIA VM cannot remove the root scope.'};$Scopes.RemoveAt($Scopes.Count-1) }
 function Pop-AriaRuntime { param($Stack,[string]$Context) if($Stack.Count-eq0){throw "ARIA VM stack underflow at $Context."};return $Stack.Pop() }
 
+function Publish-AriaVmSemanticEvent {
+    param(
+        $Context,
+        [string]$Domain,
+        [string]$Phase,
+        [string]$State,
+        [string]$Energy,
+        [string]$Information,
+        [string]$Coherence,
+        $Data = $null
+    )
+    if (-not (Get-Command Send-AriaEvent -ErrorAction SilentlyContinue)) { return $null }
+    Send-AriaEvent `
+        -Domain $Domain `
+        -Phase $Phase `
+        -State $State `
+        -Energy $Energy `
+        -Information $Information `
+        -Coherence $Coherence `
+        -Source 'aria.vm' `
+        -Data $Data `
+        -Render:(-not [bool]$Context.passThru) `
+        -PassThru
+}
+
+function Add-AriaVmRuntimeEvent {
+    param(
+        $Context,
+        $LegacyEvent,
+        [string]$Domain,
+        [string]$Phase,
+        [string]$State,
+        [string]$Energy,
+        [string]$Information,
+        [string]$Coherence
+    )
+    $semantic = Publish-AriaVmSemanticEvent `
+        -Context $Context `
+        -Domain $Domain `
+        -Phase $Phase `
+        -State $State `
+        -Energy $Energy `
+        -Information $Information `
+        -Coherence $Coherence `
+        -Data $LegacyEvent
+    if ($semantic) {
+        $LegacyEvent | Add-Member -NotePropertyName eventDigest -NotePropertyValue ([string]$semantic.digest)
+        $LegacyEvent | Add-Member -NotePropertyName cueId -NotePropertyValue ([string]$semantic.projection.cue.id)
+        $LegacyEvent | Add-Member -NotePropertyName projectionDigest -NotePropertyValue ([string]$semantic.projection.digest)
+    }
+    $Context.events.Add($LegacyEvent)
+}
+
 function Resolve-AriaRuntimePathForEffect {
     param([hashtable]$Active,[hashtable]$CapabilityMap,$Policy,[string]$Effect,[string]$WorkspaceRoot,[string]$RequestedPath)
     [string[]]$names=@($Active.Keys|ForEach-Object{[string]$_});[Array]::Sort($names,[StringComparer]::Ordinal);$authorized=New-Object System.Collections.Generic.List[object]
@@ -58,7 +111,28 @@ function Add-AriaConnectionEvent {
     $definition=$Context.connectionMap[$Name]
     $event=[pscustomobject][ordered]@{kind='connection';state=$State;connection=$Name;operator=[string]$definition.operator;agent=[string]$definition.agent;protocol=[string]$definition.protocol;text=$Text;line=$Line}
     if($null-ne$Approved){$event|Add-Member -NotePropertyName approved -NotePropertyValue ([bool]$Approved)}
-    $Context.events.Add($event)
+    $semanticPhase = switch ($State) {
+        'open' { 'open' }
+        'intent' { 'intent' }
+        'proposal' { 'proposal' }
+        'consent' { 'consent' }
+        default { 'closure' }
+    }
+    $semanticState = if ($State -eq 'consent' -and $null -ne $Approved -and -not [bool]$Approved) {
+        'REJECT'
+    }
+    elseif ($State -eq 'open') { 'ACTIVE' }
+    elseif ($State -in @('intent','proposal')) { 'INFO' }
+    else { 'PASS' }
+    Add-AriaVmRuntimeEvent `
+        -Context $Context `
+        -LegacyEvent $event `
+        -Domain connection `
+        -Phase $semanticPhase `
+        -State $semanticState `
+        -Energy lifecycle `
+        -Information $Name `
+        -Coherence $(if ($semanticState -eq 'REJECT') { 'consent withheld' } elseif ($State -eq 'closed') { 'connection closed' } else { "$State recorded" })
 }
 
 function Invoke-AriaBinaryRuntime {
@@ -104,20 +178,43 @@ function Invoke-AriaInstructionSequence {
             {$_-in@('ADD','SUB','MUL','DIV','EQ','NE','LT','LE','GT','GE','AND','OR')}{$right=Pop-AriaRuntime $stack "$op line $($ins.line)";$left=Pop-AriaRuntime $stack "$op line $($ins.line)";$stack.Push((Invoke-AriaBinaryRuntime $op $left $right ([int]$ins.line)))}
             'NOT'{$value=Pop-AriaRuntime $stack "NOT line $($ins.line)";Assert-AriaRuntimeType 'Bool' $value "NOT line $($ins.line)";$stack.Push(-not[bool]$value)}
             'NEG'{$value=Pop-AriaRuntime $stack "NEG line $($ins.line)";Assert-AriaRuntimeType 'Number' $value "NEG line $($ins.line)";$stack.Push(-$value)}
-            'EMIT'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$value=Pop-AriaRuntime $stack "EMIT line $($ins.line)";$text=ConvertTo-AriaRuntimeText $value;Assert-AriaTextEffectLimit $Context.policy 'console.emit' $text 262144;$Context.outputs.Add($text);if(-not$Context.passThru){if(Get-Command Write-AriaStream -ErrorAction SilentlyContinue){Write-AriaStream $text}else{Write-Host "∿ $text"}}}
-            'SIGNAL'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$value=Pop-AriaRuntime $stack "SIGNAL line $($ins.line)";$text=ConvertTo-AriaRuntimeText $value;Assert-AriaTextEffectLimit $Context.policy 'console.emit' $text 262144;$state=[string]$ins.state;$Context.events.Add([pscustomobject][ordered]@{kind='signal';state=$state;text=$text;line=[int]$ins.line});if(-not$Context.passThru){$render=switch($state){'pulse'{'Pulse'}'pass'{'Pass'}'warn'{'Warn'}'fail'{'Fail'}default{'Info'}};if(Get-Command Write-AriaTreeStage -ErrorAction SilentlyContinue){Write-AriaTreeStage -Name $text -State $render -Depth 1}}}
+            'EMIT'{
+                Assert-AriaRuntimeEffect $Context.policy 'console.emit'
+                $value=Pop-AriaRuntime $stack "EMIT line $($ins.line)"
+                $text=ConvertTo-AriaRuntimeText $value
+                Assert-AriaTextEffectLimit $Context.policy 'console.emit' $text 262144
+                $Context.outputs.Add($text)
+                $null = Publish-AriaVmSemanticEvent -Context $Context -Domain vm -Phase output -State INFO -Energy transmission -Information $text -Coherence 'output emitted' -Data ([pscustomobject][ordered]@{kind='output';line=[int]$ins.line})
+                if(-not$Context.passThru){if(Get-Command Write-AriaStream -ErrorAction SilentlyContinue){Write-AriaStream $text}else{Write-Host "∿ $text"}}
+            }
+            'SIGNAL'{
+                Assert-AriaRuntimeEffect $Context.policy 'console.emit'
+                $value=Pop-AriaRuntime $stack "SIGNAL line $($ins.line)"
+                $text=ConvertTo-AriaRuntimeText $value
+                Assert-AriaTextEffectLimit $Context.policy 'console.emit' $text 262144
+                $state=[string]$ins.state
+                $legacy=[pscustomobject][ordered]@{kind='signal';state=$state;text=$text;line=[int]$ins.line}
+                Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $legacy -Domain vm -Phase signal -State INFO -Energy execution -Information $text -Coherence "declared $state signal observed"
+            }
             'MEM_SET'{Assert-AriaRuntimeEffect $Context.policy 'memory.write';$value=Pop-AriaRuntime $stack "MEM_SET line $($ins.line)";$expected=[string]$Context.memoryTypes[[string]$ins.memory][[string]$ins.key];Assert-AriaRuntimeType $expected $value "memory $($ins.memory).$($ins.key)";$Context.memories[[string]$ins.memory][[string]$ins.key]=$value;$Context.memoryDirty=$true}
             'MEM_GET'{Assert-AriaRuntimeEffect $Context.policy 'memory.read';if(-not$Context.memories.ContainsKey([string]$ins.memory)-or-not$Context.memories[[string]$ins.memory].ContainsKey([string]$ins.key)){throw "ARIA VM missing memory '$($ins.memory).$($ins.key)'."};$stack.Push($Context.memories[[string]$ins.memory][[string]$ins.key])}
             'REQUIRE_CAP'{$name=[string]$ins.arg;if(-not$Context.capabilityMap.ContainsKey($name)){throw "ARIA VM unknown capability '$name'."};$decision=Test-AriaPolicyAllowsCapability $Context.policy $Context.capabilityMap[$name];if(-not$decision.allowed){throw "ARIA VM denied capability '$name': $($decision.reason)"};$ActiveCapabilities[$name]=$true}
             'ASSERT_TRUE'{$value=Pop-AriaRuntime $stack "ASSERT_TRUE line $($ins.line)";Assert-AriaRuntimeType 'Bool' $value "assert line $($ins.line)";if(-not[bool]$value){throw "ARIA assertion failed at source line $($ins.line)."}}
             'FS_READ'{$path=[string](Pop-AriaRuntime $stack "FS_READ line $($ins.line)");$auth=Resolve-AriaRuntimePathForEffect $ActiveCapabilities $Context.capabilityMap $Context.policy 'fs.read' $Context.workspaceRoot $path;Assert-AriaFileReadLimit $Context.policy $auth.path;$Scopes[$Scopes.Count-1][[string]$ins.arg]=Read-AriaUtf8Text $auth.path}
             'FS_WRITE'{$value=[string](Pop-AriaRuntime $stack "FS_WRITE line $($ins.line)");$path=[string](Pop-AriaRuntime $stack "FS_WRITE line $($ins.line)");$auth=Resolve-AriaRuntimePathForEffect $ActiveCapabilities $Context.capabilityMap $Context.policy 'fs.write' $Context.workspaceRoot $path;Assert-AriaFileWriteLimit $Context.policy $value;Write-AriaUtf8NoBom $auth.path $value}
-            'AGENT_DISPATCH'{Assert-AriaRuntimeEffect $Context.policy 'agent.dispatch';$agent=[string]$ins.agent;if(-not$Context.agentMap.ContainsKey($agent)){throw "ARIA VM unknown agent '$agent'."};$task=[string](Pop-AriaRuntime $stack "AGENT_DISPATCH line $($ins.line)");$Context.events.Add([pscustomobject][ordered]@{kind='agent';state='pulse';agent=$agent;text=$task;line=[int]$ins.line});if(-not$Context.passThru-and(Get-Command Write-AriaTreeStage -ErrorAction SilentlyContinue)){Write-AriaTreeStage -Name ("agent {0}"-f$agent) -State Pulse -Detail $task -Depth 1}}
-            'CONNECT_OPEN'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'closed' ([int]$ins.line);$state.phase='open';$state.approved=$null;$definition=$Context.connectionMap[$name];Add-AriaConnectionEvent $Context $name 'open' ([int]$ins.line);if(-not$Context.passThru-and(Get-Command Write-AriaTreeStage -ErrorAction SilentlyContinue)){Write-AriaTreeStage -Name ("connection {0}"-f$name) -State Pulse -Detail ("{0} ↔ {1} · {2}"-f$definition.operator,$definition.agent,$definition.protocol) -Depth 1}}
-            'CONNECT_INTENT'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'open' ([int]$ins.line);$value=Pop-AriaRuntime $stack "CONNECT_INTENT line $($ins.line)";Assert-AriaRuntimeType 'Text' $value "connection intent line $($ins.line)";$text=[string]$value;$state.phase='intent';Add-AriaConnectionEvent $Context $name 'intent' ([int]$ins.line) $text;if(-not$Context.passThru-and(Get-Command Write-AriaTreeStage -ErrorAction SilentlyContinue)){Write-AriaTreeStage -Name 'human intent' -State Info -Detail $text -Depth 2}}
-            'CONNECT_PROPOSE'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'intent' ([int]$ins.line);$value=Pop-AriaRuntime $stack "CONNECT_PROPOSE line $($ins.line)";Assert-AriaRuntimeType 'Text' $value "connection proposal line $($ins.line)";$text=[string]$value;$state.phase='proposal';Add-AriaConnectionEvent $Context $name 'proposal' ([int]$ins.line) $text;if(-not$Context.passThru-and(Get-Command Write-AriaTreeStage -ErrorAction SilentlyContinue)){Write-AriaTreeStage -Name 'agent proposal' -State Info -Detail $text -Depth 2}}
-            'CONNECT_CONSENT'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'proposal' ([int]$ins.line);$value=Pop-AriaRuntime $stack "CONNECT_CONSENT line $($ins.line)";Assert-AriaRuntimeType 'Bool' $value "connection consent line $($ins.line)";$approved=[bool]$value;$state.phase='consent';$state.approved=$approved;Add-AriaConnectionEvent $Context $name 'consent' ([int]$ins.line) '' $approved;if(-not$Context.passThru-and(Get-Command Write-AriaTreeStage -ErrorAction SilentlyContinue)){Write-AriaTreeStage -Name 'operator consent' -State $(if($approved){'Pass'}else{'Reject'}) -Detail $(if($approved){'explicit approval'}else{'withheld safely'}) -Depth 2}}
-            'CONNECT_CLOSE'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'consent' ([int]$ins.line);$approved=[bool]$state.approved;$state.phase='closed';Add-AriaConnectionEvent $Context $name 'closed' ([int]$ins.line) '' $approved;if(-not$Context.passThru-and(Get-Command Write-AriaTreeStage -ErrorAction SilentlyContinue)){Write-AriaTreeStage -Name ("connection {0}"-f$name) -State Pass -Detail $(if($approved){'closed · consent recorded'}else{'closed · no authority granted'}) -Depth 1}}
+            'AGENT_DISPATCH'{
+                Assert-AriaRuntimeEffect $Context.policy 'agent.dispatch'
+                $agent=[string]$ins.agent
+                if(-not$Context.agentMap.ContainsKey($agent)){throw "ARIA VM unknown agent '$agent'."}
+                $task=[string](Pop-AriaRuntime $stack "AGENT_DISPATCH line $($ins.line)")
+                $legacy=[pscustomobject][ordered]@{kind='agent';state='pulse';agent=$agent;text=$task;line=[int]$ins.line}
+                Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $legacy -Domain agent -Phase dispatch -State ACTIVE -Energy delegation -Information $agent -Coherence 'task dispatched'
+            }
+            'CONNECT_OPEN'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'closed' ([int]$ins.line);$state.phase='open';$state.approved=$null;$definition=$Context.connectionMap[$name];Add-AriaConnectionEvent $Context $name 'open' ([int]$ins.line)}
+            'CONNECT_INTENT'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'open' ([int]$ins.line);$value=Pop-AriaRuntime $stack "CONNECT_INTENT line $($ins.line)";Assert-AriaRuntimeType 'Text' $value "connection intent line $($ins.line)";$text=[string]$value;$state.phase='intent';Add-AriaConnectionEvent $Context $name 'intent' ([int]$ins.line) $text}
+            'CONNECT_PROPOSE'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'intent' ([int]$ins.line);$value=Pop-AriaRuntime $stack "CONNECT_PROPOSE line $($ins.line)";Assert-AriaRuntimeType 'Text' $value "connection proposal line $($ins.line)";$text=[string]$value;$state.phase='proposal';Add-AriaConnectionEvent $Context $name 'proposal' ([int]$ins.line) $text}
+            'CONNECT_CONSENT'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'proposal' ([int]$ins.line);$value=Pop-AriaRuntime $stack "CONNECT_CONSENT line $($ins.line)";Assert-AriaRuntimeType 'Bool' $value "connection consent line $($ins.line)";$approved=[bool]$value;$state.phase='consent';$state.approved=$approved;Add-AriaConnectionEvent $Context $name 'consent' ([int]$ins.line) '' $approved}
+            'CONNECT_CLOSE'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'consent' ([int]$ins.line);$approved=[bool]$state.approved;$state.phase='closed';Add-AriaConnectionEvent $Context $name 'closed' ([int]$ins.line) '' $approved}
             'CALL'{$name=[string]$ins.name;if(-not $Context.functionMap.ContainsKey($name)){throw "ARIA VM unknown function '$name'."};$fn=$Context.functionMap[$name];$argCount=[int]$ins.argCount;if($argCount-eq0){[object[]]$args=@()}else{[object[]]$args=New-Object object[] $argCount};for($a=$args.Length-1;$a-ge0;$a--){$args[$a]=Pop-AriaRuntime $stack "CALL $name line $($ins.line)"};$fnScopes=New-AriaScopeStack;for($a=0;$a-lt$args.Length;$a++){$param=$fn.parameters[$a];Assert-AriaRuntimeType ([string]$param.type) $args[$a] "argument $($a+1) to $name";$fnScopes[0][[string]$param.name]=$args[$a]};$result=Invoke-AriaInstructionSequence @($fn.instructions) $Context $fnScopes @{} ($CallDepth+1);if($result.control-ne'return'){throw "ARIA function '$name' terminated without return."};Assert-AriaRuntimeType ([string]$fn.returnType) $result.value "return from $name";$stack.Push($result.value)}
             'IF'{$condition=Pop-AriaRuntime $stack "IF line $($ins.line)";Assert-AriaRuntimeType 'Bool' $condition "if line $($ins.line)";Add-AriaScope $Scopes;try{$branch=if([bool]$condition){@($ins.then)}else{@($ins.else)};$result=Invoke-AriaInstructionSequence $branch $Context $Scopes (Copy-AriaRuntimeTable $ActiveCapabilities) $CallDepth}finally{Remove-AriaScope $Scopes};if($result.control-ne'normal'){return $result}}
             'REPEAT'{$raw=Pop-AriaRuntime $stack "REPEAT line $($ins.line)";Assert-AriaRuntimeType 'Number' $raw "repeat line $($ins.line)";$count=[double]$raw;if($count-lt0-or$count-gt[int]$ins.max-or[math]::Floor($count)-ne$count){throw "ARIA repeat count must be an integer from 0 through $($ins.max) at source line $($ins.line)."};for($iteration=0;$iteration-lt[int]$count;$iteration++){Add-AriaScope $Scopes @{([string]$ins.iterator)=[long]$iteration};try{$result=Invoke-AriaInstructionSequence @($ins.body) $Context $Scopes (Copy-AriaRuntimeTable $ActiveCapabilities) $CallDepth}finally{Remove-AriaScope $Scopes};if($result.control-ne'normal'){return $result}}}

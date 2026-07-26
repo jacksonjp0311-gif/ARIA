@@ -1,6 +1,6 @@
 ﻿# ARIA Language Specification 0.4.0
 
-This document is normative for the ARIA `0.1.0-alpha.7` bootstrap implementation. Where prose and the machine-readable grammar disagree, `grammar/aria.ebnf`, `grammar/opcodes.json`, and the aggregate conformance suite define the executable contract for this alpha.
+This document is normative for the ARIA `0.1.0-alpha.8` bootstrap implementation. Where prose and the machine-readable grammar disagree, `grammar/aria.ebnf`, `grammar/opcodes.json`, and the aggregate conformance suite define the executable contract for this alpha.
 
 ## 1. Source form
 

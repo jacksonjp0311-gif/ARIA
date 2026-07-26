@@ -1,37 +1,40 @@
-# Signalflow alpha.14
+# Signalflow: projected operation receipts
 
-Signalflow turns buffering into a language-level signal contract.
-
-A buffered operation now has two visible stages:
+Signalflow turns buffered work into measured semantic evidence.
 
 ```text
-⚙◈ align     github.push ⟦········◈◈········⟧  1.8s
-◆ github.push │ 🜂 transport │ ∿ origin/main · 1984001 │ 🜄 remote identity verified
-└─ ∿ provider · aligned · 1842ms · 4281B · exit:0
+⧖ pending github.push · elapsed:1.8s
+◆ operation.complete · github.push · 1842ms · 4281B · exit:0
 ```
 
-The PASS frame states the verified outcome. The subordinate receipt states what happened to the signal:
+The pending frame states only that the process remains alive. The terminal
+receipt records:
 
-- authority membrane (`local`, `provider`, `verifier`, or `runtime`);
-- coherence (`aligned` or `fractured`);
-- elapsed transmission time;
-- buffered byte count;
-- terminal exit code.
+- operation identity and operation-local order;
+- authority membrane (`local`, `remote`, `verification`, or `runtime`);
+- measured duration;
+- stdout, stderr, and total byte counts;
+- terminal exit code;
+- heartbeat count;
+- completion or fracture;
+- cue, projection, previous-event, and event digests.
+
+Raw stdout and stderr are not copied into the event journal.
 
 ## Per-item activation
 
-`Invoke-AriaBufferedItem` applies Bufferflow to one logical item.
-
-`Invoke-AriaBufferedSequence` applies it independently to every item in a sequence. Each item receives its own animation, completion geometry, and signal receipt. No aggregate operation may hide which child item was buffering.
+`Invoke-AriaBufferedItem` applies the same contract to one logical item.
+`Invoke-AriaBufferedSequence` starts a distinct event operation for every item,
+so aggregate work cannot hide child identity or outcome.
 
 ## Signal theory
 
-ARIA treats a buffered operation as a causal signal:
-
 ```text
-source → mesh → transmit → align → verify → receipt
+source → pending while live → measured receipt
 ```
 
-The receipt is not decorative logging. It is typed feedback describing signal duration, volume, authority boundary, terminal status, and coherence.
+No timed carousel may insert unobserved semantic phases. A richer producer can
+emit explicit events, but rendering remains a projection of those events.
 
-CI and redirected output suppress moving animation, but receipts remain deterministic text so automation still receives transmission feedback.
+CI and reduced-motion profiles suppress temporal frames while retaining
+deterministic text and machine records.

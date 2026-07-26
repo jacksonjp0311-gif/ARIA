@@ -7,8 +7,8 @@ machines:
 S_t → (G_t, M_t, R_t, E_t)
 ```
 
-The four outputs are carried by `aria.semantic-projection/1` inside
-`aria.event` version 2:
+The four outputs are carried by `aria.semantic-projection/1`, introduced inside
+`aria.event` version 2 and retained by hash-chained version 3:
 
 - `G_t` — a stable glyph, label, and color role;
 - `M_t` — a motion and rhythm contract triggered by a recorded transition;
@@ -119,6 +119,6 @@ interpretation, manufacture verification evidence, or override policy.
 ## Next bounded evolution
 
 Semantic Projection Core closes the human/machine representation gap at the
-event layer. The next language evolution can return to Verified Map, now
-renumbered alpha.7, with its execution evidence expressed through these shared
-cues.
+event layer. Signal Integrity Closure alpha.6.1 then applies it to chained
+history, truthful waiting, VM events, and governance output before Verified Map
+alpha.7.

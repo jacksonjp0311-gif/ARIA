@@ -11,7 +11,12 @@
     "interpretation": { "$ref": "intent-interpretation.schema.json" },
     "approval": { "$ref": "intent-approval.schema.json" },
     "challenges": { "type": "array", "items": { "$ref": "intent-challenge.schema.json" } },
-    "program": { "$ref": "intent-program-summary.schema.json" },
+    "program": {
+      "oneOf": [
+        { "$ref": "intent-program-summary.schema.json" },
+        { "$ref": "intent-program-summary-v1.schema.json" }
+      ]
+    },
     "evidence": { "type": "array", "items": { "$ref": "intent-evidence.schema.json" } },
     "verificationPolicy": {
       "type": "object",

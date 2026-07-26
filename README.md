@@ -33,16 +33,17 @@ brutally rigorous underneath
 
 | Layer | State |
 |---|---|
-| Compiler | `0.1.0-alpha.5` |
+| Compiler | `0.1.0-alpha.6` |
 | Language specification | `0.4.0` |
-| Source Core | `alpha.22` · `aria.source-ir/0.7` |
-| Conformance | `192/192` deterministic gates |
+| Source Core | bounded sequences + glyph composition + whole-program effect proofs |
+| Conformance | `276/276` deterministic gates across seven lattices |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
 | Graph substrate | Transactional execution + deterministic replay |
 | Evolution | Persistent plans + verified authorization + rollback proof |
 | Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
+| Effect verification | Entry flow + function call closure + independently reconstructed bytecode graph |
 | Event model | Typed Event Spine + append-only NDJSON ledger |
 | Operator UI | Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
@@ -109,7 +110,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ conformance lattice   PASS   192/192 · coherent
+◆ ALL LATTICES COHERENT PASS   276/276 gates
 ```
 
 ### Run an ordinary ARIA program
@@ -806,7 +807,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ conformance lattice PASS 192/192 · coherent
+◆ ALL LATTICES COHERENT PASS 276/276 gates
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
@@ -833,8 +834,12 @@ Start here:
 | `docs/33-source-language-core.md` | Ordinary pure Source Core language |
 | `docs/34-evolution-planning.md` | Persistent, non-mutating evolution planning |
 | `docs/35-evolution-verification.md` | Non-mutating capability and authorization verification |
-| docs/36-intent-verification.md | Intent artifacts, ambiguity gates, independent challenge and derived proofs |
-| docs/37-signal-subsets.md | Bounded transmission evidence, consent, retention and evolution inputs |
+| `docs/36-intent-verification.md` | Intent artifacts, ambiguity gates, independent challenge and derived proofs |
+| `docs/37-signal-subsets.md` | Bounded transmission evidence, consent, retention and evolution inputs |
+| `docs/41-aria-evolution-plan.md` | Canonical glyph-language evolution sequence |
+| `docs/42-sequence-core-alpha4.md` | Bounded immutable sequence values |
+| `docs/43-effect-purity-core-alpha5.md` | Deterministic effect graph and purity proofs |
+| `docs/44-integration-closure-alpha5-1.md` | Entry effects, artifact-derived intent authority and unified conformance |
 
 Earlier documents record the architectural evolution and remain useful context.
 

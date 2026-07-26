@@ -78,6 +78,13 @@ Evidence digests are identities, not a claim that ARIA generated the underlying
 test or semantic-diff report. Evidence producers remain part of the trusted
 computing base until attestation and proof adapters are added.
 
+Alpha.5.1 adds `aria.intent-program-summary/1.0`. The
+`New-AriaIntentProgramSummaryFromArtifact` constructor accepts verified
+container bytes and derives the artifact identity, admitted effect-graph
+identity, and requested effects from independently verified bytecode. These
+fields are no longer supplied by the producer. Behavioral outcomes and their
+evidence producers remain an explicit trust boundary.
+
 ### Derived proof
 
 `aria.intent-proof/0.9` is emitted by the deterministic verifier. It records:

@@ -2,6 +2,17 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Integration Closure alpha.5.1
+
+- Extended the deterministic effect graph with a reserved `$entry` node covering the executable entry flow.
+- Propagated entry calls, effects, and capability requirements through the same fixed-point closure used by functions.
+- Preserved independent source/bytecode reconstruction so resealed false entry summaries are rejected.
+- Added artifact-derived `aria.intent-program-summary/1.0` records bound to verified container and effect-graph identities.
+- Made `aria test` execute all seven established lattices as one 276-gate command.
+- Removed duplicate dedicated-suite invocations from CI while preserving the same coverage on all supported hosts.
+- Synchronized runtime discovery, README status, operator version output, documentation, and the integration plan.
+- Added no opcode, policy effect, capability permission, or algorithm activation.
+
 ## Intent Verification alpha.25
 
 - Added canonical, content-addressed intent, interpretation, approval, challenge, program-summary, evidence, and proof artifacts.

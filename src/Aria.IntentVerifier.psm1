@@ -2,6 +2,12 @@ Set-StrictMode -Version Latest
 
 $typedCorePath=Join-Path $PSScriptRoot 'Aria.TypedCore.psm1'
 if(-not(Get-Module Aria.TypedCore)){Import-Module $typedCorePath -DisableNameChecking}
+$commonPath=Join-Path $PSScriptRoot 'Aria.Common.psm1'
+if(-not(Get-Module Aria.Common)){Import-Module $commonPath -DisableNameChecking}
+$effectsPath=Join-Path $PSScriptRoot 'Aria.Effects.psm1'
+if(-not(Get-Module Aria.Effects)){Import-Module $effectsPath -DisableNameChecking}
+$bytecodePath=Join-Path $PSScriptRoot 'Aria.Bytecode.psm1'
+if(-not(Get-Module Aria.Bytecode)){Import-Module $bytecodePath -DisableNameChecking}
 $intentPath=Join-Path $PSScriptRoot 'Aria.Intent.psm1'
 if(-not(Get-Module Aria.Intent)){Import-Module $intentPath -DisableNameChecking}
 
@@ -63,9 +69,13 @@ function New-AriaIntentProgramSummary {
 function Test-AriaIntentProgramSummary {
     [CmdletBinding()]
     param([Parameter(Mandatory=$true)]$Program)
-    $identity=Test-AriaIntentVerifierIdentity $Program 'aria.intent-program-summary/0.9' @(
-        'artifactId','requestedEffects','outcomes','observedForbiddenOutcomes'
-    ) 'E_INTENT_PROGRAM'
+    $schema=[string](Get-AriaIntentVerifierProperty $Program 'schema')
+    $fields=@('artifactId','requestedEffects','outcomes','observedForbiddenOutcomes')
+    if($schema-ceq'aria.intent-program-summary/1.0'){
+        $fields=@('artifactId','effectGraphId','requestedEffects','outcomes','observedForbiddenOutcomes')
+    }
+    $expectedSchema=$(if($schema-ceq'aria.intent-program-summary/1.0'){'aria.intent-program-summary/1.0'}else{'aria.intent-program-summary/0.9'})
+    $identity=Test-AriaIntentVerifierIdentity $Program $expectedSchema $fields 'E_INTENT_PROGRAM'
     $errors=New-Object 'System.Collections.Generic.List[object]'
     foreach($error in @($identity.errors)){[void]$errors.Add($error)}
     if([string]::IsNullOrWhiteSpace([string](Get-AriaIntentVerifierProperty $Program 'artifactId'))){
@@ -83,7 +93,49 @@ function Test-AriaIntentProgramSummary {
         }
         else{$ids[$id]=$true}
     }
+    if($schema-ceq'aria.intent-program-summary/1.0'){
+        if([string](Get-AriaIntentVerifierProperty $Program 'artifactId')-notmatch'^sha256:[0-9a-f]{64}$'){
+            [void]$errors.Add((New-AriaStructuredError -Code 'E_INTENT_PROGRAM_ARTIFACT' -Message 'Derived program summary requires a SHA-256 artifact identity.' -Path '$.artifactId'))
+        }
+        if([string](Get-AriaIntentVerifierProperty $Program 'effectGraphId')-notmatch'^sha256:[0-9a-f]{64}$'){
+            [void]$errors.Add((New-AriaStructuredError -Code 'E_INTENT_PROGRAM_EFFECT_GRAPH' -Message 'Derived program summary requires a verified effect-graph identity.' -Path '$.effectGraphId'))
+        }
+    }
     [pscustomobject][ordered]@{valid=($errors.Count-eq0);errors=@($errors.ToArray());expectedId=$identity.expectedId}
+}
+
+function New-AriaIntentProgramSummaryFromArtifact {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][byte[]]$ArtifactBytes,
+        [object[]]$Outcomes=@(),
+        [string[]]$ObservedForbiddenOutcomes=@()
+    )
+
+    $container=Read-AriaContainerBytes -Bytes $ArtifactBytes
+    $verification=Test-AriaBytecodeModel -BytecodeModel $container.bytecode
+    if(-not[bool]$verification.valid){
+        throw ('Intent program derivation rejected bytecode: '+(@($verification.errors)-join'; '))
+    }
+    $effectValidation=Test-AriaEffectGraph -Graph $container.bytecode.effectGraph
+    if(-not[bool]$effectValidation.valid){
+        throw ('Intent program derivation rejected effect graph: '+(@($effectValidation.errors)-join'; '))
+    }
+
+    $effects=New-Object 'System.Collections.Generic.List[string]'
+    foreach($summary in @($container.bytecode.effectGraph.functions)){
+        foreach($effect in @($summary.transitiveEffects)){[void]$effects.Add([string]$effect)}
+    }
+
+    New-AriaIntentVerifierArtifact 'aria.intent-program-summary/1.0' ([ordered]@{
+        artifactId="sha256:$(Get-AriaSha256Bytes -Bytes $ArtifactBytes)"
+        effectGraphId=[string]$container.bytecode.effectGraph.digest
+        requestedEffects=@(
+            Sort-AriaEffectStringsOrdinal @($effects.ToArray())
+        )
+        outcomes=@($Outcomes|Sort-Object id)
+        observedForbiddenOutcomes=@($ObservedForbiddenOutcomes|Sort-Object -Unique)
+    })
 }
 
 function New-AriaIntentEvidence {
@@ -282,6 +334,7 @@ function Invoke-AriaIntentVerificationFile {
 
 Export-ModuleMember -Function `
     New-AriaIntentProgramSummary, `
+    New-AriaIntentProgramSummaryFromArtifact, `
     Test-AriaIntentProgramSummary, `
     New-AriaIntentEvidence, `
     Test-AriaIntentEvidence, `

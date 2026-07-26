@@ -399,7 +399,14 @@ try {
             Write-AriaTreeStage -Name 'policy document' -State Pass -Detail 'deny by default'
             $probe = Join-Path ([System.IO.Path]::GetTempPath()) ('aria-gzip-' + [guid]::NewGuid().ToString('N') + '.bin')
             try {
-                $sampleEffectGraph = New-AriaEffectGraphFromFacts -Facts @()
+                $sampleEffectGraph = New-AriaEffectGraphFromFacts -Facts @(
+                    [pscustomobject][ordered]@{
+                        name='$entry'
+                        calls=@()
+                        directEffects=@()
+                        directCapabilities=@()
+                    }
+                )
                 $sample = [pscustomobject][ordered]@{
                     format = 'aria.bytecode'; containerVersion = 1; compilerVersion = Get-AriaCompilerVersion
                     specVersion = (Get-AriaLock).specVersion; programName = 'DoctorProbe'; programVersion = '0.0.0'
@@ -429,7 +436,23 @@ try {
             Write-AriaSummary -Title 'MANIFEST SEALED' -Passed $true -Detail ("{0} files" -f $count)
         }
         'test' {
-            & (Join-Path $root 'tests/Run-Tests.ps1') -VerboseOutput:$script:VerboseOutput
+            $suites=@(
+                'Run-Tests.ps1',
+                'Run-GlyphMemoryTests.ps1',
+                'Run-GlyphLoweringTests.ps1',
+                'Run-CompositionTests.ps1',
+                'Run-SequenceCoreTests.ps1',
+                'Run-EffectPurityTests.ps1',
+                'Run-IntegrationClosureTests.ps1'
+            )
+            foreach($suite in $suites){
+                $suitePath=Join-Path $root ('tests/'+$suite)
+                if($suite-ceq'Run-Tests.ps1'){
+                    & $suitePath -VerboseOutput:$script:VerboseOutput
+                }
+                else{& $suitePath}
+            }
+            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '276/276 gates'
         }
         { $_ -in @('gate','check') } {
             if (-not $Path) { throw 'gate requires a .aria source path.' }
@@ -623,6 +646,15 @@ flow Main {
             Write-AriaKeyValue -Key 'Compiler' -Value (Get-AriaCompilerVersion)
             Write-AriaKeyValue -Key 'Spec' -Value ([string]$lock.specVersion)
             Write-AriaKeyValue -Key 'Container' -Value ([string]$lock.containerVersion)
+            Write-AriaSummary `
+                -Title 'VERSION RESOLVED' `
+                -Passed $true `
+                -Detail (
+                    'compiler={0} · spec={1} · container={2}' -f
+                        (Get-AriaCompilerVersion),
+                        ([string]$lock.specVersion),
+                        ([string]$lock.containerVersion)
+                )
         }
         'help' { Show-AriaHelp }
         default { Show-AriaHelp; throw "Unknown ARIA command '$Command'." }

@@ -16,7 +16,7 @@ A healthy baseline must report:
 
 - repository manifest integrity
 - `SYSTEM READY`
-- full conformance with zero failures
+- `276/276` aggregate conformance with zero failures
 
 ## Authoritative entrypoints
 
@@ -29,6 +29,8 @@ A healthy baseline must report:
 - `src/Aria.Bytecode.psm1` — bytecode and container
 - `src/Aria.VM.psm1` — local virtual machine
 - `src/Aria.SourceCore.psm1` — source-language core
+- `src/Aria.Effects.psm1` — whole-program effect graph and purity proof
+- `src/Aria.IntentVerifier.psm1` — intent obligations and artifact-derived program summaries
 - `grammar/alchemy.json` — executable triadic glyph syntax
 - `tests/Run-Tests.ps1` — conformance lattice
 
@@ -42,10 +44,12 @@ Every evolution must:
 2. preserve the preceding stable tag;
 3. update repository-native implementation, documentation, tests, and manifest;
 4. run `.\aria.cmd doctor -Strict`;
-5. run `.\aria.cmd test`;
+5. run `.\aria.cmd test` across every registered lattice;
 6. require zero failed gates before commit or push.
 
-The protected baseline is `aria-alpha21-stable`.
+The protected bootstrap baseline is `aria-alpha21-stable`. Current release and
+language-evolution identities are resolved through `ARIA-RUNTIME.json`,
+`VERSION`, and `aria.lock.json`.
 ## Alchemical glyph syntax
 
 The first executable triad lowers into existing verified operations:

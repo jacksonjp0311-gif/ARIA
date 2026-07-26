@@ -449,7 +449,7 @@ function New-AriaEffectGraphFromFacts {
 
     $graph = [pscustomobject][ordered]@{
         format = 'aria.effect-graph'
-        version = 1
+        version = 2
         functions = $summaries.ToArray()
         digest = ''
     }
@@ -464,6 +464,35 @@ function Get-AriaSourceEffectGraph {
     )
 
     $facts = New-Object System.Collections.Generic.List[object]
+
+    $entryFlow = @(
+        @($Model.flows) |
+            Where-Object { [string]$_.name -eq [string]$Model.entry }
+    ) | Select-Object -First 1
+
+    $entryCalls = @{}
+    $entryEffects = @{}
+    $entryCapabilities = @{}
+    if ($null -ne $entryFlow) {
+        Add-AriaSourceStatementEffectFacts `
+            -Statements @($entryFlow.statements) `
+            -Calls $entryCalls `
+            -Effects $entryEffects `
+            -Capabilities $entryCapabilities
+    }
+
+    $facts.Add(
+        [pscustomobject][ordered]@{
+            name = '$entry'
+            calls = @(Sort-AriaEffectStringsOrdinal @($entryCalls.Keys))
+            directEffects = @(
+                Sort-AriaEffectStringsOrdinal @($entryEffects.Keys)
+            )
+            directCapabilities = @(
+                Sort-AriaEffectStringsOrdinal @($entryCapabilities.Keys)
+            )
+        }
+    )
 
     foreach ($function in @($Model.functions)) {
         $calls = @{}
@@ -497,6 +526,28 @@ function Get-AriaBytecodeEffectGraph {
     param([Parameter(Mandatory=$true)]$BytecodeModel)
 
     $facts = New-Object System.Collections.Generic.List[object]
+
+    $entryCalls = @{}
+    $entryEffects = @{}
+    $entryCapabilities = @{}
+    Add-AriaBytecodeInstructionEffectFacts `
+        -Instructions @($BytecodeModel.instructions) `
+        -Calls $entryCalls `
+        -Effects $entryEffects `
+        -Capabilities $entryCapabilities
+
+    $facts.Add(
+        [pscustomobject][ordered]@{
+            name = '$entry'
+            calls = @(Sort-AriaEffectStringsOrdinal @($entryCalls.Keys))
+            directEffects = @(
+                Sort-AriaEffectStringsOrdinal @($entryEffects.Keys)
+            )
+            directCapabilities = @(
+                Sort-AriaEffectStringsOrdinal @($entryCapabilities.Keys)
+            )
+        }
+    )
 
     foreach ($function in @($BytecodeModel.functions)) {
         $calls = @{}
@@ -554,7 +605,7 @@ function Test-AriaEffectGraph {
     if ([string](Get-AriaEffectProperty $Graph 'format') -ne 'aria.effect-graph') {
         $errors.Add('E_EFFECT_GRAPH_FORMAT')
     }
-    if ([int](Get-AriaEffectProperty $Graph 'version') -ne 1) {
+    if ([int](Get-AriaEffectProperty $Graph 'version') -ne 2) {
         $errors.Add('E_EFFECT_GRAPH_VERSION')
     }
 
@@ -563,7 +614,10 @@ function Test-AriaEffectGraph {
 
     foreach ($summary in @(Get-AriaEffectProperty $Graph 'functions')) {
         $name = [string](Get-AriaEffectProperty $summary 'name')
-        if ($name -notmatch '^[A-Za-z_][A-Za-z0-9_.]*$') {
+        if (
+            $name -ne '$entry' -and
+            $name -notmatch '^[A-Za-z_][A-Za-z0-9_.]*$'
+        ) {
             $errors.Add('E_EFFECT_SUMMARY_NAME')
         }
         if ($names.ContainsKey($name)) {

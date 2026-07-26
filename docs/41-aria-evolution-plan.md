@@ -848,3 +848,6 @@ verified layers beneath it.
   algorithm lattices pass.
 - The next bounded evolution after alpha.5 remote attestation is Verified Map
   alpha.6.
+- Integration Closure alpha.5.1 completes entry-flow effect coverage, derives
+  intent authority from admitted artifacts, unifies all local lattices, and
+  synchronizes release discovery before Verified Map alpha.6.

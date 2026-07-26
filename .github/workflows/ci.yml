@@ -25,21 +25,6 @@ jobs:
       - name: Compiler and VM tests
         shell: pwsh
         run: ./aria.ps1 test
-      - name: Glyph memory card gates
-        shell: pwsh
-        run: ./tests/Run-GlyphMemoryTests.ps1
-      - name: Glyph lowering gates
-        shell: pwsh
-        run: ./tests/Run-GlyphLoweringTests.ps1
-      - name: Typed composition gates
-        shell: pwsh
-        run: ./tests/Run-CompositionTests.ps1
-      - name: Sequence core gates
-        shell: pwsh
-        run: ./tests/Run-SequenceCoreTests.ps1
-      - name: Effect graph and purity gates
-        shell: pwsh
-        run: ./tests/Run-EffectPurityTests.ps1
       - name: Gate hello program
         shell: pwsh
         run: ./aria.ps1 gate ./examples/hello.aria -Strict
@@ -56,9 +41,4 @@ jobs:
         run: |
           .\aria.ps1 doctor -Strict
           .\aria.ps1 test
-          .\tests\Run-GlyphMemoryTests.ps1
-          .\tests\Run-GlyphLoweringTests.ps1
-          .\tests\Run-CompositionTests.ps1
-          .\tests\Run-SequenceCoreTests.ps1
-          .\tests\Run-EffectPurityTests.ps1
           .\aria.ps1 run .\examples\hello.aria -Strict

@@ -33,6 +33,12 @@ Each function receives an `aria.function-effect-summary` containing:
 The program receives an `aria.effect-graph` containing all summaries in ordinal
 function-name order and a graph digest.
 
+Integration Closure alpha.5.1 adds the reserved `$entry` summary to this graph.
+It is derived from the executable entry flow and participates in transitive call
+closure, so the operator view now represents whole-program effects rather than
+named functions alone. This advances `aria.effect-graph` to version 2; function
+summary records remain version 1.
+
 ## Effect roots
 
 The alpha.5 analyzer recognizes the established runtime effects:

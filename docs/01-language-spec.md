@@ -1,6 +1,6 @@
 ﻿# ARIA Language Specification 0.4.0
 
-This document is normative for the ARIA `0.1.0-alpha.5` bootstrap implementation. Where prose and the machine-readable grammar disagree, `grammar/aria.ebnf`, `grammar/opcodes.json`, and the conformance suite define the executable contract for this alpha.
+This document is normative for the ARIA `0.1.0-alpha.6` bootstrap implementation. Where prose and the machine-readable grammar disagree, `grammar/aria.ebnf`, `grammar/opcodes.json`, and the aggregate conformance suite define the executable contract for this alpha.
 
 ## 1. Source form
 
@@ -31,6 +31,15 @@ The bootstrap scalar types are:
 
 `Any` is assignable to and from all bootstrap scalar types. Narrow types should be preferred because the compiler, bytecode verifier, and VM independently enforce them.
 
+### 2.1 Bounded immutable sequences
+
+`Sequence<Text>`, `Sequence<Number>`, `Sequence<Bool>`, and
+`Sequence<Null>` are flat immutable structured values. Literals must be
+homogeneous, preserve authored order, and remain within the element and encoded
+byte ceilings in `aria.lock.json`. Empty literals require an explicit concrete
+sequence type. Nested sequences, mutation, implicit coercion, and algorithm
+execution are not part of this release.
+
 ## 3. Expressions
 
 Expressions support literals, identifiers, function calls, parentheses, unary operators, and binary operators. Precedence from strongest to weakest is:
@@ -43,6 +52,10 @@ Expressions support literals, identifiers, function calls, parentheses, unary op
 6. `==`, `!=`;
 7. `and`;
 8. `or`.
+
+The verified call glyph `▷` is an alias for ordinary function invocation, `↩`
+is an alias for `return`, and `≫` lowers a left-to-right unary pipeline into
+nested ordinary calls. These glyphs add no opcode or authority.
 
 `+` accepts `Number + Number` or `Text + Text`. Ordering operators require numbers. Boolean operators require booleans. Equality requires compatible types. Function arguments evaluate left to right.
 
@@ -210,3 +223,13 @@ If an entry flow omits a final `halt`, the compiler appends one deterministicall
 ## 14. Required rejection behavior
 
 A conforming implementation must reject malformed syntax, duplicate declarations, unresolved symbols, invalid glyph aliases, incompatible types, unsafe repeat bounds, missing returns, unverified bytecode, policy-denied effects, unauthorized paths, incompatible locked versions, corrupted containers, and persisted memory that violates its declared type.
+
+## 15. Whole-program effect proof
+
+Every admitted artifact contains `aria.effect-graph` version 2. The reserved
+`$entry` summary covers the executable entry flow; named summaries cover
+functions. Direct calls, effects, and capability requirements are closed
+transitively through a bounded fixed-point calculation. The bytecode verifier
+independently reconstructs the complete graph from instructions and rejects
+metadata drift. Purity is derived from empty transitive effect and capability
+sets and cannot be asserted by source text.

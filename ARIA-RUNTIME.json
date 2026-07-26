@@ -1,7 +1,8 @@
 {
     "schema":  "aria.runtime/1",
-    "release":  "alpha.21",
-    "status":  "stable",
+    "release":  "0.1.0-alpha.6",
+    "languageEvolution":  "integration-closure-alpha.5.1",
+    "status":  "experimental",
     "repository":  {
                        "name":  "ARIA",
                        "root":  ".",
@@ -23,10 +24,13 @@
                          "sourceCore":  "src/Aria.SourceCore.psm1",
                          "alchemicalSyntax":  "grammar/alchemy.json",
                          "evolutionApplication":  "src/Aria.EvolutionApply.psm1",
-                         "signalSubset":  "src/Aria.SignalSubset.psm1"
+                         "signalSubset":  "src/Aria.SignalSubset.psm1",
+                         "effectGraph":  "src/Aria.Effects.psm1",
+                         "intentVerifier":  "src/Aria.IntentVerifier.psm1",
+                         "glyphMemory":  "src/Aria.GlyphMemory.psm1"
                      },
     "continuity":  {
                        "stableTag":  "aria-alpha21-stable",
-                       "rule":  "Every evolution must preserve doctor, conformance, manifest integrity, documentation, and machine discovery."
+                       "rule":  "Every evolution must preserve doctor, all conformance lattices, manifest integrity, documentation, and machine discovery."
                    }
 }

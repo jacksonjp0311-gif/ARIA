@@ -303,6 +303,56 @@ function Get-AriaExpressionType {
                 $type = $sequenceType
             }
         }
+        'reduce' {
+            $sequenceType = Get-AriaExpressionType $Expression.sequence $Scopes $Functions $Diagnostics $Line
+            $accumulatorType = Get-AriaExpressionType $Expression.initial $Scopes $Functions $Diagnostics $Line
+            $reducerName = [string]$Expression.reducer
+            $elementType = Get-AriaSequenceElementType -Type $sequenceType
+
+            try {
+                $reduceCard = Get-AriaGlyphCard -Id 'algorithm.reduce'
+                if ([string]$reduceCard.status -ne 'verified') {
+                    Add-AriaTypeDiagnostic $Diagnostics 'ARIA2140' 'The algorithm.reduce glyph card is not verified.' $Line
+                }
+            }
+            catch {
+                Add-AriaTypeDiagnostic $Diagnostics 'ARIA2140' 'The algorithm.reduce glyph card is unavailable or invalid.' $Line
+            }
+
+            if (-not (Test-AriaDeclaredTypeName -Type $sequenceType) -or -not $elementType) {
+                Add-AriaTypeDiagnostic $Diagnostics 'ARIA2141' "Reduce requires Sequence<T>, received $sequenceType." $Line
+                $type = 'Any'
+            }
+            elseif (-not $Functions.ContainsKey($reducerName)) {
+                Add-AriaTypeDiagnostic $Diagnostics 'ARIA2142' "Reduce references unknown reducer '$reducerName'." $Line
+                $type = 'Any'
+            }
+            else {
+                $reducer = $Functions[$reducerName]
+                $parameters = @($reducer.parameters)
+                if ($parameters.Count -ne 2) {
+                    Add-AriaTypeDiagnostic $Diagnostics 'ARIA2143' "Reduce reducer '$reducerName' must have exactly two parameters." $Line
+                }
+                else {
+                    if ([string]$parameters[0].type -ne $accumulatorType) {
+                        Add-AriaTypeDiagnostic $Diagnostics 'ARIA2144' "Reduce reducer '$reducerName' accumulator parameter expects $($parameters[0].type), initial value provides $accumulatorType." $Line
+                    }
+                    if ([string]$parameters[1].type -ne $elementType) {
+                        Add-AriaTypeDiagnostic $Diagnostics 'ARIA2145' "Reduce reducer '$reducerName' element parameter expects $($parameters[1].type), sequence provides $elementType." $Line
+                    }
+                }
+
+                if ([string]$reducer.returnType -ne $accumulatorType) {
+                    Add-AriaTypeDiagnostic $Diagnostics 'ARIA2146' "Reduce reducer '$reducerName' must return accumulator type $accumulatorType, received $($reducer.returnType)." $Line
+                }
+
+                $summary = $reducer.PSObject.Properties['effectSummary']
+                if ($null -eq $summary -or [string]$summary.Value.purity -ne 'pure') {
+                    Add-AriaTypeDiagnostic $Diagnostics 'ARIA2147' "Reduce reducer '$reducerName' must have a verified pure effect summary." $Line
+                }
+                $type = $accumulatorType
+            }
+        }
         'unary'{$operand=Get-AriaExpressionType $Expression.operand $Scopes $Functions $Diagnostics $Line;if($Expression.operator-eq'not'){if(-not(Test-AriaTypeAssignable 'Bool' $operand)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2064' "Operator 'not' requires Bool, received $operand." $Line};$type='Bool'}else{if(-not(Test-AriaTypeAssignable 'Number' $operand)){Add-AriaTypeDiagnostic $Diagnostics 'ARIA2065' "Unary '-' requires Number, received $operand." $Line};$type='Number'}}
         'binary'{
             $left=Get-AriaExpressionType $Expression.left $Scopes $Functions $Diagnostics $Line;$right=Get-AriaExpressionType $Expression.right $Scopes $Functions $Diagnostics $Line;$op=[string]$Expression.operator

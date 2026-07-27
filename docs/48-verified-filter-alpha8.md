@@ -92,13 +92,14 @@ The dedicated 24-gate lattice proves:
 - deterministic compilation and execution;
 - explicit composition with Verified Map;
 - no capability or policy expansion;
-- continued inactivity of `algorithm.reduce`.
+- the alpha.8 boundary where `algorithm.reduce` was still inactive.
 
-Aggregate conformance is `368/368`.
+Aggregate conformance at alpha.8 was `368/368`; the current baseline is
+recorded in `AGENTS.md`.
 
 ## Next boundary
 
-Verified Reduce alpha.9 is next. It must use an explicit initial accumulator,
-an exact pure binary reducer, deterministic left-fold order, accumulator type
-continuity, and bounded value-free evidence. Filter does not pre-authorize any
-of those semantics.
+Verified Reduce alpha.9 subsequently admitted the explicit initial
+accumulator, exact pure binary reducer, deterministic left-fold order,
+accumulator continuity, and bounded value-free evidence described in
+`docs/49-verified-reduce-alpha9.md`.

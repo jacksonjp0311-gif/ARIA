@@ -2,6 +2,18 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Verified Reduce alpha.9
+
+- Governed implementation through an executable ARIA plan plus a content-addressed intent, interpretation, human approval, independent challenge, and derived satisfied proof.
+- Activated `Σ(sequence, Reducer, initial)` with exact `(A,T) → A` continuity and deterministic left-fold order.
+- Added explicit independently verified `REDUCE` bytecode without adding capability or policy authority.
+- Proved empty, single, cross-type accumulator, non-associative order, fracture, determinism, and full Map-Filter-Reduce composition.
+- Preserved value privacy by excluding elements, initial values, and accumulators from Event Spine evidence.
+- Cached the verified semantic-cue registry and removed duplicate verification of internally constructed events.
+- Added exact hash-chained event batching in 32-record chunks with replay and tamper-rejection coverage.
+- Reduced the persistent 256-element benchmark from about 79 seconds to about 17 seconds while retaining and replaying all 258 events.
+- Added a 27-gate Verified Reduce lattice, expanded Signal Integrity to 27 gates, and raised aggregate conformance to `396/396`.
+
 ## Verified Filter alpha.8
 
 - Activated the sealed `⫰ algorithm.filter` card as ARIA's second sequence algorithm.

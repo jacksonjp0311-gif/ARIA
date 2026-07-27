@@ -15,7 +15,7 @@ ARIA 0.4.0 lowers typed source into structured stack bytecode. The bytecode is i
 | Filesystem | `FS_READ`, `FS_WRITE` | Perform policy-gated, workspace-confined text I/O. |
 | Agents | `AGENT_DISPATCH` | Emit a deterministic agent task event. |
 | Functions | `CALL`, `RETURN` | Enter a typed local frame and return exactly one scalar result, including `Null`. |
-| Pure sequence algorithms | `MAP`, `FILTER` | Apply a compile-time unary pure transform or select through a compile-time unary pure Boolean predicate. |
+| Pure sequence algorithms | `MAP`, `FILTER`, `REDUCE` | Transform, stably select, or left-fold a bounded sequence through compile-time pure functions. |
 | Structured control | `IF`, `REPEAT` | Execute nested verified instruction sequences without arbitrary jump offsets. |
 | Termination | `HALT` | Stop the entry flow. |
 
@@ -37,6 +37,7 @@ The verifier checks:
 - function argument counts and return contracts;
 - `MAP` transform identity, unary arity, purity, and exact sequence element contracts;
 - `FILTER` predicate identity, unary arity, purity, exact input type, and exact `Bool` return;
+- `REDUCE` reducer identity, binary arity, `(A,T) → A` continuity, left-fold operand order, and purity;
 - lexical variable definitions;
 - memory, capability, function, and agent references;
 - capability activation before host effects;
@@ -54,6 +55,11 @@ through the existing sequence validator and resource ceilings.
 the instruction. The VM invokes the verified predicate once per element in
 source order, retains only elements whose result is `true`, and constructs a
 fresh result through the same sequence ceilings.
+
+`REDUCE` stores the reducer identity, sequence type, and accumulator type. It
+pops the explicit initial accumulator and sequence, invokes the verified
+reducer as `(accumulator, element)` in source order, and pushes exactly one
+value of the unchanged accumulator type.
 
 ## Binary envelope
 

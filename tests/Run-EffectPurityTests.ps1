@@ -319,8 +319,7 @@ try {
         $registry = Read-AriaGlyphCardRegistry -Root $root
         foreach ($id in @('algorithm.map','algorithm.filter','algorithm.reduce')) {
             $card = Get-AriaGlyphCard -Id $id -Registry $registry
-            $expectedStatus = if ($id -in @('algorithm.map','algorithm.filter')) { 'verified' } else { 'specified' }
-            Assert-Equal $expectedStatus $card.status `
+            Assert-Equal 'verified' $card.status `
                 "Algorithm card '$id' has the wrong admission stage."
             Assert-True (
                 @($card.tests | Where-Object { [string]$_ -match 'effect graph' }).Count -ge 1
@@ -329,7 +328,7 @@ try {
     }
 
     Test-EffectCase 'effect core expands neither opcode nor policy authority' {
-        Assert-Equal 39 (Get-AriaOpcodeRegistry).Count `
+        Assert-Equal 40 (Get-AriaOpcodeRegistry).Count `
             'Effect core changed the opcode registry.'
         Assert-Equal @(
             'agent.dispatch','console.emit','fs.read','fs.write',

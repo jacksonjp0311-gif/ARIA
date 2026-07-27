@@ -1,6 +1,6 @@
 {
   "format": "aria.opcode-registry",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "opcodes": [
     {
       "id": "PUSH_CONST",
@@ -179,6 +179,12 @@
     {
       "id": "FILTER",
       "pops": 1,
+      "pushes": 1,
+      "effect": "pure"
+    },
+    {
+      "id": "REDUCE",
+      "pops": 2,
       "pushes": 1,
       "effect": "pure"
     },

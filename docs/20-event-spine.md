@@ -35,6 +35,18 @@ bytes plus the verified tail identity to remain unchanged. This lets iterable
 language operations record bounded per-iteration events without reparsing the
 complete history for each append.
 
+Verified iterable operations persist constructed events in bounded 32-record
+chunks. Each chunk takes one exclusive append lock, checks the exact prior
+ledger-byte identity and verified tail, verifies sequence and previous-digest
+continuity for every record, writes once, and updates the cached byte identity.
+Publicly supplied events still cross the complete event verifier. Events
+constructed and sealed inside Event Spine avoid a redundant second digest
+verification before publication.
+
+The content-addressed semantic-cue registry is fully verified once per module
+process and then reused as that exact in-memory identity. Passing an explicit
+registry to projection APIs continues to trigger full validation.
+
 ## Authority boundary
 
 Events describe what happened. They do not grant authority. Policy and bytecode verification remain independent execution gates.

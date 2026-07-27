@@ -329,11 +329,11 @@ try {
         Assert-Equal 1 @($result.events | Where-Object { $_.kind -eq 'filter' -and $_.state -eq 'complete' }).Count 'Filter boundary missing.'
     }
     Test-FilterCase 'filter adds computation but no authority' {
-        Assert-Equal 39 (Get-AriaOpcodeRegistry).Count 'FILTER opcode registry count mismatch.'
+        Assert-Equal 40 (Get-AriaOpcodeRegistry).Count 'Algorithm opcode registry count mismatch.'
         Assert-Equal 0 @($validGate.bytecode.capabilities).Count 'Filter introduced a capability.'
         $registry = Read-AriaGlyphCardRegistry -Root $root
         Assert-Equal 'verified' (Get-AriaGlyphCard -Id 'algorithm.map' -Registry $registry).status 'Map regressed.'
-        Assert-Equal 'specified' (Get-AriaGlyphCard -Id 'algorithm.reduce' -Registry $registry).status 'Reduce activated early.'
+        Assert-Equal 'verified' (Get-AriaGlyphCard -Id 'algorithm.reduce' -Registry $registry).status 'Reduce was not admitted.'
     }
 
     if (($script:Passed + $script:Failed) -ne $script:Expected) {

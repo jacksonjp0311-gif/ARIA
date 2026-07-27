@@ -97,6 +97,7 @@ contract is explicitly proposed and admitted.
 | Typed Composition alpha.3 | Complete | `≫` lowers left-to-right into typed nested calls |
 | Verified Map alpha.7 | Complete | `⨯` applies a compile-time unary pure transform with measured iteration evidence |
 | Verified Filter alpha.8 | Complete | `⫰` performs stable typed selection with measured count evidence |
+| Verified Reduce alpha.9 | Complete | `Σ` performs an exact pure left fold from an explicit initial accumulator |
 | Core conformance | Complete | 202-test established language lattice |
 | Cross-platform attestation | Complete | Windows PowerShell 5.1, PowerShell 7 Windows, PowerShell 7 Linux |
 
@@ -108,11 +109,7 @@ Verified executable cards:
 ≫  composition.pipe
 ```
 
-Specified and inactive card after alpha.8:
-
-```text
-Σ  algorithm.reduce
-```
+All three bounded sequence-algorithm cards are verified after alpha.9.
 
 The present architecture proves this lifecycle:
 
@@ -863,8 +860,7 @@ verified layers beneath it.
   proof obligations, CI, and operator inspection.
 - `⨯ algorithm.map` is verified through its dedicated 22-gate lattice.
 - `⫰ algorithm.filter` is verified through its dedicated 24-gate lattice.
-- `Σ algorithm.reduce` remains specified and inactive until its dedicated
-  algorithm lattice passes.
+- `Σ algorithm.reduce` is verified through its dedicated 27-gate lattice.
 - Semantic Projection Core alpha.6 interposes the governing human/machine
   projection contract before sequence algorithms.
 - Signal Integrity Closure alpha.6.1 gives that contract continuous history,
@@ -873,7 +869,10 @@ verified layers beneath it.
   bytecode, deterministic VM iteration, and Event Spine evidence.
 - Verified Filter alpha.8 connects stable selection, exact Boolean predicates,
   explicit FILTER bytecode, input immutability, and measured count evidence.
-- The next bounded evolution is Verified Reduce alpha.9.
+- Verified Reduce alpha.9 connects exact accumulator continuity, strict
+  left-fold order, explicit REDUCE bytecode, full algorithm composition,
+  content-addressed intent governance, and bounded event batching.
+- The next bounded evolution is Per-Card Execution Evidence alpha.10.
 - Integration Closure alpha.5.1 completes entry-flow effect coverage, derives
   intent authority from admitted artifacts, unifies all local lattices, and
   synchronizes release discovery before Semantic Projection Core alpha.6.

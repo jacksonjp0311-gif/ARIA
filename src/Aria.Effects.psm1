@@ -79,6 +79,11 @@ function Add-AriaExpressionEffectCalls {
             Add-AriaEffectSetValue -Set $Calls -Value ([string]$Expression.predicate)
             Add-AriaExpressionEffectCalls -Expression $Expression.sequence -Calls $Calls
         }
+        'reduce' {
+            Add-AriaEffectSetValue -Set $Calls -Value ([string]$Expression.reducer)
+            Add-AriaExpressionEffectCalls -Expression $Expression.sequence -Calls $Calls
+            Add-AriaExpressionEffectCalls -Expression $Expression.initial -Calls $Calls
+        }
         'sequence' {
             foreach ($element in @($Expression.elements)) {
                 Add-AriaExpressionEffectCalls -Expression $element -Calls $Calls
@@ -221,6 +226,11 @@ function Add-AriaBytecodeInstructionEffectFacts {
                 Add-AriaEffectSetValue `
                     -Set $Calls `
                     -Value ([string]$instruction.predicate)
+            }
+            'REDUCE' {
+                Add-AriaEffectSetValue `
+                    -Set $Calls `
+                    -Value ([string]$instruction.reducer)
             }
             'IF' {
                 Add-AriaBytecodeInstructionEffectFacts `

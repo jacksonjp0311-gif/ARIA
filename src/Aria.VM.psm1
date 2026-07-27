@@ -140,6 +140,11 @@ function Invoke-AriaVmMap {
     if (Get-Command Start-AriaEventOperation -ErrorAction SilentlyContinue) {
         $null = Start-AriaEventOperation -Name ('algorithm.map.' + $transformName)
     }
+    $batchStarted = $false
+    if (Get-Command Start-AriaEventBatch -ErrorAction SilentlyContinue) {
+        Start-AriaEventBatch -ChunkSize 32
+        $batchStarted = $true
+    }
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $iterations = @($validation.values).Count
     $completed = 0
@@ -159,6 +164,7 @@ function Invoke-AriaVmMap {
         $clock.Stop()
         $completeRecord = [pscustomobject][ordered]@{kind='map';state='complete';transform=$transformName;iteration=$completed;iterations=$iterations;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
         Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase map.complete -State PASS -Energy completion -Information $transformName -Coherence 'map contract passed'
+        if ($batchStarted) { Complete-AriaEventBatch; $batchStarted = $false }
         return $result
     }
     catch {
@@ -171,6 +177,7 @@ function Invoke-AriaVmMap {
         catch {
             # Preserve the runtime fracture when evidence publication is unavailable.
         }
+        if ($batchStarted) { Complete-AriaEventBatch; $batchStarted = $false }
         throw $originalError
     }
 }
@@ -208,6 +215,11 @@ function Invoke-AriaVmFilter {
     if (Get-Command Start-AriaEventOperation -ErrorAction SilentlyContinue) {
         $null = Start-AriaEventOperation -Name ('algorithm.filter.' + $predicateName)
     }
+    $batchStarted = $false
+    if (Get-Command Start-AriaEventBatch -ErrorAction SilentlyContinue) {
+        Start-AriaEventBatch -ChunkSize 32
+        $batchStarted = $true
+    }
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $inputCount = @($validation.values).Count
     $completed = 0
@@ -231,6 +243,7 @@ function Invoke-AriaVmFilter {
         $clock.Stop()
         $completeRecord = [pscustomobject][ordered]@{kind='filter';state='complete';predicate=$predicateName;completed=$completed;inputCount=$inputCount;selectedCount=$selected;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
         Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase filter.complete -State PASS -Energy completion -Information $predicateName -Coherence 'filter contract passed'
+        if ($batchStarted) { Complete-AriaEventBatch; $batchStarted = $false }
         return $result
     }
     catch {
@@ -243,6 +256,84 @@ function Invoke-AriaVmFilter {
         catch {
             # Preserve the runtime fracture when evidence publication is unavailable.
         }
+        if ($batchStarted) { Complete-AriaEventBatch; $batchStarted = $false }
+        throw $originalError
+    }
+}
+
+function Invoke-AriaVmReduce {
+    param($Context,$SequenceValue,$InitialValue,$Instruction,[int]$CallDepth)
+    $validation = Test-AriaSequenceValue -Value $SequenceValue
+    if (-not $validation.valid) { throw 'ARIA VM REDUCE requires a valid sequence value.' }
+    $reducerName = [string]$Instruction.reducer
+    if (-not $Context.functionMap.ContainsKey($reducerName)) {
+        throw "ARIA VM REDUCE references unknown reducer '$reducerName'."
+    }
+    $reducer = $Context.functionMap[$reducerName]
+    $parameters = @($reducer.parameters)
+    $summary = $reducer.PSObject.Properties['effectSummary']
+    $accumulatorType = [string]$Instruction.accumulatorType
+    $declaredElement = Get-AriaSequenceElementType -Type ([string]$Instruction.sequenceType)
+    if (
+        $parameters.Count -ne 2 -or
+        [string]$reducer.returnType -ne $accumulatorType -or
+        $null -eq $summary -or
+        [string]$summary.Value.purity -ne 'pure'
+    ) {
+        throw "ARIA VM REDUCE reducer '$reducerName' is not an admitted binary pure accumulator function."
+    }
+    if (
+        [string]$parameters[0].type -ne $accumulatorType -or
+        [string]$parameters[1].type -ne $declaredElement -or
+        (
+            [string]$validation.elementType -ne 'Empty' -and
+            [string]$validation.elementType -ne $declaredElement
+        )
+    ) {
+        throw "ARIA VM REDUCE reducer '$reducerName' does not preserve the declared accumulator and element types."
+    }
+    Assert-AriaRuntimeType $accumulatorType $InitialValue 'REDUCE initial accumulator'
+
+    if (Get-Command Start-AriaEventOperation -ErrorAction SilentlyContinue) {
+        $null = Start-AriaEventOperation -Name ('algorithm.reduce.' + $reducerName)
+    }
+    $batchStarted = $false
+    if (Get-Command Start-AriaEventBatch -ErrorAction SilentlyContinue) {
+        Start-AriaEventBatch -ChunkSize 32
+        $batchStarted = $true
+    }
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $inputCount = @($validation.values).Count
+    $completed = 0
+    $accumulator = $InitialValue
+    $startRecord = [pscustomobject][ordered]@{kind='reduce';state='start';reducer=$reducerName;inputCount=$inputCount;line=[int]$Instruction.line}
+    Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $startRecord -Domain algorithm -Phase reduce.start -State ACTIVE -Energy execution -Information $reducerName -Coherence 'reduce started'
+
+    try {
+        foreach ($value in @($validation.values)) {
+            $accumulator = Invoke-AriaVmFunction -Context $Context -Name $reducerName -Arguments @($accumulator,$value) -CallDepth $CallDepth -Line ([int]$Instruction.line)
+            $completed++
+            $iterationRecord = [pscustomobject][ordered]@{kind='reduce';state='iteration';reducer=$reducerName;completed=$completed;inputCount=$inputCount;line=[int]$Instruction.line}
+            Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $iterationRecord -Domain algorithm -Phase reduce.iteration -State INFO -Energy iteration -Information $reducerName -Coherence ("iteration {0} complete" -f $completed)
+        }
+        Assert-AriaRuntimeType $accumulatorType $accumulator 'REDUCE result accumulator'
+        $clock.Stop()
+        $completeRecord = [pscustomobject][ordered]@{kind='reduce';state='complete';reducer=$reducerName;completed=$completed;inputCount=$inputCount;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
+        Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase reduce.complete -State PASS -Energy completion -Information $reducerName -Coherence 'reduce contract passed'
+        if ($batchStarted) { Complete-AriaEventBatch; $batchStarted = $false }
+        return $accumulator
+    }
+    catch {
+        $originalError = $_
+        $clock.Stop()
+        try {
+            $fractureRecord = [pscustomobject][ordered]@{kind='reduce';state='fracture';reducer=$reducerName;completed=$completed;inputCount=$inputCount;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
+            Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $fractureRecord -Domain algorithm -Phase reduce.fracture -State FAIL -Energy interruption -Information $reducerName -Coherence 'reduce reducer rejected'
+        }
+        catch {
+            # Preserve the runtime fracture when evidence publication is unavailable.
+        }
+        if ($batchStarted) { Complete-AriaEventBatch; $batchStarted = $false }
         throw $originalError
     }
 }
@@ -382,6 +473,7 @@ function Invoke-AriaInstructionSequence {
             'CALL'{$name=[string]$ins.name;$argCount=[int]$ins.argCount;if($argCount-eq0){[object[]]$args=@()}else{[object[]]$args=New-Object object[] $argCount};for($a=$args.Length-1;$a-ge0;$a--){$args[$a]=Pop-AriaRuntime $stack "CALL $name line $($ins.line)"};$stack.Push((Invoke-AriaVmFunction -Context $Context -Name $name -Arguments $args -CallDepth $CallDepth -Line ([int]$ins.line)))}
             'MAP'{$sequenceValue=Pop-AriaRuntime $stack "MAP line $($ins.line)";$stack.Push((Invoke-AriaVmMap -Context $Context -SequenceValue $sequenceValue -Instruction $ins -CallDepth $CallDepth))}
             'FILTER'{$sequenceValue=Pop-AriaRuntime $stack "FILTER line $($ins.line)";$stack.Push((Invoke-AriaVmFilter -Context $Context -SequenceValue $sequenceValue -Instruction $ins -CallDepth $CallDepth))}
+            'REDUCE'{$initialValue=Pop-AriaRuntime $stack "REDUCE initial line $($ins.line)";$sequenceValue=Pop-AriaRuntime $stack "REDUCE sequence line $($ins.line)";$stack.Push((Invoke-AriaVmReduce -Context $Context -SequenceValue $sequenceValue -InitialValue $initialValue -Instruction $ins -CallDepth $CallDepth))}
             'IF'{$condition=Pop-AriaRuntime $stack "IF line $($ins.line)";Assert-AriaRuntimeType 'Bool' $condition "if line $($ins.line)";Add-AriaScope $Scopes;try{$branch=if([bool]$condition){@($ins.then)}else{@($ins.else)};$result=Invoke-AriaInstructionSequence $branch $Context $Scopes (Copy-AriaRuntimeTable $ActiveCapabilities) $CallDepth}finally{Remove-AriaScope $Scopes};if($result.control-ne'normal'){return $result}}
             'REPEAT'{$raw=Pop-AriaRuntime $stack "REPEAT line $($ins.line)";Assert-AriaRuntimeType 'Number' $raw "repeat line $($ins.line)";$count=[double]$raw;if($count-lt0-or$count-gt[int]$ins.max-or[math]::Floor($count)-ne$count){throw "ARIA repeat count must be an integer from 0 through $($ins.max) at source line $($ins.line)."};for($iteration=0;$iteration-lt[int]$count;$iteration++){Add-AriaScope $Scopes @{([string]$ins.iterator)=[long]$iteration};try{$result=Invoke-AriaInstructionSequence @($ins.body) $Context $Scopes (Copy-AriaRuntimeTable $ActiveCapabilities) $CallDepth}finally{Remove-AriaScope $Scopes};if($result.control-ne'normal'){return $result}}}
             'RETURN'{$value=if([bool]$ins.hasValue){Pop-AriaRuntime $stack "RETURN line $($ins.line)"}else{$null};if($stack.Count-ne0){throw "ARIA VM function return left $($stack.Count) operand(s) on the stack."};return [pscustomobject]@{control='return';value=$value}}

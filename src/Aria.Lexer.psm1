@@ -115,6 +115,17 @@ function Get-AriaExpressionTokens {
             continue
         }
 
+        if ($ch -eq 'Σ') {
+            $tokens.Add(
+                [pscustomobject][ordered]@{
+                    kind = 'reduce'
+                    text = 'Σ'
+                }
+            )
+            $index++
+            continue
+        }
+
         if ([char]::IsDigit($ch)) {
             $start = $index
             while ($index -lt $Text.Length -and [char]::IsDigit($Text[$index])) { $index++ }
@@ -242,6 +253,23 @@ function Parse-AriaPrimaryExpression {
             kind = 'filter'
             sequence = $sequence
             predicate = [string]$predicate.value
+        }
+    }
+
+    if ($token.kind -eq 'reduce') {
+        Move-AriaExpressionToken $State
+        $null = Read-AriaExpressionToken -State $State -Kind 'lparen'
+        $sequence = Parse-AriaPipeExpression $State
+        $null = Read-AriaExpressionToken -State $State -Kind 'comma'
+        $reducer = Read-AriaExpressionToken -State $State -Kind 'identifier'
+        $null = Read-AriaExpressionToken -State $State -Kind 'comma'
+        $initial = Parse-AriaPipeExpression $State
+        $null = Read-AriaExpressionToken -State $State -Kind 'rparen'
+        return [pscustomobject][ordered]@{
+            kind = 'reduce'
+            sequence = $sequence
+            reducer = [string]$reducer.value
+            initial = $initial
         }
     }
 

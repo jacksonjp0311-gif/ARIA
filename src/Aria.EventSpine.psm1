@@ -15,6 +15,9 @@ $script:AriaOperationId = ''
 $script:AriaOperationSequence = 0
 $script:AriaEventLedgerHash = ''
 $script:AriaEmptyLedgerHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+$script:AriaEventBatchDepth = 0
+$script:AriaEventBatchChunkSize = 32
+$script:AriaEventBatchRecords = New-Object System.Collections.Generic.List[object]
 
 function New-AriaOperationIdentity {
     param([string]$Name = 'aria.operation')
@@ -40,6 +43,8 @@ function Initialize-AriaEventSpine {
     $script:AriaOperationId = if ($OperationId) { $OperationId } else { New-AriaOperationIdentity -Name 'aria.cli' }
     $script:AriaOperationSequence = 0
     $script:AriaEventLedgerHash = ''
+    $script:AriaEventBatchDepth = 0
+    $script:AriaEventBatchRecords.Clear()
     $script:AriaEventBuffer.Clear()
     $script:AriaEventSubscribers.Clear()
 
@@ -262,11 +267,12 @@ function Assert-AriaEventLedgerContinuity {
     $OperationSequences[$operationId] = $expectedOperationSequence
 }
 
-function Add-AriaEventLedgerRecord {
+function Add-AriaEventLedgerRecords {
     param(
         [Parameter(Mandatory=$true)][string]$LedgerPath,
-        [Parameter(Mandatory=$true)]$Event
+        [Parameter(Mandatory=$true)][object[]]$Events
     )
+    if ($Events.Count -eq 0) { return }
 
     $stream = [IO.FileStream]::new(
         $LedgerPath,
@@ -297,7 +303,6 @@ function Add-AriaEventLedgerRecord {
 
         $lines = @($existingText -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         $expectedSequence = $lines.Count + 1
-        if ([int]$Event.sequence -ne $expectedSequence) { throw "ARIA event append expected ledger sequence $expectedSequence, received $($Event.sequence)." }
         $priorDigest = ''
         if ($lines.Count -gt 0) {
             $tail = $lines[$lines.Count - 1] | ConvertFrom-Json
@@ -305,10 +310,22 @@ function Add-AriaEventLedgerRecord {
             if (-not $tailVerification.valid) { throw ('ARIA event ledger tail rejected under append lock: ' + ($tailVerification.errors -join '; ')) }
             $priorDigest = [string]$tail.digest
         }
-        if ([string]$Event.previousDigest -ne $priorDigest) { throw 'ARIA event append rejected a stale previous digest.' }
 
-        $json = $Event | ConvertTo-Json -Depth 100 -Compress
-        [byte[]]$recordBytes = [Text.UTF8Encoding]::new($false).GetBytes($json + [Environment]::NewLine)
+        $records = New-Object Text.StringBuilder
+        foreach ($event in $Events) {
+            if ([int]$event.sequence -ne $expectedSequence) {
+                throw "ARIA event append expected ledger sequence $expectedSequence, received $($event.sequence)."
+            }
+            if ([string]$event.previousDigest -ne $priorDigest) {
+                throw 'ARIA event append rejected a stale previous digest.'
+            }
+            [void]$records.Append(($event | ConvertTo-Json -Depth 100 -Compress))
+            [void]$records.Append([Environment]::NewLine)
+            $priorDigest = [string]$event.digest
+            $expectedSequence++
+        }
+
+        [byte[]]$recordBytes = [Text.UTF8Encoding]::new($false).GetBytes($records.ToString())
         $stream.Position = $stream.Length
         $stream.Write($recordBytes,0,$recordBytes.Length)
         $stream.Flush()
@@ -322,8 +339,53 @@ function Add-AriaEventLedgerRecord {
     }
 }
 
-function Publish-AriaEvent {
+function Add-AriaEventLedgerRecord {
+    param(
+        [Parameter(Mandatory=$true)][string]$LedgerPath,
+        [Parameter(Mandatory=$true)]$Event
+    )
+    Add-AriaEventLedgerRecords -LedgerPath $LedgerPath -Events @($Event)
+}
+
+function Flush-AriaEventBatch {
+    if (
+        -not $script:AriaEventPersist -or
+        -not $script:AriaEventWorkspace -or
+        $script:AriaEventBatchRecords.Count -eq 0
+    ) {
+        $script:AriaEventBatchRecords.Clear()
+        return
+    }
+    $folder = Join-Path $script:AriaEventWorkspace '.aria/events'
+    New-Item -ItemType Directory -Path $folder -Force | Out-Null
+    $ledger = Join-Path $folder 'aria.events.ndjson'
+    $records = @($script:AriaEventBatchRecords.ToArray())
+    Add-AriaEventLedgerRecords -LedgerPath $ledger -Events $records
+    $script:AriaEventBatchRecords.Clear()
+}
+
+function Start-AriaEventBatch {
     [CmdletBinding()]
+    param([ValidateRange(1,256)][int]$ChunkSize = 32)
+    if ($script:AriaEventBatchDepth -eq 0) {
+        $script:AriaEventBatchRecords.Clear()
+        $script:AriaEventBatchChunkSize = $ChunkSize
+    }
+    $script:AriaEventBatchDepth++
+}
+
+function Complete-AriaEventBatch {
+    [CmdletBinding()]
+    param()
+    if ($script:AriaEventBatchDepth -gt 0) {
+        $script:AriaEventBatchDepth--
+    }
+    if ($script:AriaEventBatchDepth -eq 0) {
+        Flush-AriaEventBatch
+    }
+}
+
+function Publish-AriaConstructedEvent {
     param(
         [Parameter(Mandatory=$true)]$Event,
         [switch]$Render,
@@ -331,17 +393,22 @@ function Publish-AriaEvent {
         [switch]$PassThru
     )
 
-    $verification = Test-AriaEvent -Event $Event
-    if (-not $verification.valid) { throw ('ARIA event rejected: ' + ($verification.errors -join '; ')) }
-
     if (-not $Replay) {
         $script:AriaEventBuffer.Add($Event)
 
         if ($script:AriaEventPersist -and $script:AriaEventWorkspace) {
-            $folder = Join-Path $script:AriaEventWorkspace '.aria/events'
-            New-Item -ItemType Directory -Path $folder -Force | Out-Null
-            $ledger = Join-Path $folder 'aria.events.ndjson'
-            Add-AriaEventLedgerRecord -LedgerPath $ledger -Event $Event
+            if ($script:AriaEventBatchDepth -gt 0) {
+                $script:AriaEventBatchRecords.Add($Event)
+                if ($script:AriaEventBatchRecords.Count -ge $script:AriaEventBatchChunkSize) {
+                    Flush-AriaEventBatch
+                }
+            }
+            else {
+                $folder = Join-Path $script:AriaEventWorkspace '.aria/events'
+                New-Item -ItemType Directory -Path $folder -Force | Out-Null
+                $ledger = Join-Path $folder 'aria.events.ndjson'
+                Add-AriaEventLedgerRecord -LedgerPath $ledger -Event $Event
+            }
         }
 
         foreach ($subscriber in $script:AriaEventSubscribers.ToArray()) {
@@ -355,6 +422,20 @@ function Publish-AriaEvent {
     }
 
     if ($PassThru) { $Event }
+}
+
+function Publish-AriaEvent {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]$Event,
+        [switch]$Render,
+        [switch]$Replay,
+        [switch]$PassThru
+    )
+
+    $verification = Test-AriaEvent -Event $Event
+    if (-not $verification.valid) { throw ('ARIA event rejected: ' + ($verification.errors -join '; ')) }
+    Publish-AriaConstructedEvent -Event $Event -Render:$Render -Replay:$Replay -PassThru:$PassThru
 }
 
 function Send-AriaEvent {
@@ -373,7 +454,11 @@ function Send-AriaEvent {
     )
 
     $event = New-AriaEvent -Domain $Domain -Phase $Phase -State $State -Energy $Energy -Information $Information -Coherence $Coherence -Source $Source -Data $Data
-    Publish-AriaEvent -Event $event -Render:$Render -PassThru:$PassThru
+    # New-AriaEvent constructs and seals this exact object. Public callers that
+    # provide an event still cross the full Test-AriaEvent boundary through
+    # Publish-AriaEvent; the internal send path avoids hashing the same freshly
+    # constructed projection and event a second time.
+    Publish-AriaConstructedEvent -Event $event -Render:$Render -PassThru:$PassThru
 }
 
 function Get-AriaEventBuffer {
@@ -407,4 +492,4 @@ function Read-AriaEventLedger {
     $events.ToArray()
 }
 
-Export-ModuleMember -Function New-AriaOperationIdentity,Initialize-AriaEventSpine,Start-AriaEventOperation,Get-AriaEventDigest,New-AriaEvent,Test-AriaEvent,Register-AriaEventSubscriber,ConvertTo-AriaEtherEvent,Publish-AriaEvent,Send-AriaEvent,Get-AriaEventBuffer,Read-AriaEventLedger
+Export-ModuleMember -Function New-AriaOperationIdentity,Initialize-AriaEventSpine,Start-AriaEventOperation,Start-AriaEventBatch,Complete-AriaEventBatch,Get-AriaEventDigest,New-AriaEvent,Test-AriaEvent,Register-AriaEventSubscriber,ConvertTo-AriaEtherEvent,Publish-AriaEvent,Send-AriaEvent,Get-AriaEventBuffer,Read-AriaEventLedger

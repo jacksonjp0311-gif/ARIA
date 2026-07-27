@@ -33,10 +33,10 @@ brutally rigorous underneath
 
 | Layer | State |
 |---|---|
-| Compiler | `0.1.0-alpha.10` |
+| Compiler | `0.1.0-alpha.11` |
 | Language specification | `0.4.0` |
-| Source Core | bounded sequences + verified map/filter + glyph composition + whole-program effect proofs |
-| Conformance | `368/368` deterministic gates across eleven lattices |
+| Source Core | bounded sequences + verified map/filter/reduce + glyph composition + whole-program effect proofs |
+| Conformance | `396/396` deterministic gates across twelve lattices |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
@@ -44,7 +44,7 @@ brutally rigorous underneath
 | Evolution | Persistent plans + verified authorization + rollback proof |
 | Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
 | Effect verification | Entry flow + function call closure + independently reconstructed bytecode graph |
-| Event model | Hash-chained Event Spine v3 + operation continuity + measured map/filter projections |
+| Event model | Hash-chained Event Spine v3 + operation continuity + measured algorithm projections |
 | Operator UI | Content-addressed cues + Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
 | External AI provider | Not connected yet |
@@ -150,6 +150,8 @@ See [Verified Map alpha.7](docs/47-verified-map-alpha7.md) for the first
 language operation built directly on that shared signal history.
 See [Verified Filter alpha.8](docs/48-verified-filter-alpha8.md) for stable,
 typed selection with measured input and selected-count evidence.
+See [Verified Reduce alpha.9](docs/49-verified-reduce-alpha9.md) for exact
+left-fold aggregation and bounded accumulator evidence.
 
 ---
 
@@ -172,7 +174,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ ALL LATTICES COHERENT PASS   368/368 gates
+◆ ALL LATTICES COHERENT PASS   396/396 gates
 ```
 
 ### Run an ordinary ARIA program
@@ -258,6 +260,39 @@ gate, VM, and Event Spine:
 and an exact `Bool` return. It preserves source order and input immutability,
 while its evidence records only completed and selected counts—not element
 values.
+
+### Use ARIA's verified algorithm pipeline
+
+```aria
+function Double(value: Number) -> Number {
+  ↩ value * 2
+}
+
+function Positive(value: Number) -> Bool {
+  ↩ value > 0
+}
+
+function Add(total: Number, value: Number) -> Number {
+  ↩ total + value
+}
+
+flow Main {
+  let values: Sequence<Number> = [-2, -1, 1, 2]
+  let total: Number = Σ(⫰(⨯(values, Double), Positive), Add, 0)
+  emit total
+}
+```
+
+Run the complete Map → Filter → Reduce pipeline:
+
+```powershell
+.\aria.cmd run .\examples\verified-reduce.aria
+```
+
+`Σ` requires an explicit initial accumulator and an exact pure binary reducer
+of type `(A,T) → A`. It folds strictly left to right, returns the initial value
+for empty input, and records completed counts without elements, initial values,
+or accumulator values.
 
 ### Discover the CLI
 
@@ -952,7 +987,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ ALL LATTICES COHERENT PASS 368/368 gates
+◆ ALL LATTICES COHERENT PASS 396/396 gates
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
@@ -989,6 +1024,7 @@ Start here:
 | `docs/46-signal-integrity-closure-alpha6-1.md` | Continuous event history and truthful temporal signals |
 | `docs/47-verified-map-alpha7.md` | Typed pure map and measured iteration evidence |
 | `docs/48-verified-filter-alpha8.md` | Stable pure filter and measured selection evidence |
+| `docs/49-verified-reduce-alpha9.md` | Exact pure left fold and bounded accumulator evidence |
 
 Earlier documents record the architectural evolution and remain useful context.
 

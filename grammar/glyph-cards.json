@@ -312,15 +312,15 @@
                                        "kind":  "builtin",
                                        "target":  "sequence.reduce"
                                    },
-                      "status":  "specified",
+                      "status":  "verified",
                       "tests":  [
                                     "reduce validates accumulator continuity",
                                     "reduce requires explicit initial value",
                                     "reduce execution is deterministic",
                                     "reducer purity is proven by deterministic effect graph"
                                 ],
-                      "digest":  "sha256:ff909ec8e1b4963d10a8e95b10f882dba78f7a801f8d9c4311481abe288b27c2"
+                      "digest":  "sha256:7b1a8f4ce8b6cc509be7425511d57398d04cd77f2ad40f7e81aa14b06d6512be"
                   }
               ],
-    "digest":  "sha256:6ae1d0c43e6c83fc7213c154eb64803e7518232a0000efea0c625a56b2fccb4a"
+    "digest":  "sha256:76fa342aeffc5fd6e6dd3662dabb7eb79b4e89c523bc7830a799deb02d1ce76e"
 }

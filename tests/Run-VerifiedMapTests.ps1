@@ -305,11 +305,11 @@ try {
         Assert-Equal 2 @($result.events | Where-Object { $_.kind -eq 'map' -and $_.state -eq 'start' }).Count 'Nested maps lost operation starts.'
     }
     Test-MapCase 'map adds computation but no authority' {
-        Assert-Equal 39 (Get-AriaOpcodeRegistry).Count 'Algorithm opcode registry count mismatch.'
+        Assert-Equal 40 (Get-AriaOpcodeRegistry).Count 'Algorithm opcode registry count mismatch.'
         Assert-Equal 0 @($validGate.bytecode.capabilities).Count 'Map introduced a capability.'
         $registry = Read-AriaGlyphCardRegistry -Root $root
         Assert-Equal 'verified' (Get-AriaGlyphCard -Id 'algorithm.filter' -Registry $registry).status 'Filter was not admitted.'
-        Assert-Equal 'specified' (Get-AriaGlyphCard -Id 'algorithm.reduce' -Registry $registry).status 'Reduce activated early.'
+        Assert-Equal 'verified' (Get-AriaGlyphCard -Id 'algorithm.reduce' -Registry $registry).status 'Reduce was not admitted.'
     }
 
     if (($script:Passed + $script:Failed) -ne $script:Expected) {

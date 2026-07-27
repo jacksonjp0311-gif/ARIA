@@ -57,6 +57,7 @@ function Add-AriaExpressionInstructions {
         'call'{foreach($argument in @($Expression.arguments)){Add-AriaExpressionInstructions $argument $Instructions $Constants $ConstantIndex $FunctionMap $Line};$fn=$FunctionMap[[string]$Expression.name];$Instructions.Add([pscustomobject][ordered]@{op='CALL';name=[string]$Expression.name;argCount=@($Expression.arguments).Count;returnType=[string]$fn.returnType;line=$Line})}
         'map'{Add-AriaExpressionInstructions $Expression.sequence $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op='MAP';transform=[string]$Expression.transform;inputType=[string]$Expression.sequence.inferredType;outputType=[string]$Expression.inferredType;line=$Line})}
         'filter'{Add-AriaExpressionInstructions $Expression.sequence $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op='FILTER';predicate=[string]$Expression.predicate;sequenceType=[string]$Expression.inferredType;line=$Line})}
+        'reduce'{Add-AriaExpressionInstructions $Expression.sequence $Instructions $Constants $ConstantIndex $FunctionMap $Line;Add-AriaExpressionInstructions $Expression.initial $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op='REDUCE';reducer=[string]$Expression.reducer;sequenceType=[string]$Expression.sequence.inferredType;accumulatorType=[string]$Expression.initial.inferredType;line=$Line})}
         default{throw "Cannot compile expression kind '$($Expression.kind)'."}
     }
 }
@@ -391,6 +392,39 @@ function Test-AriaInstructionSequence {
                     }
                 }
                 Push-AriaVerifierType $stack $(if($sequenceType){$sequenceType}else{'Any'}) ([ref]$maximum)
+            }
+            'REDUCE' {
+                $actualAccumulator = Pop-AriaVerifierType $stack $Errors "REDUCE accumulator at instruction $index"
+                $actualSequence = Pop-AriaVerifierType $stack $Errors "REDUCE sequence at instruction $index"
+                $reducerName = if (Test-AriaInstructionHasProperty $instruction 'reducer') { [string]$instruction.reducer } else { '' }
+                $sequenceType = if (Test-AriaInstructionHasProperty $instruction 'sequenceType') { [string]$instruction.sequenceType } else { '' }
+                $accumulatorType = if (Test-AriaInstructionHasProperty $instruction 'accumulatorType') { [string]$instruction.accumulatorType } else { '' }
+                $elementType = Get-AriaSequenceElementType -Type $sequenceType
+
+                if (-not (Test-AriaBytecodeIdentifier $reducerName)) { $Errors.Add("REDUCE at $index has an invalid reducer identity.") }
+                if (-not (Test-AriaDeclaredTypeName -Type $sequenceType) -or -not $elementType) { $Errors.Add("REDUCE at $index has invalid sequence type '$sequenceType'.") }
+                if (-not (Test-AriaDeclaredTypeName -Type $accumulatorType)) { $Errors.Add("REDUCE at $index has invalid accumulator type '$accumulatorType'.") }
+                if ($actualSequence -ne $sequenceType) { $Errors.Add("REDUCE at $index expects $sequenceType, received $actualSequence.") }
+                if ($actualAccumulator -ne $accumulatorType) { $Errors.Add("REDUCE at $index expects accumulator $accumulatorType, received $actualAccumulator.") }
+
+                if (-not $Functions.ContainsKey($reducerName)) {
+                    $Errors.Add("REDUCE at $index references unknown reducer '$reducerName'.")
+                }
+                else {
+                    $fn = $Functions[$reducerName]
+                    $parameters = @($fn.parameters)
+                    if ($parameters.Count -ne 2) { $Errors.Add("REDUCE at $index reducer '$reducerName' must be binary.") }
+                    else {
+                        if ([string]$parameters[0].type -ne $accumulatorType) { $Errors.Add("REDUCE at $index reducer accumulator input does not match $accumulatorType.") }
+                        if ([string]$parameters[1].type -ne $elementType) { $Errors.Add("REDUCE at $index reducer element input does not match $sequenceType.") }
+                    }
+                    if ([string]$fn.returnType -ne $accumulatorType) { $Errors.Add("REDUCE at $index reducer output does not preserve $accumulatorType.") }
+                    $summaryProperty = $fn.PSObject.Properties['effectSummary']
+                    if ($null -eq $summaryProperty -or [string]$summaryProperty.Value.purity -ne 'pure') {
+                        $Errors.Add("REDUCE at $index reducer '$reducerName' is not proven pure.")
+                    }
+                }
+                Push-AriaVerifierType $stack $(if($accumulatorType){$accumulatorType}else{'Any'}) ([ref]$maximum)
             }
             'IF' {
                 $condition = Pop-AriaVerifierType $stack $Errors "IF instruction $index"

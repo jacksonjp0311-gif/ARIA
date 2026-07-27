@@ -351,7 +351,7 @@ try {
 
     Test-CompositionCase 'composition adds no opcode or capability' {
         $opcodes = Get-AriaOpcodeRegistry
-        Assert-Equal 39 $opcodes.Count 'Opcode registry changed.'
+        Assert-Equal 40 $opcodes.Count 'Opcode registry changed.'
         Assert-Equal 0 @($glyphGate.bytecode.capabilities).Count `
             'Composition introduced a capability.'
         Assert-Equal 0 @($glyphGate.bytecode.instructions |

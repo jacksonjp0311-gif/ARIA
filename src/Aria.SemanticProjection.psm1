@@ -1,6 +1,8 @@
 Import-Module (Join-Path $PSScriptRoot 'Aria.Common.psm1') -DisableNameChecking
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+$script:AriaVerifiedSemanticCueRegistry = $null
+$script:AriaVerifiedSemanticCueRegistryPath = ''
 
 function Get-AriaSemanticCueRegistryPath {
     Join-Path (Get-AriaRepositoryRoot) 'grammar/semantic-cues.json'
@@ -52,6 +54,32 @@ function Import-AriaSemanticCueRegistry {
     Read-AriaUtf8Text -Path $Path | ConvertFrom-Json
 }
 
+function Get-AriaVerifiedSemanticCueRegistry {
+    [CmdletBinding()]
+    param([string]$Path = (Get-AriaSemanticCueRegistryPath))
+
+    $resolved = [IO.Path]::GetFullPath($Path)
+    if (
+        $null -ne $script:AriaVerifiedSemanticCueRegistry -and
+        [string]::Equals(
+            $resolved,
+            $script:AriaVerifiedSemanticCueRegistryPath,
+            [StringComparison]::OrdinalIgnoreCase
+        )
+    ) {
+        return $script:AriaVerifiedSemanticCueRegistry
+    }
+
+    $registry = Import-AriaSemanticCueRegistry -Path $resolved
+    $verification = Test-AriaSemanticCueRegistry -Registry $registry
+    if (-not $verification.valid) {
+        throw ('Semantic cue registry rejected: ' + ($verification.errors -join '; '))
+    }
+    $script:AriaVerifiedSemanticCueRegistry = $registry
+    $script:AriaVerifiedSemanticCueRegistryPath = $resolved
+    return $registry
+}
+
 function Test-AriaSemanticCueRegistry {
     [CmdletBinding()]
     param([Parameter(Mandatory=$true)]$Registry)
@@ -88,6 +116,8 @@ function Update-AriaSemanticCueRegistry {
     foreach ($cue in @($registry.cues)) { $cue.digest = Get-AriaSemanticCueDigest -Cue $cue }
     $registry.digest = Get-AriaSemanticRegistryDigest -Registry $registry
     Write-AriaUtf8NoBom -Path $Path -Text (($registry | ConvertTo-Json -Depth 100) + [Environment]::NewLine)
+    $script:AriaVerifiedSemanticCueRegistry = $null
+    $script:AriaVerifiedSemanticCueRegistryPath = ''
     $registry
 }
 
@@ -196,10 +226,15 @@ function New-AriaSemanticProjection {
     param(
         [Parameter(Mandatory=$true)]$Event,
         [AllowEmptyString()][string]$PreviousStateIdentity = '',
-        $Registry = (Import-AriaSemanticCueRegistry)
+        $Registry = $null
     )
-    $verification = Test-AriaSemanticCueRegistry -Registry $Registry
-    if (-not $verification.valid) { throw ('Semantic cue registry rejected: ' + ($verification.errors -join '; ')) }
+    if ($null -eq $Registry) {
+        $Registry = Get-AriaVerifiedSemanticCueRegistry
+    }
+    else {
+        $verification = Test-AriaSemanticCueRegistry -Registry $Registry
+        if (-not $verification.valid) { throw ('Semantic cue registry rejected: ' + ($verification.errors -join '; ')) }
+    }
     $cue = Resolve-AriaSemanticCue -Registry $Registry -Domain $Event.domain -Phase $Event.phase -State $Event.state
     $stateIdentity = ('{0}.{1}:{2}' -f $Event.domain,$Event.phase,$Event.state)
     $metrics = [ordered]@{ sequence = [int]$Event.sequence }
@@ -266,4 +301,4 @@ function Test-AriaSemanticProjection {
     [pscustomobject][ordered]@{ valid=($errors.Count -eq 0); errors=$errors.ToArray(); digest=$expected }
 }
 
-Export-ModuleMember -Function Get-AriaSemanticCueRegistryPath,Get-AriaSemanticCueDigest,Get-AriaSemanticRegistryDigest,Import-AriaSemanticCueRegistry,Test-AriaSemanticCueRegistry,Update-AriaSemanticCueRegistry,Resolve-AriaSemanticCue,ConvertTo-AriaBoundedSignalData,ConvertTo-AriaBoundedSignalText,New-AriaSemanticProjection,Test-AriaSemanticProjection,Get-AriaProjectionDigest
+Export-ModuleMember -Function Get-AriaSemanticCueRegistryPath,Get-AriaSemanticCueDigest,Get-AriaSemanticRegistryDigest,Import-AriaSemanticCueRegistry,Get-AriaVerifiedSemanticCueRegistry,Test-AriaSemanticCueRegistry,Update-AriaSemanticCueRegistry,Resolve-AriaSemanticCue,ConvertTo-AriaBoundedSignalData,ConvertTo-AriaBoundedSignalText,New-AriaSemanticProjection,Test-AriaSemanticProjection,Get-AriaProjectionDigest

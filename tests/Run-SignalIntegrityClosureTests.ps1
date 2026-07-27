@@ -126,6 +126,37 @@ Test-Case 'persistent ledger round trip verifies every event' {
     }
     finally { Remove-TestWorkspace $workspace }
 }
+Test-Case 'batched persistence preserves exact replay and rejects changed ledger bytes' {
+    $workspace = New-TestWorkspace
+    $tamperWorkspace = New-TestWorkspace
+    try {
+        Initialize-AriaEventSpine -WorkspaceRoot $workspace -Persist | Out-Null
+        Start-AriaEventBatch -ChunkSize 32
+        foreach ($phase in @('one','two','three','four','five')) {
+            $null = Send-ProbeEvent -Phase $phase
+        }
+        Complete-AriaEventBatch
+        $events = @(Read-AriaEventLedger $workspace)
+        Assert-Equal 5 $events.Count 'Batched ledger count mismatch.'
+        Assert-Equal 'five' $events[4].phase 'Batched event order changed.'
+        Assert-True (Test-AriaEvent $events[4]).valid 'Batched tail event failed verification.'
+
+        Initialize-AriaEventSpine -WorkspaceRoot $tamperWorkspace -Persist | Out-Null
+        $null = Send-ProbeEvent -Phase anchor
+        Start-AriaEventBatch -ChunkSize 32
+        $null = Send-ProbeEvent -Phase pending
+        $path = Get-LedgerPath $tamperWorkspace
+        $text = [IO.File]::ReadAllText($path).Replace('"phase":"anchor"','"phase":"tamper"')
+        [IO.File]::WriteAllText($path,$text,[Text.UTF8Encoding]::new($false))
+        $rejected = $false
+        try { Complete-AriaEventBatch } catch { $rejected = $true }
+        Assert-True $rejected 'Batch flush accepted changed ledger bytes.'
+    }
+    finally {
+        Remove-TestWorkspace $workspace
+        Remove-TestWorkspace $tamperWorkspace
+    }
+}
 Test-Case 'ledger rejects reordered events' {
     $workspace = New-TestWorkspace
     try {
@@ -347,15 +378,13 @@ Test-Case 'static signal writing does not advance semantic event history' {
     Write-AriaSignal -Mode Observe -Name static-signal
     Assert-Equal 0 @(Get-AriaEventBuffer).Count 'Legacy static signal manufactured an event.'
 }
-Test-Case 'signal integrity closure remains authority-stable after filter' {
+Test-Case 'signal integrity closure remains authority-stable after reduce' {
     $registry = Read-AriaUtf8Text -Path (Join-Path $root 'grammar/glyph-cards.json') | ConvertFrom-Json
-    foreach ($id in @('algorithm.map','algorithm.filter')) {
+    foreach ($id in @('algorithm.map','algorithm.filter','algorithm.reduce')) {
         $card = @($registry.cards | Where-Object { $_.id -eq $id })[0]
         Assert-Equal 'verified' $card.status "Algorithm card '$id' was not admitted."
         Assert-Equal 0 @($card.capabilities).Count "Algorithm card '$id' introduced authority."
     }
-    $reduce = @($registry.cards | Where-Object { $_.id -eq 'algorithm.reduce' })[0]
-    Assert-Equal 'specified' $reduce.status 'Reduce activated early.'
 }
 
 Write-Host ''

@@ -1,7 +1,7 @@
 {
     "schema":  "aria.runtime/1",
     "release":  "0.1.0-alpha.14",
-    "languageEvolution":  "consent-admission-receipts-alpha.12",
+    "languageEvolution":  "agent-semantic-handshake-alpha.13",
     "status":  "experimental",
     "repository":  {
                        "name":  "ARIA",
@@ -11,6 +11,8 @@
                    },
     "bootstrap":  {
                       "humanGuide":  "AGENTS.md",
+                      "connectionContract":  "ARIA-CONNECT.json",
+                      "handshake":  "aria.cmd handshake --json",
                       "runtimeManifest":  "ARIA-RUNTIME.json",
                       "doctor":  "aria.cmd doctor -Strict",
                       "tests":  "aria.cmd test"
@@ -47,7 +49,11 @@
                          "semanticProposalIntent":  "plans/semantic-proposal-bundles-alpha11-intent.json",
                          "admission":  "src/Aria.Admission.psm1",
                          "admissionPlan":  "plans/consent-admission-receipts-alpha12.aria",
-                         "admissionIntent":  "plans/consent-admission-receipts-alpha12-intent.json"
+                         "admissionIntent":  "plans/consent-admission-receipts-alpha12-intent.json",
+                         "agentHandshake":  "src/Aria.AgentHandshake.psm1",
+                         "agentConnectionContract":  "ARIA-CONNECT.json",
+                         "agentHandshakeSchema":  "schemas/aria-agent-handshake.schema.json",
+                         "agentHandshakePlan":  "plans/agent-semantic-handshake-alpha13.aria"
                      },
     "continuity":  {
                        "stableTag":  "aria-alpha21-stable",

@@ -1,5 +1,17 @@
 # ARIA First Run on Windows
 
+## AI and tool discovery
+
+An unfamiliar AI or automation client should begin with:
+
+```powershell
+.\aria.cmd handshake --json
+```
+
+The returned record supplies the canonical read order, shared vocabulary,
+resource digests, manifest state, authority boundary, and next valid command.
+Discovery grants no authority.
+
 ARIA `0.1.0-alpha.1` is a local language laboratory. The folder contains the language specification, compiler, bytecode verifier, compressed `.ariac` container, virtual machine, tests, policy, examples, and research documentation.
 
 ## 1. Put the folder on your desktop

@@ -6,7 +6,7 @@
 
 | Gates | Release | Conformance | Bootstrap | License |
 | :---: | :---: | :---: | :---: | :---: |
-| [![ARIA gates](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml) | ![Release 0.1.0-alpha.14](https://img.shields.io/badge/0.1.0--alpha.14-ff4fc8?style=flat-square) | ![Conformance 460 of 460](https://img.shields.io/badge/460%2F460-67e8d5?style=flat-square) | ![PowerShell 5.1 and 7](https://img.shields.io/badge/PowerShell_5.1_%7C_7-8a72ff?style=flat-square) | [![Apache 2.0 license](https://img.shields.io/badge/Apache--2.0-d8d2e5?style=flat-square)](LICENSE) |
+| [![ARIA gates](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml) | ![Release 0.1.0-alpha.14](https://img.shields.io/badge/0.1.0--alpha.14-ff4fc8?style=flat-square) | ![Conformance 468 of 468](https://img.shields.io/badge/468%2F468-67e8d5?style=flat-square) | ![PowerShell 5.1 and 7](https://img.shields.io/badge/PowerShell_5.1_%7C_7-8a72ff?style=flat-square) | [![Apache 2.0 license](https://img.shields.io/badge/Apache--2.0-d8d2e5?style=flat-square)](LICENSE) |
 
 <div align="center">
 
@@ -88,7 +88,7 @@ Expected closure:
 
 ```text
 ◆ SYSTEM READY            PASS  all gates online
-◆ ALL LATTICES COHERENT   PASS  460/460 gates
+◆ ALL LATTICES COHERENT   PASS  468/468 gates
 ```
 
 Run the first program:
@@ -105,6 +105,41 @@ Explore the operator vocabulary:
 .\aria.cmd glyph list
 .\aria.cmd events
 ```
+
+### Connect an AI
+
+An unfamiliar AI does not need a custom prompt or a guessed reading order.
+ARIA exposes one deterministic semantic handshake:
+
+```powershell
+.\aria.cmd handshake --json
+```
+
+That record identifies the repository, runtime, guide, and connection contract;
+binds each discovery resource to an exact digest; supplies the shared
+vocabulary, synchronization phases, manifest state, and next valid command; and
+states that initial authority is `none`.
+
+```mermaid
+flowchart LR
+    D["discover<br/>resolve identity"] --> O["orient<br/>learn semantics"]
+    O --> V["verify<br/>establish baseline"]
+    V --> A["align<br/>map intent + ambiguity"]
+    A --> P["propose<br/>bounded change + evidence"]
+    P --> C{"human consent"}
+    C -->|refine| A
+    C -->|admit| G["governed execution"]
+
+    classDef signal fill:#351b39,stroke:#ff4fc8,color:#fff;
+    classDef verify fill:#1b2830,stroke:#67e8d5,color:#fff;
+    classDef boundary fill:#25233a,stroke:#8f82ff,color:#fff;
+    class D,O,A,P signal;
+    class V,G verify;
+    class C boundary;
+```
+
+The handshake makes discovery seamless; it does not make authority ambient.
+See [Agent Semantic Handshake](docs/53-agent-semantic-handshake-alpha13.md).
 
 ## See the language
 
@@ -374,15 +409,16 @@ and [Consent and Admission Receipts](docs/52-consent-admission-receipts-alpha12.
 |---|---|
 | Release | `0.1.0-alpha.14` |
 | Language specification | `0.4.0` |
-| Aggregate conformance | `460/460` deterministic gates |
-| Test lattices | 15 |
+| Aggregate conformance | `468/468` deterministic gates |
+| Test lattices | 16 |
 | Runtime lanes | Windows PowerShell 5.1, PowerShell 7 Windows, PowerShell 7 Ubuntu |
 | Runtime | local PowerShell bootstrap VM |
 | Host effects | deny by default |
 | Algorithms | verified map, filter, reduce |
 | Event history | hash-chained Event Spine v3 |
+| AI connection | content-addressed semantic handshake + shared vocabulary + explicit synchronization phases |
 | Evolution | semantic proposal + independent consent + deterministic admission + governed apply |
-| Next frontier | Deterministic Semantic Replay alpha.13 |
+| Next frontier | Deterministic Semantic Replay alpha.14 |
 
 ### Evolution ledger
 
@@ -399,14 +435,15 @@ flowchart LR
     A9 --> A10["α10 Card evidence"]
     A10 --> A11["α11 Semantic proposals"]
     A11 --> A12["α12 Consent + admission"]
-    A12 -. next .-> A13["α13 Semantic replay"]
+    A12 --> A13["α13 Agent handshake"]
+    A13 -. next .-> A14["α14 Semantic replay"]
 
     classDef done fill:#1b2830,stroke:#67e8d5,color:#fff;
     classDef current fill:#351b39,stroke:#ff4fc8,color:#fff;
     classDef next fill:#1c1c2c,stroke:#8f82ff,color:#c9c2d4,stroke-dasharray:5 5;
-    class A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11 done;
-    class A12 current;
-    class A13 next;
+    class A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12 done;
+    class A13 current;
+    class A14 next;
 ```
 
 The detailed sequence and admission contracts live in the
@@ -418,6 +455,7 @@ Run `.\aria.cmd help` for the complete command surface.
 
 | Goal | Command |
 |---|---|
+| synchronize an AI | `.\aria.cmd handshake --json` |
 | verify installation | `.\aria.cmd doctor -Strict` |
 | run every lattice | `.\aria.cmd test` |
 | verify repository identity | `.\aria.cmd verify` |
@@ -455,6 +493,7 @@ ARIA/
 │   ├── algorithms/           implementation invariants
 │   ├── research/             research maps and open questions
 │   └── assets/               deterministic project visuals
+├── ARIA-CONNECT.json         canonical AI connection contract
 ├── ARIA-RUNTIME.json         machine discovery surface
 ├── MANIFEST.sha256           sealed repository identity
 └── AGENTS.md                 operational guide for coding agents
@@ -483,6 +522,9 @@ Choose the shortest path for what you need.
 
 ### Understand the human–machine interface
 
+- [Agent Semantic Handshake](docs/53-agent-semantic-handshake-alpha13.md)
+- [AI bridge boundary](docs/08-ai-bridge.md)
+- [Connectflow](docs/16-connectflow.md)
 - [Operator renderer](docs/13-operator-renderer.md)
 - [Etherflow](docs/19-etherflow.md)
 - [Event Spine](docs/20-event-spine.md)
@@ -536,17 +578,21 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
 Start with:
 
 ```powershell
-.\aria.cmd begin --json
+.\aria.cmd handshake --json
 ```
 
-Then read `AGENTS.md` and `ARIA-RUNTIME.json`. Treat generated output as a
-proposal, not permission. Never bypass a failed gate, rewrite history, expose
-secrets, or infer authority from a seal, receipt, or successful test.
+The handshake provides the canonical read order, exact resource identities,
+shared vocabulary, baseline state, and next valid boundary. Follow it with
+`.\aria.cmd doctor -Strict`. Treat generated output as a proposal, not
+permission. Never bypass a failed gate, rewrite history, expose secrets, or
+infer authority from a seal, receipt, handshake, or successful test.
 
 Preferred task model:
 
 ```text
-discover
+discover identity
+→ orient to shared semantics
+→ verify baseline
 → declare intent
 → identify assumptions and ambiguity
 → propose bounded meaning
@@ -560,7 +606,7 @@ discover
 
 ## Evolution frontier
 
-The next bounded milestone is **Deterministic Semantic Replay alpha.13**:
+The next bounded milestone is **Deterministic Semantic Replay alpha.14**:
 
 > Given the same baseline, semantic proposal, consent, admission receipt,
 > toolchain lock, policy, and evidence, reproduce the same admitted semantic

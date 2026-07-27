@@ -2,6 +2,15 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Agent Semantic Handshake alpha.13
+
+- Added `ARIA-CONNECT.json` as a model-neutral, machine-readable connection contract with shared vocabulary, explicit completion conditions, valid commands, invariants, and a canonical read order.
+- Added deterministic `aria handshake --json` discovery that binds the contract, runtime map, agent guide, manifest state, next action, and zero-authority session boundary with exact resource and record digests.
+- Formalized seamless integration as `discover → orient → verify → align → propose`, keeping inference low without making authority ambient.
+- Added schemas for the static connection contract and emitted handshake.
+- Added an eight-gate Agent Handshake lattice and raised aggregate conformance to `468/468` across sixteen lattices.
+- Updated the README, agent bootstrap, runtime discovery map, AI bridge documentation, and repository hero around the same connection identity.
+
 ## Project surface: README system makeover
 
 - Rebuilt the repository front door around ARIA's shared human-machine semantics, verified runtime, trust model, governed evolution, operator CLI, and research path.

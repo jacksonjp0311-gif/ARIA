@@ -22,6 +22,7 @@ The documents in this directory define the language, its bootstrap implementatio
 - [`50-per-card-execution-evidence-alpha10.md`](50-per-card-execution-evidence-alpha10.md) — bounded receipts joining cards, artifacts, policy, and terminal events
 - [`51-semantic-proposal-bundles-alpha11.md`](51-semantic-proposal-bundles-alpha11.md) — canonical non-mutating language-change proposals
 - [`52-consent-admission-receipts-alpha12.md`](52-consent-admission-receipts-alpha12.md) — independent human consent and deterministic admission
+- [`53-agent-semantic-handshake-alpha13.md`](53-agent-semantic-handshake-alpha13.md) — content-addressed AI discovery, shared vocabulary, and authority-free synchronization
 
 ## Algorithms
 

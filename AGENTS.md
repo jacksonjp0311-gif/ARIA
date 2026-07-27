@@ -7,6 +7,7 @@ ARIA is a repository-native language, compiler, verifier, bytecode container, an
 From the repository root, run:
 
 ```powershell
+.\aria.cmd handshake --json
 .\aria.cmd begin --json
 .\aria.cmd doctor -Strict
 .\aria.cmd test
@@ -16,13 +17,15 @@ A healthy baseline must report:
 
 - repository manifest integrity
 - `SYSTEM READY`
-- `460/460` aggregate conformance with zero failures
+- `468/468` aggregate conformance with zero failures
 
 ## Authoritative entrypoints
 
 - `aria.cmd` — canonical Windows command
 - `aria.ps1` — command dispatcher
 - `ARIA-RUNTIME.json` — machine-readable repository map
+- `ARIA-CONNECT.json` — canonical model-neutral connection contract
+- `src/Aria.AgentHandshake.psm1` — deterministic discovery and synchronization record
 - `src/Aria.Gate.psm1` — compiler gate
 - `src/Aria.Parser.psm1` — parser
 - `src/Aria.Semantics.psm1` — semantic analysis
@@ -38,6 +41,23 @@ A healthy baseline must report:
 - `tests/Run-Tests.ps1` — conformance lattice
 
 - `src/Aria.ExecutionEvidence.psm1` — per-card observational execution receipts
+
+## Semantic synchronization
+
+`.\aria.cmd handshake --json` is the first machine action. It binds the
+connection contract, runtime map, this guide, manifest state, shared
+vocabulary, and next valid boundary into one deterministic record.
+
+Follow its phases in order:
+
+```text
+discover → orient → verify → align → propose
+```
+
+Handshake success grants no authority. Do not infer consent, capability,
+correctness, or permission from discovery. A proposal remains non-authoritative
+until the independent human, capability, policy, and execution boundaries admit
+it.
 
 ## Evolution rule
 

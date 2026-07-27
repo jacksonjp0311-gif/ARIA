@@ -55,9 +55,9 @@
   <g transform="translate(822 73)" font-family="Inter,Segoe UI,Arial,sans-serif">
     <rect width="300" height="165" rx="20" fill="#ffffff" fill-opacity=".035" stroke="#ffffff" stroke-opacity=".11"/>
     <text x="24" y="38" fill="#ff66cf" font-size="13" font-weight="700" letter-spacing="2">CURRENT FRONTIER</text>
-    <text x="24" y="78" fill="#fff" font-size="24" font-weight="700">alpha.12</text>
-    <text x="24" y="108" fill="#c7bdd3" font-size="15">Consent + Admission</text>
+    <text x="24" y="78" fill="#fff" font-size="24" font-weight="700">alpha.13</text>
+    <text x="24" y="108" fill="#c7bdd3" font-size="15">Agent Handshake</text>
     <path d="M24 130H276" stroke="#fff" stroke-opacity=".1"/>
-    <text x="24" y="151" fill="#79e7d0" font-size="13" font-weight="600">460 / 460 local gates</text>
+    <text x="24" y="151" fill="#79e7d0" font-size="13" font-weight="600">468 / 468 local gates</text>
   </g>
 </svg>

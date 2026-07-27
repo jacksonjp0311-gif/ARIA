@@ -39,6 +39,7 @@ Import-Module (Join-Path $root 'src/Aria.GlyphMemory.psm1') -Force -DisableNameC
 Import-Module (Join-Path $root 'src/Aria.ExecutionEvidence.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.SemanticProposal.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Admission.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.AgentHandshake.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Gitflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
@@ -57,6 +58,7 @@ function Show-AriaHelp {
     Write-AriaBanner -Title 'ARIA / LANGUAGE LABORATORY'
     @'
   aria begin --json
+  aria handshake --json
   aria doctor [-Workspace <repository>] [-Strict]
   aria verify
   aria manifest
@@ -85,7 +87,8 @@ function Show-AriaHelp {
   aria intent verify <intent-verification-bundle.json> [-Workspace <repository>]
   aria init <ProgramName>
 
-  ARIA 0.4 adds verified human-agent connection contracts: intent, proposal, consent, and closure.
+  `handshake --json` lets an unfamiliar AI discover ARIA's shared semantics and
+  exact authority boundary through one deterministic, content-addressed record.
   aria version
 
   Add -VerboseOutput, or set ARIA_VERBOSE=1, to expose raw diagnostic detail.
@@ -584,6 +587,7 @@ try {
                 'Run-CardExecutionEvidenceTests.ps1'
                 'Run-SemanticProposalTests.ps1'
                 'Run-AdmissionTests.ps1'
+                'Run-AgentHandshakeTests.ps1'
             )
             foreach($suite in $suites){
                 $suitePath=Join-Path $root ('tests/'+$suite)
@@ -603,8 +607,8 @@ try {
                 -WorkspaceRoot $workspaceRoot `
                 -Profile $closureProfile `
                 -Persist
-            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '460/460 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=460;failedCount=0}) -Render
-            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '460/460 gates'
+            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '468/468 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=468;failedCount=0}) -Render
+            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '468/468 gates'
         }
         { $_ -in @('gate','check') } {
             if (-not $Path) { throw 'gate requires a .aria source path.' }
@@ -763,6 +767,13 @@ flow Main {
             Write-AriaBanner -Title 'ARIA / INITIALIZE'
             Write-AriaSummary -Title 'PROGRAM CREATED' -Passed $true -Detail $target
         }
+        'handshake' {
+            if (-not $Json) {
+                throw 'handshake requires --json so every participant receives the same machine-readable record.'
+            }
+            $handshake = Get-AriaAgentHandshake -RepositoryRoot $root
+            Write-Output (ConvertTo-AriaJson -Value $handshake)
+        }
         'begin' {
             if (-not $Json) {
                 throw 'begin currently requires --json.'
@@ -782,8 +793,10 @@ flow Main {
                 release = [string]$runtime.release
                 repositoryRoot = $root
                 runtimeManifest = 'ARIA-RUNTIME.json'
+                connectionContract = 'ARIA-CONNECT.json'
                 agentGuide = 'AGENTS.md'
                 stableTag = [string]$runtime.continuity.stableTag
+                handshake = './aria.cmd handshake --json'
                 validation = [pscustomobject][ordered]@{
                     doctor = '.\aria.cmd doctor -Strict'
                     tests = '.\aria.cmd test'

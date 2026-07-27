@@ -2,6 +2,14 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Project surface: README system makeover
+
+- Rebuilt the repository front door around ARIA's shared human-machine semantics, verified runtime, trust model, governed evolution, operator CLI, and research path.
+- Added deterministic, accessible, repository-owned hero and architecture SVGs.
+- Added GitHub-native compiler, governance, and evolution diagrams with explicit evidence/authority boundaries.
+- Replaced the duplicated long-form manual with a curated quick start, capability map, documentation routes, AI-agent guidance, and current verified frontier.
+- Preserved alpha.12 release and conformance claims without expanding runtime or repository authority.
+
 ## Consent and Admission Receipts alpha.12
 
 - Added content-addressed `aria.semantic-consent/1` artifacts over exact proposal, intent, scope, rollback, producer, approver, decision, and authority acknowledgements.

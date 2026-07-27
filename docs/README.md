@@ -20,6 +20,8 @@ The documents in this directory define the language, its bootstrap implementatio
 - [`48-verified-filter-alpha8.md`](48-verified-filter-alpha8.md) — verified stable selection and count evidence
 - [`49-verified-reduce-alpha9.md`](49-verified-reduce-alpha9.md) — verified exact left fold and accumulator evidence
 - [`50-per-card-execution-evidence-alpha10.md`](50-per-card-execution-evidence-alpha10.md) — bounded receipts joining cards, artifacts, policy, and terminal events
+- [`51-semantic-proposal-bundles-alpha11.md`](51-semantic-proposal-bundles-alpha11.md) — canonical non-mutating language-change proposals
+- [`52-consent-admission-receipts-alpha12.md`](52-consent-admission-receipts-alpha12.md) — independent human consent and deterministic admission
 
 ## Algorithms
 

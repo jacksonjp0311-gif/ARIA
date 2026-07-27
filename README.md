@@ -1,281 +1,143 @@
-# ARIA
+<div align="center">
 
-> **A local-first, typed programming language for verified computation, explicit authority, and governable evolution.**
+![ARIA — a verified language between human and machine](docs/assets/aria-hero.svg)
 
-```text
-Glyphs compress expression.
-Types preserve meaning.
-Signatures protect identity.
-Capabilities control authority.
-The verifier decides execution.
-```
+[![ARIA gates](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml)
+![Release](https://img.shields.io/badge/release-0.1.0--alpha.14-ff4fc8?style=flat-square)
+![Conformance](https://img.shields.io/badge/conformance-460%2F460-67e8d5?style=flat-square)
+![PowerShell](https://img.shields.io/badge/bootstrap-PowerShell_5.1_%7C_7-8a72ff?style=flat-square)
+[![License](https://img.shields.io/badge/license-Apache--2.0-d8d2e5?style=flat-square)](LICENSE)
 
-ARIA is an experimental programming language and runtime built around one hard rule:
+**A local-first, typed programming language for shared human–AI semantics, verified computation, explicit authority, and governable evolution.**
 
-> **Nothing executes merely because it was requested. It executes only after structure, identity, type, policy, capability, and artifact integrity have been verified.**
+[Quick start](#quick-start) · [See the language](#see-the-language) · [Architecture](#architecture) · [Trust model](#trust-model) · [Roadmap](#evolution-frontier) · [Documentation](#documentation)
 
-ARIA now has three complementary surfaces:
-
-- **Source Core** for small, ordinary, pure programs with immutable bindings, typed functions, expressions, and output;
-- **the verified runtime substrate** for bytecode, capability authority, graph execution, replay, events, and governed repository evolution;
-- **Intent Verification** for binding human objectives to interpretations, independent challenges, explicit authority, execution evidence, and derived verdicts.
-
-The source language is intentionally familiar. The machinery underneath is deliberately explicit, deterministic, and auditable.
-
-```text
-alien on the outside
-brutally rigorous underneath
-```
+</div>
 
 ---
 
-## Project status
+## The idea
 
-| Layer | State |
+ARIA is an experimental language and runtime built around one hard rule:
+
+> **Nothing executes merely because it was requested. It executes only after structure, identity, types, effects, policy, capabilities, and artifact integrity have been verified.**
+
+Most systems make code legible either to people or to machines. ARIA is exploring
+a shared semantic layer in which both perceive the same computational event
+through forms suited to them:
+
+| Human surface | Shared fact | Machine surface |
+|---|---|---|
+| glyph, motion, rhythm, metric, explanation | one verified semantic state | schema, type, effect, transition, provenance, digest |
+| stable visual pattern | one bounded operation | canonical event and evidence |
+| explicit interpretation boundary | one authority decision | policy and capability result |
+
+This is not an attempt to make symbols magical. ARIA preserves the distinction:
+
+```text
+symbol ≠ meaning ≠ implementation ≠ authority
+```
+
+A glyph can express meaning. It cannot grant permission. Motion can reveal a
+transition. It cannot manufacture evidence. An AI can propose an interpretation.
+It cannot approve its own proposal.
+
+## Why ARIA
+
+ARIA treats verification, authority, and operator understanding as language
+semantics—not optional infrastructure around the language.
+
+| Conventional default | ARIA default |
 |---|---|
-| Compiler | `0.1.0-alpha.14` |
-| Language specification | `0.4.0` |
-| Source Core | bounded sequences + verified map/filter/reduce + glyph composition + whole-program effect proofs |
-| Conformance | `460/460` deterministic gates across fifteen lattices |
-| Runtime | Local PowerShell VM |
-| Policy | Deny by default |
-| Artifact | Deterministic bytecode + compressed `.ariac` container |
-| Graph substrate | Transactional execution + deterministic replay |
-| Evolution | Persistent plans + verified authorization + rollback proof |
-| Semantic proposals | Canonical meaning + exact scope + proof/test/rollback contracts + no self-approval |
-| Admission | Exact independent consent + deterministic non-mutating admission receipts |
-| Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
-| Effect verification | Entry flow + function call closure + independently reconstructed bytecode graph |
-| Event model | Hash-chained Event Spine v3 + operation continuity + per-card execution receipts |
-| Operator UI | Content-addressed cues + Etherflow + Bufferflow + Signalflow |
-| Git transport | Buffered, fast-forward-only, SHA-verified |
-| External AI provider | Not connected yet |
+| execute, then inspect | verify, authorize, then execute |
+| ambient process authority | explicit, scoped capabilities |
+| logs assembled after the fact | human and machine views from one event stream |
+| AI prose translated directly into action | intent → interpretation → challenge → consent → admission |
+| repository changes reviewed as raw diffs | semantic proposal + exact paths + rollback + proof obligations |
+| animation as decoration | temporal cues derived from real state transitions |
 
-ARIA currently targets Windows PowerShell 5.1 and PowerShell 7 on both Windows
-and Linux CI. It is alpha software: the architecture is real, tested, and
-evolving; compatibility is not yet frozen.
+ARIA is useful as a research platform for:
 
----
-
-## Why ARIA exists
-
-Most programming systems treat execution as the default and verification as an optional layer around it. ARIA reverses that relationship.
-
-A request moves through a gated causal path:
-
-```text
-source
-  ↓
-parse
-  ↓
-semantic + type validation
-  ↓
-deterministic compilation
-  ↓
-artifact verification
-  ↓
-policy + capability decision
-  ↓
-virtual-machine execution
-  ↓
-typed event + transmission receipt
-```
-
-This makes ARIA suitable for research into:
-
-- AI-generated programs that must remain inspectable;
+- inspectable AI-generated programs;
 - capability-limited local agents;
-- deterministic and signed execution artifacts;
-- graph-native program representation;
-- typed provider boundaries;
-- causal event replay;
-- compact operator interfaces that do not leak raw subsystem noise.
+- deterministic and content-addressed execution;
+- typed effect and authority analysis;
+- human-learnable operational semantics;
+- replayable, reversible language evolution.
 
-ARIA does **not** claim that glyph density is security. Obscurity is not cryptography. Security comes from verification, signatures, capabilities, policy, deterministic identity, and constrained execution.
-
----
-
-## Shared semantic projections
-
-ARIA's Event Spine now binds the human and machine views of a runtime fact:
-
-```text
-actual state S_t
-  ├─ glyph G_t
-  ├─ motion and rhythm contract M_t
-  ├─ canonical machine record R_t
-  └─ explanation and interpretation boundary E_t
-```
-
-Each `aria.event` version 3 contains a deterministic, digested semantic
-projection. The terminal renders that projection; the NDJSON journal stores the
-same projection. A seal means the declared checks for that event passed—it does
-not mean universal truth or unlimited authority. A transmission wave means
-information crossed a bounded stage—it does not mean acceptance. An authority
-clamp means permission is being evaluated—it does not mean permission was
-granted.
-
-The cue registry is content-addressed, color-independent, reduced-motion
-equivalent, privacy-bounded, and explicit about prohibited interpretations.
-ARIA records measured timing only when timing evidence exists; otherwise it
-labels motion as an event-boundary expression and claims no false percentage.
-
-Event history is continuous across CLI processes. Every v3 event carries a
-workspace ledger sequence, operation identity, operation-local sequence, and
-the previous event digest. Reordering, deletion, duplication, tampering, stale
-append attempts, and cross-session chain fractures are rejected.
-
-Live buffering expresses only what ARIA can observe:
-
-```text
-operation started
-→ pending while the process remains alive · measured elapsed time
-→ measured completion receipt or fracture
-```
-
-Bufferflow no longer cycles through invented `mesh`, `transmit`, `align`, or
-`verify` phases. A producer may name a richer phase only by recording that
-actual transition.
-
-Learn or inspect the shared vocabulary:
-
-```powershell
-.\aria.cmd cue list
-.\aria.cmd cue explain verification.seal
-.\aria.cmd cue explain authority.evaluate --json
-.\aria.cmd cue verify
-```
-
-See [Semantic Projection Core alpha.6](docs/45-semantic-projection-core-alpha6.md)
-for the full event, accessibility, privacy, and non-manipulation contract.
-See [Verified Map alpha.7](docs/47-verified-map-alpha7.md) for the first
-language operation built directly on that shared signal history.
-See [Verified Filter alpha.8](docs/48-verified-filter-alpha8.md) for stable,
-typed selection with measured input and selected-count evidence.
-See [Verified Reduce alpha.9](docs/49-verified-reduce-alpha9.md) for exact
-left-fold aggregation and bounded accumulator evidence.
-See [Per-Card Execution Evidence alpha.10](docs/50-per-card-execution-evidence-alpha10.md)
-for content-addressed receipts joining cards, artifacts, policy, events, and
-privacy-filtered aggregate observations.
-See [Semantic Proposal Bundles alpha.11](docs/51-semantic-proposal-bundles-alpha11.md)
-for non-mutating, content-addressed language-change proposals that bind intent,
-semantic deltas, exact scope, proof obligations, tests, compatibility, rollback,
-and the independent human-approval boundary.
-See [Consent and Admission Receipts alpha.12](docs/52-consent-admission-receipts-alpha12.md)
-for exact human consent and deterministic admission verdicts that reject drift
-and self-approval while granting no repository authority.
-
----
+It is alpha software, not a hardened production sandbox.
 
 ## Quick start
 
 ### Requirements
 
-- Windows PowerShell 5.1 or PowerShell 7
-- Git
-- A local checkout of this repository
-
-From the repository root:
+- Windows PowerShell 5.1 or PowerShell 7;
+- Git;
+- a local checkout of this repository.
 
 ```powershell
+git clone https://github.com/jacksonjp0311-gif/ARIA.git
+cd ARIA
 .\aria.cmd doctor -Strict
 .\aria.cmd test
 ```
 
-Expected shape:
+Expected closure:
 
 ```text
-◆ SYSTEM READY          PASS   all gates online
-◆ ALL LATTICES COHERENT PASS   460/460 gates
+◆ SYSTEM READY            PASS  all gates online
+◆ ALL LATTICES COHERENT   PASS  460/460 gates
 ```
 
-### Run an ordinary ARIA program
+Run the first program:
 
 ```powershell
-.\aria-source.cmd check .\examples\source-core\03-function.aria
-.\aria-source.cmd run .\examples\source-core\03-function.aria
-.\aria-source.cmd ir .\examples\source-core\03-function.aria
+.\aria.cmd run .\examples\hello.aria
 ```
 
-Source Core programs are pure in alpha.22:
+Explore the operator vocabulary:
+
+```powershell
+.\aria.cmd cue list
+.\aria.cmd cue explain verification.seal
+.\aria.cmd glyph list
+.\aria.cmd events
+```
+
+## See the language
+
+ARIA currently exposes two interoperable language surfaces.
+
+### Source Core
+
+Source Core is intentionally familiar: immutable bindings, typed functions,
+expressions, conditionals, and pure output.
 
 ```aria
 fn add(x: Int, y: Int) -> Int {
     x + y
 }
 
-let answer: Int = add(20, 22);
-emit answer;
+emit add(20, 22);
 ```
 
-The result is statically checked, evaluated without ambient effects, lowered to deterministic `aria.source-ir/0.7`, and assigned a SHA-256 identity.
+```powershell
+.\aria-source.cmd check .\examples\source-core\03-function.aria
+.\aria-source.cmd run   .\examples\source-core\03-function.aria
+.\aria-source.cmd ir    .\examples\source-core\03-function.aria
+```
 
-### Use ARIA's verified map
+### Verified runtime language
+
+The runtime surface exposes connections, effects, bytecode, policy, capability
+checks, graph operations, evidence, and glyph-native algorithms.
 
 ```aria
 aria 0.4.0
-module VerifiedMapExample version 0.7.0
-program VerifiedMapExample version 0.7.0
+module VerifiedAlgorithmPipeline version 0.9.0
+program VerifiedAlgorithmPipeline version 0.9.0
 entry Main
 
-function Double(value: Number) -> Number {
-  ↩ value * 2
-}
-
-flow Main {
-  let values: Sequence<Number> = [1, 2, 3, 4]
-  let doubled: Sequence<Number> = ⨯(values, Double)
-  emit doubled
-  halt
-}
-```
-
-Run it through the normal compiler, verifier, policy gate, and VM:
-
-```powershell
-.\aria.cmd run .\examples\verified-map.aria
-```
-
-`⨯` accepts only a compile-time unary pure transform. It preserves order and
-length, reuses existing sequence limits, and emits start, actual completed
-iterations, completion, or fracture through Event Spine v3 without recording
-element values.
-
-### Use ARIA's verified filter
-
-```aria
-aria 0.4.0
-module VerifiedFilterExample version 0.8.0
-program VerifiedFilterExample version 0.8.0
-entry Main
-
-function IsPositive(value: Number) -> Bool {
-  ↩ value > 0
-}
-
-flow Main {
-  let values: Sequence<Number> = [-2, 0, 3, 4]
-  let selected: Sequence<Number> = ⫰(values, IsPositive)
-  emit selected
-  halt
-}
-```
-
-Run the same source through the compiler, independent bytecode verifier, policy
-gate, VM, and Event Spine:
-
-```powershell
-.\aria.cmd run .\examples\verified-filter.aria
-```
-
-`⫰` requires a compile-time unary pure predicate with the exact element type
-and an exact `Bool` return. It preserves source order and input immutability,
-while its evidence records only completed and selected counts—not element
-values.
-
-### Use ARIA's verified algorithm pipeline
-
-```aria
 function Double(value: Number) -> Number {
   ↩ value * 2
 }
@@ -292,646 +154,362 @@ flow Main {
   let values: Sequence<Number> = [-2, -1, 1, 2]
   let total: Number = Σ(⫰(⨯(values, Double), Positive), Add, 0)
   emit total
+  halt
 }
 ```
 
-Run the complete Map → Filter → Reduce pipeline:
-
 ```powershell
-.\aria.cmd run .\examples\verified-reduce.aria
+.\aria.cmd gate .\examples\verified-reduce.aria -Strict
+.\aria.cmd run  .\examples\verified-reduce.aria
 ```
 
-`Σ` requires an explicit initial accumulator and an exact pure binary reducer
-of type `(A,T) → A`. It folds strictly left to right, returns the initial value
-for empty input, and records completed counts without elements, initial values,
-or accumulator values.
+The glyphs are verified aliases over canonical semantics:
 
-Every completed or fractured `⨯`, `⫰`, and `Σ` exercise also returns one
-`executionEvidence` receipt. The receipt cryptographically joins the semantic
-card, source, IR, exact artifact, effect graph, policy, admission-test contract,
-terminal Event Spine event, and privacy-filtered aggregate counts. It is
-observational and cannot grant a capability or authorize another execution.
+| Glyph | Spoken form | Meaning | Authority |
+|---:|---|---|---|
+| `▷` | invoke | call a verified function | none |
+| `↩` | return | return a typed value | none |
+| `≫` | pipe | compose typed stages left-to-right | none |
+| `⨯` | map | apply a proven-pure unary transform | none |
+| `⫰` | filter | stable selection by a proven-pure predicate | none |
+| `Σ` | reduce | exact deterministic left fold | none |
 
-### Discover the CLI
-
-```powershell
-.\aria.cmd help
-```
-
-Common operations:
-
-```powershell
-.\aria.cmd doctor -Strict
-.\aria.cmd test
-.\aria.cmd manifest
-.\aria.cmd events
-.\aria.cmd cue list
-.\aria.cmd cue explain verification.seal
-.\aria.cmd cue verify --json
-.\aria.cmd profile
-.\aria.cmd pull
-.\aria.cmd push
-.\aria.cmd sync
-.\aria.cmd evolve plan .\examples\evolution-plan.json
-.\aria.cmd evolve verify <proposal-id> -Capability <bundle.json> -Authorization <authorization.json> -IssuerPolicy <verification-policy.json>
-.\aria.cmd intent verify .\examples\intent\publish-verified-release.json
-```
-
-Raw buffered provider output is hidden by default. To expose it:
-
-```powershell
-$env:ARIA_VERBOSE = "1"
-.\aria.cmd push
-```
-
-Disable terminal animation:
-
-```powershell
-$env:ARIA_NO_ANIMATION = "1"
-```
-
-`ARIA_REDUCED_MOTION=1`, `ARIA_MOTION=off`, and `ARIA_ANIMATION=0` select the
-same semantic information without temporal frames. Glyph, label, state,
-metrics, cue identity, explanation, and interpretation boundary remain present.
-
----
-
-## Two language surfaces
-
-### Source Core
-
-Source Core is the ordinary programming surface. Alpha.22 supports:
-
-- `Int`, `Text`, and `Bool`;
-- immutable `let` bindings;
-- explicitly typed pure functions;
-- arithmetic, comparison, Boolean, and text expressions;
-- typed conditional expressions;
-- deterministic output and IR identity.
-
-It deliberately excludes filesystem, process, repository, network, secret, and deployment effects.
-
-### Verified runtime language
-
-ARIA programs are glyphic, typed, and graph-oriented. Exact syntax continues to evolve, so the canonical examples in `examples/` and the language specification are the source of truth.
-
-Conceptually, an ARIA program describes:
-
-```text
-typed values
-  + graph relationships
-  + requested effects
-  + capability requirements
-  + verification constraints
-```
-
-A human should read ARIA as a compact causal graph. An AI should read it as a typed request that must be compiled and verified before execution.
-
-The important distinction is:
-
-```text
-program text ≠ execution authority
-```
-
-Program text expresses intent. Policy and capabilities decide whether that intent may become an effect.
-
----
-
-## Glyph-native execution and signal evolution
-
-ARIA's executable glyph triad lowers into existing trusted operations:
-
-```aria
-🜁 answer: Number = 40 + 2
-🜂 answer
-🜄 Project.status = "active"
-🜁 Project.status -> state: Text
-```
-
-```text
-🜁 air    bind or recall  → let / recall
-🜂 fire   externalize     → emit
-🜄 water  preserve        → remember
-```
-
-The parser lowers glyph syntax before semantic analysis, bytecode generation,
-artifact verification, policy, and VM execution. Glyphs compress expression;
-they do not bypass authority.
-
-ARIA also uses bounded signal subsets for learning from transmissions:
-
-```text
-🜁 observe → 🜃 bound → 🜂 transmit → 🜄 retain → 🜍 attest → ∿ evolve
-```
-
-A signal subset declares purpose, source, field allowlist, excluded fields,
-counts, limit, consent, retention, selected records, and digest. It is carried
-inside `aria.transmission/1`, preserving the established compressed container
-and tamper checks. Subset evidence may inform governed evolution but never
-grants capability or replaces human authorization.
-
-The complete self-hosting path is:
-
-```text
-glyph source
-  → parser lowering
-  → semantics and types
-  → deterministic bytecode
-  → artifact verification
-  → policy and capability
-  → VM execution
-  → typed events and bounded signal subsets
-  → governed plan and authorization
-  → transactional apply
-  → manifest, strict doctor, conformance
-  → exact-path commit
-  → optional SHA-verified push
-```
-
-See `grammar/alchemy.json`, `examples/glyph-triad.aria`,
-`docs/36-evolution-application.md`, and `docs/37-signal-subsets.md`.
-
----
-## Execution model
-
-### 1. Parse
-
-The parser converts glyphic source into structured program nodes. Syntax errors stop the pipeline.
-
-### 2. Validate
-
-Semantic and type validation establish whether nodes, values, operators, and relationships are meaningful.
-
-### 3. Compile
-
-The compiler produces deterministic bytecode. Equivalent valid input should produce stable artifact identity.
-
-### 4. Package
-
-Bytecode is stored in the compressed `.ariac` container with integrity metadata.
-
-### 5. Verify
-
-The verifier checks artifact structure, digest, identity, and compatibility before execution.
-
-### 6. Authorize
-
-The policy engine is deny-by-default. Requested authority must be explicitly permitted.
-
-### 7. Execute
-
-The local VM runs verified instructions against typed memory.
-
-### 8. Observe
-
-Runtime actions emit typed events through the Event Spine and operator feedback through Etherflow, Bufferflow, and Signalflow.
-
----
+Every glyph has a textual, spoken, and machine-readable identity. Glyph density
+is not security; verification is.
 
 ## Architecture
 
-```text
-┌─────────────────────────────┐    ┌─────────────────────────────┐
-│   SOURCE CORE · PURE CODE   │    │ VERIFIED RUNTIME LANGUAGE   │
-│ let · fn · if · emit        │    │ glyphs · memory · effects   │
-└──────────────┬──────────────┘    └──────────────┬──────────────┘
-               │                                  │
-       typed AST + source IR              parser + semantics
-               │                                  │
-               └────────────────┬─────────────────┘
-                                ▼
-┌──────────────────────────────────────────────────────────────┐
-│            DETERMINISTIC IDENTITY + TYPED AUTHORITY           │
-└──────────────────────────────┬───────────────────────────────┘
-                               │
-             bytecode · graphs · proposals · capabilities
-                               │
-                               ▼
-┌──────────────────────────────────────────────────────────────┐
-│                         VERIFIER                             │
-│        digest · structure · identity · compatibility         │
-└──────────────────────────────┬───────────────────────────────┘
-                               │
-                    policy + capability gate
-                               │
-                               ▼
-┌──────────────────────────────────────────────────────────────┐
-│                    LOCAL VM + TYPED MEMORY                   │
-└──────────────────────────────┬───────────────────────────────┘
-                               │
-               Event Spine · Etherflow · Signalflow
-                               │
-                               ▼
-┌──────────────────────────────────────────────────────────────┐
-│          OPERATOR / PROVIDER / REPLAY / AUDIT SURFACES       │
-└──────────────────────────────────────────────────────────────┘
+![ARIA architecture — shared semantic state projected for humans and machines](docs/assets/aria-architecture.svg)
+
+ARIA’s compiler and runtime form a gated causal path:
+
+```mermaid
+flowchart LR
+    A["Source or proposal"] --> B["Parse"]
+    B --> C["Type + semantic analysis"]
+    C --> D["Effect graph"]
+    D --> E["Canonical IR"]
+    E --> F["Deterministic bytecode"]
+    F --> G["Artifact verification"]
+    G --> H{"Policy + capability"}
+    H -->|denied| X["Bounded fracture"]
+    H -->|allowed| I["Virtual machine"]
+    I --> J["Event Spine"]
+    J --> K["Human projection"]
+    J --> L["Machine evidence"]
+
+    classDef signal fill:#2a142d,stroke:#ff4fc8,color:#fff;
+    classDef verify fill:#211c38,stroke:#ae72ff,color:#fff;
+    classDef evidence fill:#132a30,stroke:#67e8f9,color:#fff;
+    classDef fracture fill:#32131f,stroke:#ff617d,color:#fff;
+    class A,B,C,D signal;
+    class E,F,G,H,I verify;
+    class J,K,L evidence;
+    class X fracture;
 ```
 
-### Core modules
+### One state, synchronized projections
 
-| Module | Responsibility |
+For actual system state \(S_t\), ARIA derives:
+
+$$
+S_t \longrightarrow (G_t,\;M_t,\;R_t,\;E_t)
+$$
+
+where:
+
+- \(G_t\) is the stable glyphic expression;
+- \(M_t\) is the motion and temporal contract;
+- \(R_t\) is the canonical machine record;
+- \(E_t\) is the bounded human explanation.
+
+A state transition is governed by input, policy, and available evidence:
+
+$$
+S_{t+1}=F(S_t,\;I_t,\;P_t,\;V_t)
+$$
+
+The visible transition represents \(\Delta S_t\). Motion occurs because
+information crossed a boundary, evidence was evaluated, an invariant fractured,
+or coherence was reached—not merely because time passed.
+
+### Runtime layers
+
+| Layer | Responsibility | Primary implementation |
+|---|---|---|
+| Source | normalization, parsing, typed Source Core | `Aria.SourceCore.psm1` |
+| Semantics | types, glyph lowering, policy checks | `Aria.Semantics.psm1` |
+| Effects | call topology, transitive effects, purity | `Aria.Effects.psm1` |
+| Artifact | deterministic bytecode and `.ariac` container | `Aria.Bytecode.psm1` |
+| Verification | independent artifact reconstruction | `Aria.Gate.psm1` |
+| Authority | capabilities, delegation, revocation, policy | `Aria.CapabilityAuthority.psm1` |
+| Runtime | bounded stack machine and graph execution | `Aria.VM.psm1` |
+| Observation | hash-chained events and semantic projections | `Aria.EventSpine.psm1` |
+| Evidence | privacy-bounded per-card execution receipts | `Aria.ExecutionEvidence.psm1` |
+| Evolution | proposals, consent, admission, rollback, apply | `Aria.SemanticProposal.psm1`, `Aria.Admission.psm1` |
+
+## Trust model
+
+ARIA separates four questions that are often collapsed:
+
+1. **Is it structurally valid?** Syntax, identity, types, and bytecode.
+2. **What can it affect?** Effect graph and capability requirements.
+3. **Is it permitted here?** Policy, scope, delegation, and revocation.
+4. **What actually happened?** Event history, execution evidence, and closure.
+
+### Deny by default
+
+Host effects are rejected unless policy allows the effect and an active
+capability authorizes the exact resource.
+
+```text
+requested effect
+  → policy allows effect?
+  → capability identity valid?
+  → capability active and unrevoked?
+  → scope contains requested resource?
+  → execute or reject
+```
+
+### Content-addressed identity
+
+ARIA assigns deterministic SHA-256 identities to source, semantic IR, effect
+graphs, bytecode, containers, policies, glyph cards, projections, proposals,
+consent, admission, and evidence.
+
+The same admitted inputs must yield the same semantic identity—or expose the
+boundary that drifted.
+
+### Truthful operator cues
+
+| Cue | Means | Must not imply |
+|---|---|---|
+| traveling pulse | information crossed a bounded stage | receiver acceptance |
+| authority clamp | permission is being evaluated | permission granted |
+| verification seal | declared checks passed | universal truth or infallibility |
+| fracture | a named invariant failed | blame or permission to bypass it |
+| calm pending signal | process is alive; elapsed time is measured | invented percentage |
+
+Color reinforces meaning but is never its only carrier. Reduced-motion and
+static profiles preserve the same semantics.
+
+See [Semantic Projection Core](docs/45-semantic-projection-core-alpha6.md) and
+[Signal Integrity Closure](docs/46-signal-integrity-closure-alpha6-1.md).
+
+## Governed human–AI evolution
+
+ARIA now uses its own contracts to evolve the repository.
+
+```mermaid
+sequenceDiagram
+    participant H as Human
+    participant P as Producer AI
+    participant C as Independent challenge
+    participant V as ARIA verifier
+    participant G as Governed evolution
+
+    H->>P: Declare intent
+    P->>V: Interpretation + semantic proposal
+    C->>V: Ambiguities + counterexamples
+    V-->>H: Evidence-derived obligations
+    H->>V: Consent over exact proposal digest
+    V->>V: Reconstruct admission receipt
+    V-->>G: Eligible for planning, no capability granted
+    G->>G: Verify capability + rollback + exact paths
+    G-->>H: Local gates + remote attestation + closure
+```
+
+The governed path is:
+
+```text
+intent
+→ interpretation
+→ independent challenge
+→ semantic proposal
+→ human consent
+→ deterministic admission
+→ evolution planning
+→ capability authorization
+→ exact apply
+→ local gates
+→ remote attestation
+→ closure
+```
+
+Critical boundaries:
+
+- the producer cannot approve its own interpretation or proposal;
+- consent binds an exact proposal, intent, path scope, and rollback scope;
+- admission is evidence, not repository authority;
+- apply rejects baseline, proposal, candidate, or path drift;
+- force push is outside the governed path;
+- failed remote closure must use a normal reversal commit.
+
+```powershell
+# Construct and verify semantic meaning without mutation
+.\aria.cmd semantic propose .\semantic-proposal-request.json
+.\aria.cmd semantic verify  .\semantic-proposal.json
+
+# Record exact consent and reconstruct admission
+.\aria.cmd admit consent .\consent-request.json
+.\aria.cmd admit verify  .\admission-bundle.json
+
+# Existing capability-gated repository transaction
+.\aria.cmd evolve plan   .\examples\evolution-plan.json
+.\aria.cmd evolve verify <proposal-id> `
+  -Capability <bundle.json> `
+  -Authorization <authorization.json> `
+  -IssuerPolicy <verification-policy.json>
+.\aria.cmd evolve apply  <proposal-id>
+```
+
+See [Semantic Proposal Bundles](docs/51-semantic-proposal-bundles-alpha11.md)
+and [Consent and Admission Receipts](docs/52-consent-admission-receipts-alpha12.md).
+
+## Current verified frontier
+
+| Dimension | Current state |
 |---|---|
-| Source Core | Pure typed source, evaluation, deterministic source IR |
-| Parser | Source structure and syntax |
-| Semantic/type layer | Meaning preservation and type correctness |
-| Compiler | Deterministic bytecode generation |
-| Container | Compression and artifact identity |
-| Verifier | Artifact acceptance or rejection |
-| Policy | Deny-by-default authority decisions |
-| VM | Local execution |
-| Typed memory | Runtime value integrity |
-| Event Spine | Canonical typed events, persistence, replay |
-| Etherflow | Triadic operator rendering |
-| Gitflow | Buffered and verified Git transport |
-| Bufferflow | Animated buffering state machine |
-| Signalflow | Typed transmission receipts and per-item feedback |
-| Signal Subset | Bounded, consent-scoped transmission evidence |
-| Typed Authority Core | Canonical types, immutable bindings, structured errors and typed IR |
-| Graph Core | Validated graph patterns and transactional rewrites |
-| Graph Replay | Semantic diff, transition-chain verification and historical reconstruction |
-| Capability Authority | Content-addressed, attenuable and revocable authority |
-| Governed Evolution | Exact proposals, human authorization, candidate snapshots and rollback proof |
-| Intent Verification | Approved interpretations, independent challenges and evidence-derived verdicts |
+| Release | `0.1.0-alpha.14` |
+| Language specification | `0.4.0` |
+| Aggregate conformance | `460/460` deterministic gates |
+| Test lattices | 15 |
+| Runtime lanes | Windows PowerShell 5.1, PowerShell 7 Windows, PowerShell 7 Ubuntu |
+| Runtime | local PowerShell bootstrap VM |
+| Host effects | deny by default |
+| Algorithms | verified map, filter, reduce |
+| Event history | hash-chained Event Spine v3 |
+| Evolution | semantic proposal + independent consent + deterministic admission + governed apply |
+| Next frontier | Deterministic Semantic Replay alpha.13 |
 
----
+### Evolution ledger
 
-# Signal Intelligence
+```mermaid
+flowchart LR
+    A1["α1 Glyph memory"] --> A2["α2 Glyph lowering"]
+    A2 --> A3["α3 Typed composition"]
+    A3 --> A4["α4 Sequence core"]
+    A4 --> A5["α5 Effect + purity"]
+    A5 --> A6["α6 Shared projections"]
+    A6 --> A7["α7 Map"]
+    A7 --> A8["α8 Filter"]
+    A8 --> A9["α9 Reduce"]
+    A9 --> A10["α10 Card evidence"]
+    A10 --> A11["α11 Semantic proposals"]
+    A11 --> A12["α12 Consent + admission"]
+    A12 -. next .-> A13["α13 Semantic replay"]
 
-Signal Intelligence is ARIA's language-level model for work that is active but not yet externally visible.
-
-Traditional CLIs show a spinner and then print logs. ARIA models buffering as a
-live predicate followed by measured evidence.
-
-```text
-operation start → pending while live → measured receipt
+    classDef done fill:#1b2830,stroke:#67e8d5,color:#fff;
+    classDef current fill:#351b39,stroke:#ff4fc8,color:#fff;
+    classDef next fill:#1c1c2c,stroke:#8f82ff,color:#c9c2d4,stroke-dasharray:5 5;
+    class A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11 done;
+    class A12 current;
+    class A13 next;
 ```
 
-## Live Bufferflow
+The detailed sequence and admission contracts live in the
+[canonical evolution plan](docs/41-aria-evolution-plan.md).
 
-Signal Integrity Closure alpha.6.1 renders one bounded heartbeat:
+## Operator CLI
 
-```text
-⧖· pending   github.push ⟦∙∙∙·⧖·∙∙∙⟧ elapsed:1.8s
-```
+Run `.\aria.cmd help` for the complete command surface.
 
-It means only that the underlying process remains alive. It claims no internal
-phase, percentage, acceptance, convergence, or verification.
-
-The following multi-phase display is retained as historical documentation of
-the pre-alpha.6.1 behavior and is no longer executable:
-
-```text
-⚙◇ mesh      github.push ⟦··◇◆◇············⟧  0.4s
-◈⚙ transmit  github.push ⟦∙·∙·⬢·∙·∙·∙·∙·∙·∙⟧  1.1s
-⚙◈ align     github.push ⟦········◈◈········⟧  1.8s
-◇⚙ verify    github.push ⟦─·─·─·◆·─·─·─·─·⟧  2.3s
-```
-
-Those retired phase labels previously meant:
-
-| Phase | Meaning |
+| Goal | Command |
 |---|---|
-| `mesh` | Local components engage and establish a working interface |
-| `transmit` | Information crosses a process or provider membrane |
-| `align` | Local and remote state converge toward common geometry |
-| `verify` | Terminal identity, exit state, and coherence are checked |
+| verify installation | `.\aria.cmd doctor -Strict` |
+| run every lattice | `.\aria.cmd test` |
+| verify repository identity | `.\aria.cmd verify` |
+| reseal repository manifest | `.\aria.cmd manifest` |
+| gate a program | `.\aria.cmd gate <program.aria> -Strict` |
+| compile an artifact | `.\aria.cmd compile <program.aria>` |
+| execute source | `.\aria.cmd run <program.aria>` |
+| execute artifact | `.\aria.cmd exec <program.ariac>` |
+| inspect artifact | `.\aria.cmd inspect <program.ariac>` |
+| inspect effect graph | `.\aria.cmd effects <program.aria>` |
+| inspect graph | `.\aria.cmd graph <program.aria>` |
+| inspect event history | `.\aria.cmd events` |
+| explain a cue | `.\aria.cmd cue explain <cue-id>` |
+| inspect glyph memory | `.\aria.cmd glyph memory` |
+| verify intent | `.\aria.cmd intent verify <bundle.json>` |
+| manage Git safely | `.\aria.cmd pull`, `push`, or `sync` |
 
-Current pending animation is suppressed in CI, redirected output, and
-reduced-motion profiles, but the deterministic receipt remains.
-
-## Transmission receipt
-
-After buffering completes, ARIA emits outcome and signal feedback:
-
-```text
-◆ github.push │ 🜂 transport │ ∿ origin/main · b8b3959 │ 🜄 remote identity verified
-└─ ∿ provider · exit code 0 · 1912ms · 83B · exit:0
-```
-
-The primary line answers:
-
-> What verified operation completed?
-
-The projected receipt answers:
-
-> What happened to the signal while it crossed the boundary?
-
-Receipt fields:
-
-| Field | Meaning |
-|---|---|
-| authority | `local`, `provider`, `verifier`, or `runtime` |
-| coherence | the measured process exit code |
-| duration | elapsed transmission time |
-| volume | UTF-8 bytes buffered from stdout and stderr |
-| exit | terminal process exit code |
-| heartbeats | bounded liveness observations before completion |
-
-A receipt is a hash-chained Event Spine record, not decorative logging. Raw
-stdout and stderr are excluded from the event.
-
-## Per-item activation
-
-Every buffered child item should receive its own lifecycle:
-
-```text
-item
-  → record operation start
-  → remain pending while live
-  → perform work
-  → record measured receipt
-```
-
-PowerShell modules can use:
-
-```powershell
-$result = Invoke-AriaBufferedItem `
-    -Name "compiler.compile" `
-    -Mode verification `
-    -Action {
-        # perform one logical item
-    }
-```
-
-For multiple items:
-
-```powershell
-$results = Invoke-AriaBufferedSequence -Items @(
-    [pscustomobject]@{
-        name = "compiler.compile"
-        mode = "verification"
-        action = { "compiled" }
-    },
-    [pscustomobject]@{
-        name = "verifier.artifact"
-        mode = "verification"
-        action = { "verified" }
-    }
-)
-```
-
-For native subprocesses:
-
-```powershell
-$result = Invoke-AriaBufferedProcess `
-    -FilePath $toolPath `
-    -ArgumentList @("--version") `
-    -WorkingDirectory $root `
-    -Label "provider.probe" `
-    -Mode remote
-```
-
-### Buffering invariant
-
-Any ARIA subsystem that intentionally captures or delays output should use the Signalflow primitives. It should not invent a private spinner, print raw progress by default, or hide child-item identity.
-
-```text
-buffered work ⇒ live pending predicate + projected measured receipt
-```
-
----
-
-## Etherflow operator language
-
-ARIA renders state through a compact triadic frame:
-
-```text
-🜂 energy       what authority or action is moving
-∿ information  what identity or payload is carried
-🜄 coherence    whether structure remains aligned
-```
-
-Example:
-
-```text
-◆ github.push │ 🜂 transport │ ∿ origin/main · b8b3959 │ 🜄 remote identity verified
-```
-
-Operator states:
-
-| Glyph | State |
-|---|---|
-| `◆ PASS` | Verified success |
-| `◆ REJECTED` | Invalid or unauthorized input correctly blocked |
-| `◈ ACTIVE` | Work is currently active |
-| `◇ INFO` | Informational state |
-| `⬖ WARN` | Recoverable risk or degraded condition |
-| `⬗ FAIL` | Unexpected failure |
-
-A rejection is not a runtime failure. Correctly denying invalid authority is successful system behavior.
-
----
-
-## Event Spine
-
-The Event Spine is ARIA's canonical event bus.
-
-It provides:
-
-- typed event objects;
-- deterministic canonical JSON;
-- SHA-256 event digests;
-- append-only NDJSON persistence;
-- subscriber dispatch;
-- replay;
-- digest verification;
-- operator rendering downstream of verification.
-
-The local ledger is stored under:
-
-```text
-.aria/events
-```
-
-Use:
-
-```powershell
-.\aria.cmd events
-```
-
-Events are intended for audit and replay. They do not grant execution authority.
-
----
-
-## Gitflow
-
-Gitflow treats Git as a provider behind ARIA's transport membrane.
-
-```powershell
-.\aria.cmd pull
-.\aria.cmd push
-.\aria.cmd sync
-```
-
-Properties:
-
-- native Git progress is buffered;
-- raw output appears only in verbose mode;
-- pulls are fast-forward-only;
-- force-push is not used;
-- push PASS requires remote SHA to equal local `HEAD`;
-- pull PASS requires local and tracking SHAs to agree;
-- transport emits Bufferflow motion and a Signalflow receipt.
-
-Gitflow protects history integrity; it does not replace Git's object model.
-
----
-
-## Policy and capabilities
-
-ARIA is deny-by-default.
-
-Execution authority is distinct from program meaning:
-
-```text
-valid program + invalid capability = rejected execution
-```
-
-Capabilities should be narrow, explicit, and attributable to a verified request. Provider access, filesystem effects, network transmission, and other authorities belong behind policy gates.
-
-Do not bypass the verifier or policy layer to make an example “work.”
-
----
-
-## Determinism and identity
-
-ARIA uses deterministic representations so that identity can be checked rather than guessed.
-
-Important deterministic surfaces include:
-
-- bytecode generation;
-- compressed artifact contents;
-- canonical JSON;
-- event digests;
-- provider transmission envelopes;
-- repository manifests;
-- Source Core IR;
-- graph snapshots and replay transitions;
-- capability tokens and authority decisions;
-- governed-evolution proposals, authorizations, candidates, and rollback proofs;
-- intent declarations, interpretations, approvals, challenges, evidence, and derived proofs;
-- remote Git SHA verification.
-
-Timestamps and environment-specific values must be normalized before participating in identity calculations.
-
----
+Add `-VerboseOutput`, or set `ARIA_VERBOSE=1`, to expose bounded diagnostic
+detail.
 
 ## Repository map
 
 ```text
-.
-├── aria.ps1                 # Primary PowerShell CLI
-├── aria.cmd                 # Windows launcher
-├── aria-source.ps1          # Pure Source Core CLI
-├── aria-source.cmd          # Source Core Windows launcher
-├── aria.policy.json         # Deny-by-default policy
-├── src/                     # Compiler, verifier, VM, event and UI modules
-├── schemas/                 # Typed JSON schemas
-├── examples/source-core/    # Ordinary pure ARIA programs
-├── examples/intent/         # Complete intent-verification bundles
-├── examples/                # Verified-runtime examples and provider fixtures
-├── tests/                   # Deterministic conformance suite
-├── docs/                    # Architecture and evolution documents
-├── .aria/                   # Local runtime state and event ledger
-└── MANIFEST.sha256          # Repository integrity manifest
+ARIA/
+├── aria.cmd / aria.ps1       canonical operator CLI
+├── aria-source.cmd           Source Core CLI
+├── grammar/                  syntax, opcodes, glyphs, semantic cues
+├── schemas/                  machine-readable contracts
+├── src/                      compiler, verifier, VM, authority, evidence
+├── examples/                 executable language examples
+├── plans/                    ARIA-authored evolution and intent artifacts
+├── tests/                    deterministic conformance lattices
+├── docs/
+│   ├── adr/                  architectural decisions
+│   ├── algorithms/           implementation invariants
+│   ├── research/             research maps and open questions
+│   └── assets/               deterministic project visuals
+├── ARIA-RUNTIME.json         machine discovery surface
+├── MANIFEST.sha256           sealed repository identity
+└── AGENTS.md                 operational guide for coding agents
 ```
 
-Generated runtime state under `.aria/` should be treated differently from source-controlled language artifacts.
+## Documentation
 
----
+Choose the shortest path for what you need.
 
-## Development workflow
+### Understand the language
 
-ARIA evolves through validated commits. Material changes should use a feature branch and review before reaching `main`.
+- [Project charter](docs/00-charter.md)
+- [Language specification](docs/01-language-spec.md)
+- [Mathematical model](docs/02-mathematical-model.md)
+- [Glyph alphabet](docs/03-glyph-alphabet.md)
+- [Bytecode and container](docs/04-bytecode-and-container.md)
+- [VM and memory](docs/05-vm-and-memory.md)
 
-Required sequence:
+### Understand verification and authority
 
-```text
-clean tree
-  → fetch
-  → feature branch
-  → content-addressed proposal
-  → explicit human authorization
-  → modify
-  → seal manifest
-  → strict doctor
-  → conformance
-  → rollback proof
-  → reseal manifest
-  → commit
-  → push + review
-  → verify remote SHA
-```
+- [Capability security](docs/06-capability-security.md)
+- [Compiler gates](docs/07-compiler-gates.md)
+- [Typed authority core](docs/27-typed-authority-core.md)
+- [Capability authority](docs/30-capability-authority.md)
+- [Intent verification](docs/36-intent-verification.md)
 
-### Governed evolution
+### Understand the human–machine interface
 
-ARIA can represent a repository change as a verified plan rather than an ambient edit:
+- [Operator renderer](docs/13-operator-renderer.md)
+- [Etherflow](docs/19-etherflow.md)
+- [Event Spine](docs/20-event-spine.md)
+- [Semantic Projection Core](docs/45-semantic-projection-core-alpha6.md)
+- [Signal Integrity Closure](docs/46-signal-integrity-closure-alpha6-1.md)
 
-```text
-proposal
-  → exact base commit and file digests
-  → capability-authority decision
-  → human authorization of the proposal identity
-  → deterministic candidate snapshot
-  → semantic diff
-  → executable rollback proof
-  → manifest + strict doctor + conformance
-  → Git transition
-```
+### Understand language evolution
 
-ARIA now applies an authorized proposal through a constrained transaction executor that binds candidate bytes to the exact base commit, preserves rollback, seals the manifest, runs strict doctor and conformance, commits only approved paths, and optionally pushes while verifying the remote SHA. Proposal content never becomes arbitrary shell authority.
+- [Governed evolution](docs/31-governed-evolution.md)
+- [Evolution planning](docs/34-evolution-planning.md)
+- [Evolution verification](docs/35-evolution-verification.md)
+- [Evolution application](docs/36-evolution-application.md)
+- [Canonical evolution plan](docs/41-aria-evolution-plan.md)
+- [Semantic Proposal Bundles](docs/51-semantic-proposal-bundles-alpha11.md)
+- [Consent and Admission Receipts](docs/52-consent-admission-receipts-alpha12.md)
 
-The first native planning command is non-mutating:
+The complete catalog is in the [documentation index](docs/README.md).
+
+## Development
+
+Before changing compiler, verifier, runtime, authority, schemas, or evolution
+contracts:
 
 ```powershell
-.\aria.cmd evolve plan .\examples\evolution-plan.json
+.\aria.cmd doctor -Strict
+.\aria.cmd test
 ```
 
-It binds the request to the exact Git commit and affected file bytes, proves
-candidate rollback, and writes canonical records under `.aria/evolution/`.
-The record remains `awaiting-authorization`; planning does not apply content,
-run gates, commit, or push.
-
-Authorization is a separate, still non-mutating step:
-
-```powershell
-.\aria.cmd evolve verify <proposal-id> `
-  -Capability .\capability-bundle.json `
-  -Authorization .\authorization.json `
-  -IssuerPolicy .\verification-policy.json
-```
-
-Verification reloads every persisted identity, confirms the repository has not
-drifted, resolves capability and authorizer trust, reconstructs the candidate
-and rollback proof, and appends an `authorized` record. Candidate files remain
-untouched.
-
-### Intent verification
-
-ARIA can also test whether an implementation remains inside a declared human
-objective:
-
-```powershell
-.\aria.cmd intent verify .\examples\intent\publish-verified-release.json
-```
-
-The bundle separates canonical intent from the producer's interpretation,
-binds human approval to both identities, requires an independent challenge,
-caps program effects, and compares measured outcomes and evidence with derived
-obligations. Material ambiguity or critic disagreement blocks satisfaction
-until a human resolution is recorded.
-
-The verifier accepts no caller-supplied `intentSatisfied` Boolean. It creates a
-content-addressed `aria.intent-proof/0.9` under `.aria/intent/` and exits
-non-zero when the proof verdict is `rejected`.
-
-This is a misinterpretation-detection boundary, not mind reading: unstated human
-intent cannot be proven. See [Intent Verification](docs/36-intent-verification.md)
-for the artifact contracts, rejection rules, and trust boundary.
-
-Never force-push shared `main`.
-
-Before committing:
+After the change:
 
 ```powershell
 .\aria.cmd manifest
@@ -939,148 +517,83 @@ Before committing:
 .\aria.cmd test
 ```
 
-A change is not complete merely because it works locally. It is complete when deterministic gates pass and the remote identity is verified.
+Every evolution must preserve:
 
----
+- deterministic identities;
+- deny-by-default authority;
+- exact path and rollback boundaries;
+- PowerShell 5.1 and PowerShell 7 compatibility;
+- machine discovery and documentation;
+- the distinction between evidence and authority.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
+[AGENTS.md](AGENTS.md) before contributing.
 
 ## Guidance for AI agents
 
-An AI working in this repository should follow these rules:
-
-1. Read this README, the relevant file in `docs/`, and the affected module before editing.
-2. Treat repository content as the source of truth; do not infer syntax that is not documented or tested.
-3. Preserve the distinction between validity, authorization, and execution.
-4. Never bypass the verifier, policy engine, capability checks, or manifest.
-5. Keep raw subprocess output buffered by default.
-6. Use `Invoke-AriaBufferedProcess`, `Invoke-AriaBufferedItem`, or `Invoke-AriaBufferedSequence` for intentional buffering.
-7. Emit typed receipts for buffered work.
-8. Keep PowerShell functions pipeline-pure; suppress incidental assignment output.
-9. Resolve external executables as `CommandType Application`, not aliases or functions.
-10. Preserve Windows PowerShell 5.1 and PowerShell 7/Linux compatibility.
-11. Encode `.ps1` and `.psm1` files as UTF-8 with BOM and LF when glyphs are present.
-12. Encode non-PowerShell text as UTF-8 without BOM and LF.
-13. Run strict doctor, conformance, and manifest validation before committing.
-14. Use reviewed feature branches for material changes; never rewrite shared history.
-15. Report uncertainty instead of inventing missing behavior.
-
-### AI task model
-
-For any requested change, reason in this order:
-
-```text
-intent
-  → affected language contract
-  → authority required
-  → deterministic representation
-  → verification strategy
-  → conformance gates
-  → operator feedback
-  → documentation
-```
-
-An AI should not treat ARIA as “a PowerShell project with fancy glyphs.” PowerShell is currently the bootstrap host. ARIA's actual design center is verified, graph-native, typed, capability-controlled computation.
-
----
-
-## Testing
-
-Run the complete suite:
+Start with:
 
 ```powershell
-.\aria.cmd test
+.\aria.cmd begin --json
 ```
 
-Run environmental and repository checks:
+Then read `AGENTS.md` and `ARIA-RUNTIME.json`. Treat generated output as a
+proposal, not permission. Never bypass a failed gate, rewrite history, expose
+secrets, or infer authority from a seal, receipt, or successful test.
 
-```powershell
-.\aria.cmd doctor -Strict
-```
-
-Seal and verify the repository manifest:
-
-```powershell
-.\aria.cmd manifest
-```
-
-Current expected conformance:
+Preferred task model:
 
 ```text
-◆ ALL LATTICES COHERENT PASS 460/460 gates
+discover
+→ declare intent
+→ identify assumptions and ambiguity
+→ propose bounded meaning
+→ verify exact effects and paths
+→ obtain independent consent
+→ implement
+→ run local gates
+→ obtain remote attestation
+→ report exact closure
 ```
 
-CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
+## Evolution frontier
+
+The next bounded milestone is **Deterministic Semantic Replay alpha.13**:
+
+> Given the same baseline, semantic proposal, consent, admission receipt,
+> toolchain lock, policy, and evidence, reproduce the same admitted semantic
+> state—or identify the first exact drift boundary.
+
+After Epoch III closes, ARIA’s PowerShell implementation is intended to become
+a frozen reference oracle for a native front end. It will be preserved as
+evidence, not discarded.
+
+See the [roadmap](docs/11-roadmap.md) and
+[canonical evolution plan](docs/41-aria-evolution-plan.md).
+
+## Project doctrine
+
+1. **Semantics before aesthetics.**
+2. **Verification before execution.**
+3. **Explicit authority before effects.**
+4. **Canonical identity before trust.**
+5. **Evidence before claims.**
+6. **Accessibility before novelty.**
+7. **Reversibility before acceleration.**
+8. **Human agency before engagement.**
+
+ARIA should feel alive because real information is moving, real boundaries are
+being evaluated, and real states are changing—not because the interface is
+pretending.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
 
 ---
 
-## Documentation index
+<div align="center">
 
-Start here:
+**Make computation perceptible without making it dishonest.**
 
-| Document | Subject |
-|---|---|
-| `docs/20-event-spine.md` | Canonical typed event bus |
-| `docs/21-runtime-spine.md` | Compiler-to-VM causal runtime |
-| `docs/23-gitflow-membrane.md` | Buffered and SHA-verified Git transport |
-| `docs/24-oscillator-buffer.md` | Original oscillator primitive |
-| `docs/25-bufferflow.md` | Truthful live pending state and measured receipts |
-| `docs/26-signalflow.md` | Receipts and per-item signal feedback |
-| `docs/27-typed-authority-core.md` | Type lattice, immutable scope and typed IR |
-| `docs/28-graph-execution.md` | Guarded transactional graph rewriting |
-| `docs/29-replay-semantic-diff.md` | Deterministic replay and semantic graph diff |
-| `docs/30-capability-authority.md` | Content-addressed capability authority |
-| `docs/31-governed-evolution.md` | Authorized repository evolution and rollback proof |
-| `docs/33-source-language-core.md` | Ordinary pure Source Core language |
-| `docs/34-evolution-planning.md` | Persistent, non-mutating evolution planning |
-| `docs/35-evolution-verification.md` | Non-mutating capability and authorization verification |
-| `docs/36-intent-verification.md` | Intent artifacts, ambiguity gates, independent challenge and derived proofs |
-| `docs/37-signal-subsets.md` | Bounded transmission evidence, consent, retention and evolution inputs |
-| `docs/41-aria-evolution-plan.md` | Canonical glyph-language evolution sequence |
-| `docs/42-sequence-core-alpha4.md` | Bounded immutable sequence values |
-| `docs/43-effect-purity-core-alpha5.md` | Deterministic effect graph and purity proofs |
-| `docs/44-integration-closure-alpha5-1.md` | Entry effects, artifact-derived intent authority and unified conformance |
-| `docs/45-semantic-projection-core-alpha6.md` | Shared human/machine cue projections |
-| `docs/46-signal-integrity-closure-alpha6-1.md` | Continuous event history and truthful temporal signals |
-| `docs/47-verified-map-alpha7.md` | Typed pure map and measured iteration evidence |
-| `docs/48-verified-filter-alpha8.md` | Stable pure filter and measured selection evidence |
-| `docs/49-verified-reduce-alpha9.md` | Exact pure left fold and bounded accumulator evidence |
-| `docs/50-per-card-execution-evidence-alpha10.md` | Content-addressed per-card runtime receipts |
-| `docs/51-semantic-proposal-bundles-alpha11.md` | Canonical non-mutating language-change contracts |
-| `docs/52-consent-admission-receipts-alpha12.md` | Independent consent and deterministic admission receipts |
-
-Earlier documents record the architectural evolution and remain useful context.
-
----
-
-## Security posture
-
-ARIA is experimental and should not yet be treated as a hardened production sandbox.
-
-Current security principles:
-
-- deny by default;
-- verify before execute;
-- separate identity from authority;
-- constrain provider boundaries;
-- preserve append-only evidence;
-- avoid raw secret-bearing logs;
-- never confuse glyph density with encryption.
-
-Report security-sensitive findings privately rather than publishing exploit details in an issue.
-
----
-
-## Design doctrine
-
-```text
-Glyphs compress expression.
-Types preserve meaning.
-Signatures protect identity.
-Capabilities control authority.
-The verifier decides execution.
-```
-
-ARIA is trying to make computation look less like a stream of commands and more like a verified field of relationships.
-
-The goal is not to make software mysterious.
-
-The goal is to make **authority explicit, identity checkable, execution observable, and AI-generated intent governable**.
+</div>

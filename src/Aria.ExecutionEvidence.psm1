@@ -98,7 +98,21 @@ function ConvertTo-AriaCardExecutionEvidenceBody {
         operation = $Evidence.operation
         outcome = [string]$Evidence.outcome
         counts = $Evidence.counts
-        terminalEvent = $Evidence.terminalEvent
+        terminalEvent = [pscustomobject][ordered]@{
+            operationId = [string]$Evidence.terminalEvent.operationId
+            sequence = [int]$Evidence.terminalEvent.sequence
+            operationSequence = [int]$Evidence.terminalEvent.operationSequence
+            occurredAt = if ($Evidence.terminalEvent.occurredAt -is [datetime]) {
+                ([datetime]$Evidence.terminalEvent.occurredAt).
+                    ToUniversalTime().
+                    ToString('o',[Globalization.CultureInfo]::InvariantCulture)
+            }
+            else {
+                [string]$Evidence.terminalEvent.occurredAt
+            }
+            state = [string]$Evidence.terminalEvent.state
+            digest = [string]$Evidence.terminalEvent.digest
+        }
         signalSubset = $Evidence.signalSubset
         authority = $Evidence.authority
     }

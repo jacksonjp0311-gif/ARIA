@@ -12,6 +12,7 @@ All notable changes to ARIA are recorded here. The compiler, language specificat
 - Classified evidence as observational and rejected every authority or capability claim.
 - Added persistent `evidence.card.execution` linkage events with exact replay and tamper rejection.
 - Reverified the exact workspace Event Spine after suite-level module reloads before sealing aggregate conformance closure.
+- Canonicalized materialized PowerShell 7 `DateTime` event timestamps back to exact UTC text before receipt hashing.
 - Added a 20-gate Per-Card Execution Evidence lattice and raised aggregate conformance to `416/416` across thirteen lattices.
 
 ## Verified Reduce alpha.9

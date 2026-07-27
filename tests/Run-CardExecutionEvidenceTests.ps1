@@ -171,11 +171,13 @@ try {
             $clone = Copy-JsonValue $receipt
             # PowerShell 7 materializes ISO timestamps as DateTime while
             # Windows PowerShell 5.1 preserves strings.
-            $clone.terminalEvent.occurredAt = [datetime]::Parse(
-                [string]$clone.terminalEvent.occurredAt,
-                [Globalization.CultureInfo]::InvariantCulture,
-                [Globalization.DateTimeStyles]::RoundtripKind
-            )
+            if ($clone.terminalEvent.occurredAt -isnot [datetime]) {
+                $clone.terminalEvent.occurredAt = [datetime]::Parse(
+                    [string]$clone.terminalEvent.occurredAt,
+                    [Globalization.CultureInfo]::InvariantCulture,
+                    [Globalization.DateTimeStyles]::RoundtripKind
+                )
+            }
             Assert-Equal $receipt.digest (Get-AriaCardExecutionEvidenceDigest $clone) 'Receipt digest changed across JSON round trip.'
             Assert-True (Test-AriaCardExecutionEvidence -Evidence $clone -Registry $registry).valid 'Round-tripped receipt failed.'
         }

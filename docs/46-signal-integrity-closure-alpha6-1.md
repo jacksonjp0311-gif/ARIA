@@ -137,7 +137,7 @@ algorithm card. Event records observe decisions; they do not make them.
 
 ## Next boundary
 
-Verified Map alpha.7 now uses this substrate as the first iterable language
-operation whose start, measured iteration, completion, fracture, and evidence
-history share the same human/machine semantic spine. Verified Filter alpha.8 is
-the next bounded language boundary.
+Verified Map alpha.7 and Verified Filter alpha.8 now use this substrate as
+iterable language operations whose start, measured iteration, completion,
+fracture, and evidence history share the same human/machine semantic spine.
+Verified Reduce alpha.9 is the next bounded language boundary.

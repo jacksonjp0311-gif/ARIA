@@ -347,15 +347,15 @@ Test-Case 'static signal writing does not advance semantic event history' {
     Write-AriaSignal -Mode Observe -Name static-signal
     Assert-Equal 0 @(Get-AriaEventBuffer).Count 'Legacy static signal manufactured an event.'
 }
-Test-Case 'signal integrity closure grants no algorithm authority' {
+Test-Case 'signal integrity closure remains authority-stable after filter' {
     $registry = Read-AriaUtf8Text -Path (Join-Path $root 'grammar/glyph-cards.json') | ConvertFrom-Json
-    $map = @($registry.cards | Where-Object { $_.id -eq 'algorithm.map' })[0]
-    Assert-Equal 'verified' $map.status 'Map was not admitted.'
-    Assert-Equal 0 @($map.capabilities).Count 'Map introduced authority.'
-    foreach ($id in @('algorithm.filter','algorithm.reduce')) {
+    foreach ($id in @('algorithm.map','algorithm.filter')) {
         $card = @($registry.cards | Where-Object { $_.id -eq $id })[0]
-        Assert-Equal 'specified' $card.status "Algorithm card '$id' activated early."
+        Assert-Equal 'verified' $card.status "Algorithm card '$id' was not admitted."
+        Assert-Equal 0 @($card.capabilities).Count "Algorithm card '$id' introduced authority."
     }
+    $reduce = @($registry.cards | Where-Object { $_.id -eq 'algorithm.reduce' })[0]
+    Assert-Equal 'specified' $reduce.status 'Reduce activated early.'
 }
 
 Write-Host ''

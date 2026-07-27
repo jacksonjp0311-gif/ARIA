@@ -315,7 +315,7 @@ try {
 
     Test-SequenceCase 'sequence uses structured constants without opcode expansion' {
         $opcodes = Get-AriaOpcodeRegistry
-        Assert-Equal 38 $opcodes.Count 'Opcode registry changed.'
+        Assert-Equal 39 $opcodes.Count 'Opcode registry changed.'
 
         $sequences = @(
             $validGate.bytecode.constants |
@@ -418,15 +418,14 @@ try {
             'Empty sequence memory type changed.'
     }
 
-    Test-SequenceCase 'map is verified while later algorithms remain inactive' {
+    Test-SequenceCase 'map and filter are verified while reduce remains inactive' {
         $registry = Read-AriaGlyphCardRegistry -Root $root
-        $map = Get-AriaGlyphCard -Id 'algorithm.map' -Registry $registry
-        Assert-Equal 'verified' $map.status 'Map card was not admitted.'
-        foreach ($id in @('algorithm.filter','algorithm.reduce')) {
-            $card = Get-AriaGlyphCard -Id $id -Registry $registry
-            Assert-Equal 'specified' $card.status `
-                "Algorithm card '$id' advanced without evidence."
+        foreach ($id in @('algorithm.map','algorithm.filter')) {
+            Assert-Equal 'verified' (Get-AriaGlyphCard -Id $id -Registry $registry).status `
+                "Algorithm card '$id' was not admitted."
         }
+        Assert-Equal 'specified' (Get-AriaGlyphCard -Id 'algorithm.reduce' -Registry $registry).status `
+            'Reduce advanced without evidence.'
 
         Assert-Equal 9 @(Get-AriaExecutableGlyphAliases).Count `
             'Sequence core added an executable glyph alias.'

@@ -1,7 +1,7 @@
 {
     "schema":  "aria.runtime/1",
-    "release":  "0.1.0-alpha.9",
-    "languageEvolution":  "verified-map-alpha.7",
+    "release":  "0.1.0-alpha.10",
+    "languageEvolution":  "verified-filter-alpha.8",
     "status":  "experimental",
     "repository":  {
                        "name":  "ARIA",
@@ -33,7 +33,9 @@
                          "eventSpine":  "src/Aria.EventSpine.psm1",
                          "signalIntegrityPlan":  "plans/signal-integrity-closure-alpha6-1.aria",
                          "verifiedMap":  "src/Aria.VM.psm1",
-                         "verifiedMapPlan":  "plans/verified-map-alpha7.aria"
+                         "verifiedMapPlan":  "plans/verified-map-alpha7.aria",
+                         "verifiedFilter":  "src/Aria.VM.psm1",
+                         "verifiedFilterPlan":  "plans/verified-filter-alpha8.aria"
                      },
     "continuity":  {
                        "stableTag":  "aria-alpha21-stable",

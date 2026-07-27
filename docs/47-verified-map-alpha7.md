@@ -116,12 +116,14 @@ The dedicated 22-gate lattice covers:
 - order, length, output type, empty sequence, nested map, and determinism;
 - measured event order, value privacy, and runtime fracture evidence;
 - unchanged capability and policy authority;
-- continued inactivity of filter and reduce.
+- the alpha.7 boundary where filter and reduce were still inactive.
 
-Aggregate conformance is `344/344`.
+Aggregate conformance at alpha.7 was `344/344`; the current repository baseline
+is recorded in `AGENTS.md` and `ARIA-RUNTIME.json`.
 
 ## Next boundary
 
-Verified Filter alpha.8 may reuse the same compile-time pure-function and
-iteration-evidence architecture, but it requires a distinct cardinality
-contract. Filter remains specified and inactive until that lattice exists.
+Verified Filter alpha.8 subsequently reused the compile-time pure-function and
+iteration-evidence architecture while adding a distinct stable-cardinality
+contract. Its admitted contract is recorded in
+`docs/48-verified-filter-alpha8.md`.

@@ -22,8 +22,9 @@ Two function cards are marked `verified` because they lower to the existing
 - `▷` — `function.invoke`
 - `↩` — `function.return`
 
-Four cards are marked `specified` and cannot activate until their compiler and
-runtime implementations have their own gates:
+At the alpha.1 milestone, four cards were marked `specified` and could not
+activate until their compiler and runtime implementations gained dedicated
+gates:
 
 - `≫` — `composition.pipe`
 - `⨯` — `algorithm.map`

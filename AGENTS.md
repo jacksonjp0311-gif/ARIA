@@ -16,7 +16,7 @@ A healthy baseline must report:
 
 - repository manifest integrity
 - `SYSTEM READY`
-- `344/344` aggregate conformance with zero failures
+- `368/368` aggregate conformance with zero failures
 
 ## Authoritative entrypoints
 

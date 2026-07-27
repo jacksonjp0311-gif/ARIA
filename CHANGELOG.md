@@ -2,6 +2,17 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Verified Filter alpha.8
+
+- Activated the sealed `⫰ algorithm.filter` card as ARIA's second sequence algorithm.
+- Added the exact `⫰(sequence, Predicate)` surface with compile-time predicate identity.
+- Required an exact unary `T → Bool` predicate proven pure through the transitive effect graph.
+- Added independently verified `FILTER` bytecode without adding a capability or policy permission.
+- Preserved source order and input immutability across zero, some, all, and empty selections.
+- Emitted value-free filter start, measured iteration, completion, and fracture evidence with completed and selected counts.
+- Proved deterministic Map/Filter composition through explicit runtime operation boundaries.
+- Added a 24-gate Verified Filter lattice and expanded aggregate conformance to `368/368`.
+
 ## Verified Map alpha.7
 
 - Activated the sealed `⨯ algorithm.map` card as ARIA's first sequence algorithm.

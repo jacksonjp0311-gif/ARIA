@@ -175,6 +175,78 @@ function Invoke-AriaVmMap {
     }
 }
 
+function Invoke-AriaVmFilter {
+    param($Context,$SequenceValue,$Instruction,[int]$CallDepth)
+    $validation = Test-AriaSequenceValue -Value $SequenceValue
+    if (-not $validation.valid) { throw 'ARIA VM FILTER requires a valid sequence value.' }
+    $predicateName = [string]$Instruction.predicate
+    if (-not $Context.functionMap.ContainsKey($predicateName)) {
+        throw "ARIA VM FILTER references unknown predicate '$predicateName'."
+    }
+    $predicate = $Context.functionMap[$predicateName]
+    $parameters = @($predicate.parameters)
+    $summary = $predicate.PSObject.Properties['effectSummary']
+    if (
+        $parameters.Count -ne 1 -or
+        [string]$predicate.returnType -ne 'Bool' -or
+        $null -eq $summary -or
+        [string]$summary.Value.purity -ne 'pure'
+    ) {
+        throw "ARIA VM FILTER predicate '$predicateName' is not an admitted unary pure Bool function."
+    }
+    $declaredElement = Get-AriaSequenceElementType -Type ([string]$Instruction.sequenceType)
+    if (
+        [string]$parameters[0].type -ne $declaredElement -or
+        (
+            [string]$validation.elementType -ne 'Empty' -and
+            [string]$validation.elementType -ne $declaredElement
+        )
+    ) {
+        throw "ARIA VM FILTER predicate '$predicateName' does not accept the declared input sequence."
+    }
+
+    if (Get-Command Start-AriaEventOperation -ErrorAction SilentlyContinue) {
+        $null = Start-AriaEventOperation -Name ('algorithm.filter.' + $predicateName)
+    }
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $inputCount = @($validation.values).Count
+    $completed = 0
+    $selected = 0
+    $resultValues = New-Object System.Collections.Generic.List[object]
+    $startRecord = [pscustomobject][ordered]@{kind='filter';state='start';predicate=$predicateName;inputCount=$inputCount;line=[int]$Instruction.line}
+    Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $startRecord -Domain algorithm -Phase filter.start -State ACTIVE -Energy execution -Information $predicateName -Coherence 'filter started'
+
+    try {
+        foreach ($value in @($validation.values)) {
+            $accepted = Invoke-AriaVmFunction -Context $Context -Name $predicateName -Arguments @($value) -CallDepth $CallDepth -Line ([int]$Instruction.line)
+            if ([bool]$accepted) {
+                $resultValues.Add($value)
+                $selected++
+            }
+            $completed++
+            $iterationRecord = [pscustomobject][ordered]@{kind='filter';state='iteration';predicate=$predicateName;completed=$completed;inputCount=$inputCount;selectedCount=$selected;line=[int]$Instruction.line}
+            Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $iterationRecord -Domain algorithm -Phase filter.iteration -State INFO -Energy iteration -Information $predicateName -Coherence ("iteration {0} complete; {1} selected" -f $completed,$selected)
+        }
+        $result = New-AriaSequenceValue -ElementType $declaredElement -Values $resultValues.ToArray()
+        $clock.Stop()
+        $completeRecord = [pscustomobject][ordered]@{kind='filter';state='complete';predicate=$predicateName;completed=$completed;inputCount=$inputCount;selectedCount=$selected;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
+        Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase filter.complete -State PASS -Energy completion -Information $predicateName -Coherence 'filter contract passed'
+        return $result
+    }
+    catch {
+        $originalError = $_
+        $clock.Stop()
+        try {
+            $fractureRecord = [pscustomobject][ordered]@{kind='filter';state='fracture';predicate=$predicateName;completed=$completed;inputCount=$inputCount;selectedCount=$selected;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
+            Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $fractureRecord -Domain algorithm -Phase filter.fracture -State FAIL -Energy interruption -Information $predicateName -Coherence 'filter predicate rejected'
+        }
+        catch {
+            # Preserve the runtime fracture when evidence publication is unavailable.
+        }
+        throw $originalError
+    }
+}
+
 function Resolve-AriaRuntimePathForEffect {
     param([hashtable]$Active,[hashtable]$CapabilityMap,$Policy,[string]$Effect,[string]$WorkspaceRoot,[string]$RequestedPath)
     [string[]]$names=@($Active.Keys|ForEach-Object{[string]$_});[Array]::Sort($names,[StringComparer]::Ordinal);$authorized=New-Object System.Collections.Generic.List[object]
@@ -309,6 +381,7 @@ function Invoke-AriaInstructionSequence {
             'CONNECT_CLOSE'{Assert-AriaRuntimeEffect $Context.policy 'console.emit';$name=[string]$ins.connection;$state=Assert-AriaConnectionPhase $Context $name 'consent' ([int]$ins.line);$approved=[bool]$state.approved;$state.phase='closed';Add-AriaConnectionEvent $Context $name 'closed' ([int]$ins.line) '' $approved}
             'CALL'{$name=[string]$ins.name;$argCount=[int]$ins.argCount;if($argCount-eq0){[object[]]$args=@()}else{[object[]]$args=New-Object object[] $argCount};for($a=$args.Length-1;$a-ge0;$a--){$args[$a]=Pop-AriaRuntime $stack "CALL $name line $($ins.line)"};$stack.Push((Invoke-AriaVmFunction -Context $Context -Name $name -Arguments $args -CallDepth $CallDepth -Line ([int]$ins.line)))}
             'MAP'{$sequenceValue=Pop-AriaRuntime $stack "MAP line $($ins.line)";$stack.Push((Invoke-AriaVmMap -Context $Context -SequenceValue $sequenceValue -Instruction $ins -CallDepth $CallDepth))}
+            'FILTER'{$sequenceValue=Pop-AriaRuntime $stack "FILTER line $($ins.line)";$stack.Push((Invoke-AriaVmFilter -Context $Context -SequenceValue $sequenceValue -Instruction $ins -CallDepth $CallDepth))}
             'IF'{$condition=Pop-AriaRuntime $stack "IF line $($ins.line)";Assert-AriaRuntimeType 'Bool' $condition "if line $($ins.line)";Add-AriaScope $Scopes;try{$branch=if([bool]$condition){@($ins.then)}else{@($ins.else)};$result=Invoke-AriaInstructionSequence $branch $Context $Scopes (Copy-AriaRuntimeTable $ActiveCapabilities) $CallDepth}finally{Remove-AriaScope $Scopes};if($result.control-ne'normal'){return $result}}
             'REPEAT'{$raw=Pop-AriaRuntime $stack "REPEAT line $($ins.line)";Assert-AriaRuntimeType 'Number' $raw "repeat line $($ins.line)";$count=[double]$raw;if($count-lt0-or$count-gt[int]$ins.max-or[math]::Floor($count)-ne$count){throw "ARIA repeat count must be an integer from 0 through $($ins.max) at source line $($ins.line)."};for($iteration=0;$iteration-lt[int]$count;$iteration++){Add-AriaScope $Scopes @{([string]$ins.iterator)=[long]$iteration};try{$result=Invoke-AriaInstructionSequence @($ins.body) $Context $Scopes (Copy-AriaRuntimeTable $ActiveCapabilities) $CallDepth}finally{Remove-AriaScope $Scopes};if($result.control-ne'normal'){return $result}}}
             'RETURN'{$value=if([bool]$ins.hasValue){Pop-AriaRuntime $stack "RETURN line $($ins.line)"}else{$null};if($stack.Count-ne0){throw "ARIA VM function return left $($stack.Count) operand(s) on the stack."};return [pscustomobject]@{control='return';value=$value}}

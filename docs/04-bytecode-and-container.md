@@ -15,7 +15,7 @@ ARIA 0.4.0 lowers typed source into structured stack bytecode. The bytecode is i
 | Filesystem | `FS_READ`, `FS_WRITE` | Perform policy-gated, workspace-confined text I/O. |
 | Agents | `AGENT_DISPATCH` | Emit a deterministic agent task event. |
 | Functions | `CALL`, `RETURN` | Enter a typed local frame and return exactly one scalar result, including `Null`. |
-| Pure sequence algorithms | `MAP` | Apply one compile-time unary pure transform to a bounded sequence while preserving order and length. |
+| Pure sequence algorithms | `MAP`, `FILTER` | Apply a compile-time unary pure transform or select through a compile-time unary pure Boolean predicate. |
 | Structured control | `IF`, `REPEAT` | Execute nested verified instruction sequences without arbitrary jump offsets. |
 | Termination | `HALT` | Stop the entry flow. |
 
@@ -36,6 +36,7 @@ The verifier checks:
 - arithmetic, comparison, Boolean, call, return, memory, and dispatch types;
 - function argument counts and return contracts;
 - `MAP` transform identity, unary arity, purity, and exact sequence element contracts;
+- `FILTER` predicate identity, unary arity, purity, exact input type, and exact `Bool` return;
 - lexical variable definitions;
 - memory, capability, function, and agent references;
 - capability activation before host effects;
@@ -48,6 +49,11 @@ The VM repeats runtime type, policy, path, memory, call-depth, and loop-bound ch
 the instruction. The transform is not a runtime function value. The VM invokes
 the already verified function body once per element and constructs the result
 through the existing sequence validator and resource ceilings.
+
+`FILTER` stores the predicate identity and unchanged sequence type directly in
+the instruction. The VM invokes the verified predicate once per element in
+source order, retains only elements whose result is `true`, and constructs a
+fresh result through the same sequence ceilings.
 
 ## Binary envelope
 

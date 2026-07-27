@@ -33,10 +33,10 @@ brutally rigorous underneath
 
 | Layer | State |
 |---|---|
-| Compiler | `0.1.0-alpha.9` |
+| Compiler | `0.1.0-alpha.10` |
 | Language specification | `0.4.0` |
-| Source Core | bounded sequences + verified map + glyph composition + whole-program effect proofs |
-| Conformance | `344/344` deterministic gates across ten lattices |
+| Source Core | bounded sequences + verified map/filter + glyph composition + whole-program effect proofs |
+| Conformance | `368/368` deterministic gates across eleven lattices |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
@@ -44,12 +44,14 @@ brutally rigorous underneath
 | Evolution | Persistent plans + verified authorization + rollback proof |
 | Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
 | Effect verification | Entry flow + function call closure + independently reconstructed bytecode graph |
-| Event model | Hash-chained Event Spine v3 + operation continuity + measured map iteration projections |
+| Event model | Hash-chained Event Spine v3 + operation continuity + measured map/filter projections |
 | Operator UI | Content-addressed cues + Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
 | External AI provider | Not connected yet |
 
-ARIA currently targets Windows PowerShell 5.1 and PowerShell 7 on Linux CI. It is alpha software: the architecture is real, tested, and evolving; compatibility is not yet frozen.
+ARIA currently targets Windows PowerShell 5.1 and PowerShell 7 on both Windows
+and Linux CI. It is alpha software: the architecture is real, tested, and
+evolving; compatibility is not yet frozen.
 
 ---
 
@@ -146,6 +148,8 @@ See [Semantic Projection Core alpha.6](docs/45-semantic-projection-core-alpha6.m
 for the full event, accessibility, privacy, and non-manipulation contract.
 See [Verified Map alpha.7](docs/47-verified-map-alpha7.md) for the first
 language operation built directly on that shared signal history.
+See [Verified Filter alpha.8](docs/48-verified-filter-alpha8.md) for stable,
+typed selection with measured input and selected-count evidence.
 
 ---
 
@@ -168,7 +172,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ ALL LATTICES COHERENT PASS   344/344 gates
+◆ ALL LATTICES COHERENT PASS   368/368 gates
 ```
 
 ### Run an ordinary ARIA program
@@ -222,6 +226,38 @@ Run it through the normal compiler, verifier, policy gate, and VM:
 length, reuses existing sequence limits, and emits start, actual completed
 iterations, completion, or fracture through Event Spine v3 without recording
 element values.
+
+### Use ARIA's verified filter
+
+```aria
+aria 0.4.0
+module VerifiedFilterExample version 0.8.0
+program VerifiedFilterExample version 0.8.0
+entry Main
+
+function IsPositive(value: Number) -> Bool {
+  ↩ value > 0
+}
+
+flow Main {
+  let values: Sequence<Number> = [-2, 0, 3, 4]
+  let selected: Sequence<Number> = ⫰(values, IsPositive)
+  emit selected
+  halt
+}
+```
+
+Run the same source through the compiler, independent bytecode verifier, policy
+gate, VM, and Event Spine:
+
+```powershell
+.\aria.cmd run .\examples\verified-filter.aria
+```
+
+`⫰` requires a compile-time unary pure predicate with the exact element type
+and an exact `Bool` return. It preserves source order and input immutability,
+while its evidence records only completed and selected counts—not element
+values.
 
 ### Discover the CLI
 
@@ -916,7 +952,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ ALL LATTICES COHERENT PASS 344/344 gates
+◆ ALL LATTICES COHERENT PASS 368/368 gates
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
@@ -952,6 +988,7 @@ Start here:
 | `docs/45-semantic-projection-core-alpha6.md` | Shared human/machine cue projections |
 | `docs/46-signal-integrity-closure-alpha6-1.md` | Continuous event history and truthful temporal signals |
 | `docs/47-verified-map-alpha7.md` | Typed pure map and measured iteration evidence |
+| `docs/48-verified-filter-alpha8.md` | Stable pure filter and measured selection evidence |
 
 Earlier documents record the architectural evolution and remain useful context.
 

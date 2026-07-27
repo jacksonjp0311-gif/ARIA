@@ -56,6 +56,7 @@ function Add-AriaExpressionInstructions {
         'binary'{Add-AriaExpressionInstructions $Expression.left $Instructions $Constants $ConstantIndex $FunctionMap $Line;Add-AriaExpressionInstructions $Expression.right $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op=(Get-AriaBinaryOpcode $Expression.operator);line=$Line})}
         'call'{foreach($argument in @($Expression.arguments)){Add-AriaExpressionInstructions $argument $Instructions $Constants $ConstantIndex $FunctionMap $Line};$fn=$FunctionMap[[string]$Expression.name];$Instructions.Add([pscustomobject][ordered]@{op='CALL';name=[string]$Expression.name;argCount=@($Expression.arguments).Count;returnType=[string]$fn.returnType;line=$Line})}
         'map'{Add-AriaExpressionInstructions $Expression.sequence $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op='MAP';transform=[string]$Expression.transform;inputType=[string]$Expression.sequence.inferredType;outputType=[string]$Expression.inferredType;line=$Line})}
+        'filter'{Add-AriaExpressionInstructions $Expression.sequence $Instructions $Constants $ConstantIndex $FunctionMap $Line;$Instructions.Add([pscustomobject][ordered]@{op='FILTER';predicate=[string]$Expression.predicate;sequenceType=[string]$Expression.inferredType;line=$Line})}
         default{throw "Cannot compile expression kind '$($Expression.kind)'."}
     }
 }
@@ -364,6 +365,32 @@ function Test-AriaInstructionSequence {
                     }
                 }
                 Push-AriaVerifierType $stack $(if($outputType){$outputType}else{'Any'}) ([ref]$maximum)
+            }
+            'FILTER' {
+                $actual = Pop-AriaVerifierType $stack $Errors "FILTER instruction $index"
+                $predicateName = if (Test-AriaInstructionHasProperty $instruction 'predicate') { [string]$instruction.predicate } else { '' }
+                $sequenceType = if (Test-AriaInstructionHasProperty $instruction 'sequenceType') { [string]$instruction.sequenceType } else { '' }
+                $elementType = Get-AriaSequenceElementType -Type $sequenceType
+
+                if (-not (Test-AriaBytecodeIdentifier $predicateName)) { $Errors.Add("FILTER at $index has an invalid predicate identity.") }
+                if (-not (Test-AriaDeclaredTypeName -Type $sequenceType) -or -not $elementType) { $Errors.Add("FILTER at $index has invalid sequence type '$sequenceType'.") }
+                if ($actual -ne $sequenceType) { $Errors.Add("FILTER at $index expects $sequenceType, received $actual.") }
+
+                if (-not $Functions.ContainsKey($predicateName)) {
+                    $Errors.Add("FILTER at $index references unknown predicate '$predicateName'.")
+                }
+                else {
+                    $fn = $Functions[$predicateName]
+                    $parameters = @($fn.parameters)
+                    if ($parameters.Count -ne 1) { $Errors.Add("FILTER at $index predicate '$predicateName' must be unary.") }
+                    elseif ([string]$parameters[0].type -ne $elementType) { $Errors.Add("FILTER at $index predicate input does not match $sequenceType.") }
+                    if ([string]$fn.returnType -ne 'Bool') { $Errors.Add("FILTER at $index predicate '$predicateName' must return Bool.") }
+                    $summaryProperty = $fn.PSObject.Properties['effectSummary']
+                    if ($null -eq $summaryProperty -or [string]$summaryProperty.Value.purity -ne 'pure') {
+                        $Errors.Add("FILTER at $index predicate '$predicateName' is not proven pure.")
+                    }
+                }
+                Push-AriaVerifierType $stack $(if($sequenceType){$sequenceType}else{'Any'}) ([ref]$maximum)
             }
             'IF' {
                 $condition = Pop-AriaVerifierType $stack $Errors "IF instruction $index"

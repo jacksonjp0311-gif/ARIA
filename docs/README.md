@@ -16,6 +16,8 @@ The documents in this directory define the language, its bootstrap implementatio
 - [`09-versioning-and-compatibility.md`](09-versioning-and-compatibility.md) — compiler/spec/container version policy
 - [`10-repository-operations.md`](10-repository-operations.md) — local development and release workflow
 - [`11-roadmap.md`](11-roadmap.md) — staged evolution beyond the bootstrap
+- [`47-verified-map-alpha7.md`](47-verified-map-alpha7.md) — verified typed transformation and iteration evidence
+- [`48-verified-filter-alpha8.md`](48-verified-filter-alpha8.md) — verified stable selection and count evidence
 
 ## Algorithms
 
@@ -27,7 +29,9 @@ The [`research/`](research/) folder maps compiler theory, formal semantics, secu
 
 ## Architecture decisions
 
-The [`adr/`](adr/) folder records why ARIA uses a PowerShell bootstrap, a deterministic core, glyph aliases, and memory outside executable artifacts.
+The [`adr/`](adr/) folder records why ARIA uses a PowerShell bootstrap, a
+deterministic core, glyph aliases, memory outside executable artifacts, and
+explicit verifier-visible sequence algorithm instructions.
 
 ## Validation
 

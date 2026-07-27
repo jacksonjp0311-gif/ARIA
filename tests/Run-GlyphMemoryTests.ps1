@@ -210,7 +210,7 @@ try {
             'Activation state mismatch.'
     }
 
-    Test-GlyphMemoryCase 'specified filter cannot activate early' {
+    Test-GlyphMemoryCase 'verified filter activates with clean evidence' {
         $card = Get-AriaGlyphCard `
             -Id 'algorithm.filter' `
             -Registry $registry
@@ -219,21 +219,16 @@ try {
             Get-AriaSha256Text 'glyph-memory-test-context'
         )
 
-        $rejected = $false
+        $activation = New-AriaGlyphActivation `
+            -Card $card `
+            -ContextDigest $context `
+            -PolicyDecision allow `
+            -TestsPassed 24 `
+            -TestsFailed 0 `
+            -Source 'tests'
 
-        try {
-            $null = New-AriaGlyphActivation `
-                -Card $card `
-                -ContextDigest $context `
-                -PolicyDecision allow `
-                -TestsPassed 3
-        }
-        catch {
-            $rejected = $true
-        }
-
-        Assert-True $rejected `
-            'Specified filter activated before implementation.'
+        Assert-True (Test-AriaGlyphActivation $activation).valid `
+            'Verified filter activation was rejected.'
     }
 
     Test-GlyphMemoryCase 'activation memory round-trips and detects tampering' {

@@ -359,7 +359,7 @@ try {
 
     Test-GlyphLoweringCase 'lowering introduces no new opcode' {
         $opcodes = Get-AriaOpcodeRegistry
-        Assert-Equal 38 $opcodes.Count 'Opcode registry changed during lowering.'
+        Assert-Equal 39 $opcodes.Count 'Opcode registry changed during lowering.'
 
         $generated = @(
             @($glyphGate.bytecode.instructions.op) +

@@ -96,6 +96,7 @@ contract is explicitly proposed and admitted.
 | Glyph Lowering alpha.2 | Complete | `▷` and `↩` lower to existing `CALL` and `RETURN` |
 | Typed Composition alpha.3 | Complete | `≫` lowers left-to-right into typed nested calls |
 | Verified Map alpha.7 | Complete | `⨯` applies a compile-time unary pure transform with measured iteration evidence |
+| Verified Filter alpha.8 | Complete | `⫰` performs stable typed selection with measured count evidence |
 | Core conformance | Complete | 202-test established language lattice |
 | Cross-platform attestation | Complete | Windows PowerShell 5.1, PowerShell 7 Windows, PowerShell 7 Linux |
 
@@ -107,10 +108,9 @@ Verified executable cards:
 ≫  composition.pipe
 ```
 
-Specified and inactive cards after alpha.7:
+Specified and inactive card after alpha.8:
 
 ```text
-⫰  algorithm.filter
 Σ  algorithm.reduce
 ```
 
@@ -862,15 +862,18 @@ verified layers beneath it.
   bytecode metadata, independent verifier reconstruction, VM admission, glyph
   proof obligations, CI, and operator inspection.
 - `⨯ algorithm.map` is verified through its dedicated 22-gate lattice.
-- `⫰ algorithm.filter` and `Σ algorithm.reduce` remain specified and inactive
-  until their dedicated algorithm lattices pass.
+- `⫰ algorithm.filter` is verified through its dedicated 24-gate lattice.
+- `Σ algorithm.reduce` remains specified and inactive until its dedicated
+  algorithm lattice passes.
 - Semantic Projection Core alpha.6 interposes the governing human/machine
   projection contract before sequence algorithms.
 - Signal Integrity Closure alpha.6.1 gives that contract continuous history,
   truthful live waiting, VM adoption, and governance adoption.
 - Verified Map alpha.7 connects typed sequences, purity proofs, explicit MAP
   bytecode, deterministic VM iteration, and Event Spine evidence.
-- The next bounded evolution is Verified Filter alpha.8.
+- Verified Filter alpha.8 connects stable selection, exact Boolean predicates,
+  explicit FILTER bytecode, input immutability, and measured count evidence.
+- The next bounded evolution is Verified Reduce alpha.9.
 - Integration Closure alpha.5.1 completes entry-flow effect coverage, derives
   intent authority from admitted artifacts, unifies all local lattices, and
   synchronizes release discovery before Semantic Projection Core alpha.6.

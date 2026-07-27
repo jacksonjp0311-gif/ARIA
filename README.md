@@ -2,11 +2,7 @@
 
 ![ARIA — a verified language between human and machine](docs/assets/aria-hero.svg)
 
-[![ARIA gates](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml)
-![Release](https://img.shields.io/badge/release-0.1.0--alpha.14-ff4fc8?style=flat-square)
-![Conformance](https://img.shields.io/badge/conformance-460%2F460-67e8d5?style=flat-square)
-![PowerShell](https://img.shields.io/badge/bootstrap-PowerShell_5.1_%7C_7-8a72ff?style=flat-square)
-[![License](https://img.shields.io/badge/license-Apache--2.0-d8d2e5?style=flat-square)](LICENSE)
+[![ARIA gates](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml) ![Release](https://img.shields.io/badge/release-0.1.0--alpha.14-ff4fc8?style=flat-square) ![Conformance](https://img.shields.io/badge/conformance-460%2F460-67e8d5?style=flat-square) ![PowerShell](https://img.shields.io/badge/bootstrap-PowerShell_5.1_%7C_7-8a72ff?style=flat-square) [![License](https://img.shields.io/badge/license-Apache--2.0-d8d2e5?style=flat-square)](LICENSE)
 
 **A local-first, typed programming language for shared human–AI semantics, verified computation, explicit authority, and governable evolution.**
 

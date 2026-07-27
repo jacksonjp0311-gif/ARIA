@@ -47,6 +47,13 @@ The content-addressed semantic-cue registry is fully verified once per module
 process and then reused as that exact in-memory identity. Passing an explicit
 registry to projection APIs continues to trigger full validation.
 
+Verified Map, Filter, and Reduce terminal events now derive one
+`aria.card-execution-evidence/1` receipt. The receipt binds the exact card,
+program artifact, effect graph, policy, admission-test contract, aggregate
+counts, and terminal event identity. A privacy-filtered SignalSubset records
+the exact selected and excluded event fields. Event Spine then seals a bounded
+`evidence.card.execution` linkage event.
+
 ## Authority boundary
 
 Events describe what happened. They do not grant authority. Policy and bytecode verification remain independent execution gates.
@@ -56,3 +63,7 @@ Events describe what happened. They do not grant authority. Policy and bytecode 
 `aria events` reads the verified local event ledger and renders recent events through the active Etherflow profile.
 
 `aria transmit` publishes provider normalization, artifact sealing, and provenance verification into the same spine used by future compiler and VM integrations.
+
+The aggregate test orchestrator reinitializes and fully verifies the workspace
+ledger after all suite-level module reloads and before publishing its closure
+event. A stale cached byte identity is never silently accepted.

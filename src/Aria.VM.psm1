@@ -1,5 +1,11 @@
 ﻿Set-StrictMode -Version 2.0
 
+if ($null -eq (Get-Command New-AriaCardExecutionEvidence -ErrorAction SilentlyContinue)) {
+    Import-Module (Join-Path $PSScriptRoot 'Aria.SignalSubset.psm1') -Force -DisableNameChecking
+    Import-Module (Join-Path $PSScriptRoot 'Aria.GlyphMemory.psm1') -Force -DisableNameChecking
+    Import-Module (Join-Path $PSScriptRoot 'Aria.ExecutionEvidence.psm1') -Force -DisableNameChecking
+}
+
 function Get-AriaCapabilityMapFromBytecode { param($Bytecode) $map=@{};foreach($cap in @($Bytecode.capabilities)){$map[[string]$cap.name]=$cap};return $map }
 function Assert-AriaRuntimeEffect { param($Policy,[string]$Effect,[string]$Scope='.') $decision=Test-AriaPolicyAllowsEffect $Policy $Effect $Scope;if(-not$decision.allowed){throw "ARIA VM denied effect '$Effect': $($decision.reason)"} }
 function Get-AriaRuntimeValueType { param($Value) return (Get-AriaCanonicalValueType -Value $Value) }
@@ -64,7 +70,8 @@ function Add-AriaVmRuntimeEvent {
         [string]$State,
         [string]$Energy,
         [string]$Information,
-        [string]$Coherence
+        [string]$Coherence,
+        [switch]$PassThru
     )
     $semantic = Publish-AriaVmSemanticEvent `
         -Context $Context `
@@ -81,6 +88,60 @@ function Add-AriaVmRuntimeEvent {
         $LegacyEvent | Add-Member -NotePropertyName projectionDigest -NotePropertyValue ([string]$semantic.projection.digest)
     }
     $Context.events.Add($LegacyEvent)
+    if ($PassThru) { return $semantic }
+}
+
+function Add-AriaVmCardExecutionEvidence {
+    param(
+        $Context,
+        [ValidateSet('map','filter','reduce')][string]$Kind,
+        [string]$Target,
+        [int]$Line,
+        [ValidateSet('completed','fractured')][string]$Outcome,
+        $Counts,
+        $TerminalEvent
+    )
+    if ($null -eq $TerminalEvent) {
+        throw "ARIA VM cannot seal '$Kind' evidence without a terminal Event Spine identity."
+    }
+    $card = Get-AriaGlyphCard -Id ('algorithm.' + $Kind) -Registry $Context.glyphRegistry
+    $evidence = New-AriaCardExecutionEvidence `
+        -Card $card `
+        -CompilerVersion ([string]$Context.bytecode.compilerVersion) `
+        -SourceHash ([string]$Context.bytecode.sourceHash) `
+        -IrHash ([string]$Context.bytecode.irHash) `
+        -ArtifactHash ([string]$Context.artifactHash) `
+        -EffectGraphDigest ([string]$Context.bytecode.effectGraph.digest) `
+        -PolicyDigest ([string]$Context.policyDigest) `
+        -TerminalEvent $TerminalEvent `
+        -Outcome $Outcome `
+        -OperationKind $Kind `
+        -Target $Target `
+        -Line $Line `
+        -Counts $Counts
+    $verification = Test-AriaCardExecutionEvidence -Evidence $evidence -Registry $Context.glyphRegistry
+    if (-not [bool]$verification.valid) {
+        throw ('ARIA VM rejected card execution evidence: ' + (@($verification.errors) -join ', '))
+    }
+    $Context.executionEvidence.Add($evidence)
+    $null = Send-AriaEvent `
+        -Domain evidence `
+        -Phase card.execution `
+        -State $(if ($Outcome -eq 'completed') { 'PASS' } else { 'FAIL' }) `
+        -Energy sealing `
+        -Information ([string]$card.id) `
+        -Coherence $(if ($Outcome -eq 'completed') { 'bounded card evidence sealed' } else { 'bounded card fracture evidence sealed' }) `
+        -Source 'aria.vm.evidence' `
+        -Data ([pscustomobject][ordered]@{
+            receiptDigest = [string]$evidence.digest
+            cardId = [string]$card.id
+            outcome = $Outcome
+            terminalEventDigest = [string]$evidence.terminalEvent.digest
+            signalSubsetDigest = ('sha256:' + [string]$evidence.signalSubset.digest)
+        }) `
+        -Render:(-not [bool]$Context.passThru) `
+        -PassThru
+    $evidence
 }
 
 function Invoke-AriaVmFunction {
@@ -163,7 +224,8 @@ function Invoke-AriaVmMap {
         $result = New-AriaSequenceValue -ElementType ([string]$transform.returnType) -Values $resultValues.ToArray()
         $clock.Stop()
         $completeRecord = [pscustomobject][ordered]@{kind='map';state='complete';transform=$transformName;iteration=$completed;iterations=$iterations;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
-        Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase map.complete -State PASS -Energy completion -Information $transformName -Coherence 'map contract passed'
+        $terminalEvent = Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase map.complete -State PASS -Energy completion -Information $transformName -Coherence 'map contract passed' -PassThru
+        $null = Add-AriaVmCardExecutionEvidence -Context $Context -Kind map -Target $transformName -Line ([int]$Instruction.line) -Outcome completed -Counts ([pscustomobject][ordered]@{inputCount=$iterations;completedCount=$completed;outputCount=$resultValues.Count}) -TerminalEvent $terminalEvent
         if ($batchStarted) { Complete-AriaEventBatch; $batchStarted = $false }
         return $result
     }
@@ -172,7 +234,8 @@ function Invoke-AriaVmMap {
         $clock.Stop()
         try {
             $fractureRecord = [pscustomobject][ordered]@{kind='map';state='fracture';transform=$transformName;iteration=$completed;iterations=$iterations;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
-            Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $fractureRecord -Domain algorithm -Phase map.fracture -State FAIL -Energy interruption -Information $transformName -Coherence 'map transform rejected'
+            $terminalEvent = Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $fractureRecord -Domain algorithm -Phase map.fracture -State FAIL -Energy interruption -Information $transformName -Coherence 'map transform rejected' -PassThru
+            $null = Add-AriaVmCardExecutionEvidence -Context $Context -Kind map -Target $transformName -Line ([int]$Instruction.line) -Outcome fractured -Counts ([pscustomobject][ordered]@{inputCount=$iterations;completedCount=$completed;outputCount=$resultValues.Count}) -TerminalEvent $terminalEvent
         }
         catch {
             # Preserve the runtime fracture when evidence publication is unavailable.
@@ -242,7 +305,8 @@ function Invoke-AriaVmFilter {
         $result = New-AriaSequenceValue -ElementType $declaredElement -Values $resultValues.ToArray()
         $clock.Stop()
         $completeRecord = [pscustomobject][ordered]@{kind='filter';state='complete';predicate=$predicateName;completed=$completed;inputCount=$inputCount;selectedCount=$selected;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
-        Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase filter.complete -State PASS -Energy completion -Information $predicateName -Coherence 'filter contract passed'
+        $terminalEvent = Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase filter.complete -State PASS -Energy completion -Information $predicateName -Coherence 'filter contract passed' -PassThru
+        $null = Add-AriaVmCardExecutionEvidence -Context $Context -Kind filter -Target $predicateName -Line ([int]$Instruction.line) -Outcome completed -Counts ([pscustomobject][ordered]@{inputCount=$inputCount;completedCount=$completed;selectedCount=$selected;outputCount=$resultValues.Count}) -TerminalEvent $terminalEvent
         if ($batchStarted) { Complete-AriaEventBatch; $batchStarted = $false }
         return $result
     }
@@ -251,7 +315,8 @@ function Invoke-AriaVmFilter {
         $clock.Stop()
         try {
             $fractureRecord = [pscustomobject][ordered]@{kind='filter';state='fracture';predicate=$predicateName;completed=$completed;inputCount=$inputCount;selectedCount=$selected;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
-            Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $fractureRecord -Domain algorithm -Phase filter.fracture -State FAIL -Energy interruption -Information $predicateName -Coherence 'filter predicate rejected'
+            $terminalEvent = Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $fractureRecord -Domain algorithm -Phase filter.fracture -State FAIL -Energy interruption -Information $predicateName -Coherence 'filter predicate rejected' -PassThru
+            $null = Add-AriaVmCardExecutionEvidence -Context $Context -Kind filter -Target $predicateName -Line ([int]$Instruction.line) -Outcome fractured -Counts ([pscustomobject][ordered]@{inputCount=$inputCount;completedCount=$completed;selectedCount=$selected;outputCount=$resultValues.Count}) -TerminalEvent $terminalEvent
         }
         catch {
             # Preserve the runtime fracture when evidence publication is unavailable.
@@ -319,7 +384,8 @@ function Invoke-AriaVmReduce {
         Assert-AriaRuntimeType $accumulatorType $accumulator 'REDUCE result accumulator'
         $clock.Stop()
         $completeRecord = [pscustomobject][ordered]@{kind='reduce';state='complete';reducer=$reducerName;completed=$completed;inputCount=$inputCount;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
-        Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase reduce.complete -State PASS -Energy completion -Information $reducerName -Coherence 'reduce contract passed'
+        $terminalEvent = Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $completeRecord -Domain algorithm -Phase reduce.complete -State PASS -Energy completion -Information $reducerName -Coherence 'reduce contract passed' -PassThru
+        $null = Add-AriaVmCardExecutionEvidence -Context $Context -Kind reduce -Target $reducerName -Line ([int]$Instruction.line) -Outcome completed -Counts ([pscustomobject][ordered]@{inputCount=$inputCount;completedCount=$completed;outputCount=1}) -TerminalEvent $terminalEvent
         if ($batchStarted) { Complete-AriaEventBatch; $batchStarted = $false }
         return $accumulator
     }
@@ -328,7 +394,8 @@ function Invoke-AriaVmReduce {
         $clock.Stop()
         try {
             $fractureRecord = [pscustomobject][ordered]@{kind='reduce';state='fracture';reducer=$reducerName;completed=$completed;inputCount=$inputCount;durationMs=[int][math]::Round($clock.Elapsed.TotalMilliseconds);line=[int]$Instruction.line}
-            Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $fractureRecord -Domain algorithm -Phase reduce.fracture -State FAIL -Energy interruption -Information $reducerName -Coherence 'reduce reducer rejected'
+            $terminalEvent = Add-AriaVmRuntimeEvent -Context $Context -LegacyEvent $fractureRecord -Domain algorithm -Phase reduce.fracture -State FAIL -Energy interruption -Information $reducerName -Coherence 'reduce reducer rejected' -PassThru
+            $null = Add-AriaVmCardExecutionEvidence -Context $Context -Kind reduce -Target $reducerName -Line ([int]$Instruction.line) -Outcome fractured -Counts ([pscustomobject][ordered]@{inputCount=$inputCount;completedCount=$completed;outputCount=0}) -TerminalEvent $terminalEvent
         }
         catch {
             # Preserve the runtime fracture when evidence publication is unavailable.
@@ -491,11 +558,12 @@ function Invoke-AriaContainer {
     foreach($memory in @($bytecode.memories)){$memories[[string]$memory.name]=ConvertTo-AriaHashtable $memory.values;$types=@{};foreach($property in $memory.types.PSObject.Properties){$types[$property.Name]=[string]$property.Value};$memoryTypes[[string]$memory.name]=$types}
     $stateRelative='.aria/state/'+$bytecode.programName+'.memory.json';$statePath=Resolve-AriaConfinedPath $WorkspaceRoot '.' $stateRelative;$stateRoot=Split-Path -Parent $statePath
     if(Test-Path -LiteralPath $statePath){$info=Get-Item -LiteralPath $statePath -Force;$limit=Get-AriaPolicyMaxBytes $policy 'memory.read' 16777216;if([int64]$info.Length-gt$limit){throw "ARIA memory state exceeds policy maxBytes ($limit): $statePath"};$persisted=ConvertTo-AriaHashtable (Read-AriaUtf8Text $statePath|ConvertFrom-Json);foreach($memoryName in $persisted.Keys){if(-not$memories.ContainsKey($memoryName)){throw "ARIA persisted state contains undeclared memory '$memoryName'."};foreach($key in $persisted[$memoryName].Keys){if(-not$memoryTypes[$memoryName].ContainsKey($key)){throw "ARIA persisted state contains undeclared memory key '$memoryName.$key'."};Assert-AriaRuntimeType ([string]$memoryTypes[$memoryName][$key]) $persisted[$memoryName][$key] "persisted memory $memoryName.$key";$memories[$memoryName][$key]=$persisted[$memoryName][$key]}}}
-    $context=[pscustomobject]@{bytecode=$bytecode;policy=$policy;workspaceRoot=$WorkspaceRoot;capabilityMap=$capabilityMap;agentMap=$agentMap;connectionMap=$connectionMap;connectionStates=$connectionStates;functionMap=$functionMap;outputs=$outputs;events=$events;memories=$memories;memoryTypes=$memoryTypes;memoryDirty=$false;passThru=[bool]$PassThru}
+    $artifactHashProperty=$Container.PSObject.Properties['artifactHash'];if($null-eq$artifactHashProperty-or[string]::IsNullOrWhiteSpace([string]$artifactHashProperty.Value)){throw 'ARIA VM requires an exact artifact identity for execution evidence.'};$executionEvidence=New-Object System.Collections.Generic.List[object];$glyphRegistry=Read-AriaGlyphCardRegistry;$policyDigest=Get-AriaSha256File -Path (Resolve-Path -LiteralPath $PolicyPath).Path
+    $context=[pscustomobject]@{bytecode=$bytecode;artifactHash=[string]$artifactHashProperty.Value;policy=$policy;policyDigest=$policyDigest;glyphRegistry=$glyphRegistry;executionEvidence=$executionEvidence;workspaceRoot=$WorkspaceRoot;capabilityMap=$capabilityMap;agentMap=$agentMap;connectionMap=$connectionMap;connectionStates=$connectionStates;functionMap=$functionMap;outputs=$outputs;events=$events;memories=$memories;memoryTypes=$memoryTypes;memoryDirty=$false;passThru=[bool]$PassThru}
     $scopes=New-AriaScopeStack;$result=Invoke-AriaInstructionSequence @($bytecode.instructions) $context $scopes @{} 0;if($result.control-ne'halt'){throw 'ARIA entry flow terminated without HALT.'}
     foreach($name in @($connectionStates.Keys)){if([string]$connectionStates[$name].phase-ne'closed'){throw "ARIA connection '$name' terminated in phase '$($connectionStates[$name].phase)' instead of closed."}}
     if($context.memoryDirty){if(-not(Test-Path -LiteralPath $stateRoot)){New-Item -ItemType Directory -Path $stateRoot -Force|Out-Null};Save-AriaMemoryState $statePath $memories $policy}
-    return [pscustomobject][ordered]@{programName=$bytecode.programName;outputs=$outputs.ToArray();events=$events.ToArray();variables=$scopes[0];memories=$memories;connections=$connectionStates;graphs=$bytecode.graphs;effectGraph=$bytecode.effectGraph;statePath=$statePath;memoryPersisted=$context.memoryDirty}
+    return [pscustomobject][ordered]@{programName=$bytecode.programName;outputs=$outputs.ToArray();events=$events.ToArray();executionEvidence=$executionEvidence.ToArray();variables=$scopes[0];memories=$memories;connections=$connectionStates;graphs=$bytecode.graphs;effectGraph=$bytecode.effectGraph;statePath=$statePath;memoryPersisted=$context.memoryDirty}
 }
 function Invoke-AriaArtifact { param([string]$Path,[string]$PolicyPath,[string]$WorkspaceRoot=(Get-AriaRepositoryRoot),[switch]$PassThru) return(Invoke-AriaContainer (Read-AriaContainer $Path) $PolicyPath $WorkspaceRoot -PassThru:$PassThru) }
 Export-ModuleMember -Function Invoke-AriaContainer,Invoke-AriaArtifact

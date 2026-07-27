@@ -36,6 +36,7 @@ Import-Module (Join-Path $root 'src/Aria.EventSpine.psm1') -Force -DisableNameCh
 Import-Module (Join-Path $root 'src/Aria.SemanticProjection.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.GlyphMemory.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.ExecutionEvidence.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Gitflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
@@ -506,6 +507,7 @@ try {
             Write-AriaSummary -Title 'MANIFEST SEALED' -Passed $true -Detail ("{0} files" -f $count)
         }
         'test' {
+            $closureProfile = Get-AriaOperatorProfile
             $suites=@(
                 'Run-Tests.ps1',
                 'Run-GlyphMemoryTests.ps1',
@@ -518,7 +520,8 @@ try {
                 'Run-SignalIntegrityClosureTests.ps1',
                 'Run-VerifiedMapTests.ps1',
                 'Run-VerifiedFilterTests.ps1',
-                'Run-VerifiedReduceTests.ps1'
+                'Run-VerifiedReduceTests.ps1',
+                'Run-CardExecutionEvidenceTests.ps1'
             )
             foreach($suite in $suites){
                 $suitePath=Join-Path $root ('tests/'+$suite)
@@ -527,8 +530,19 @@ try {
                 }
                 else{& $suitePath}
             }
-            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '396/396 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=396;failedCount=0}) -Render
-            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '396/396 gates'
+            # Suite-level module reloads may advance or rebind Event Spine.
+            # Restore the rendering spine, then reverify the exact workspace
+            # ledger before sealing closure.
+            Import-Module (Join-Path $root 'src/Aria.Display.psm1') -Force -DisableNameChecking
+            Import-Module (Join-Path $root 'src/Aria.Etherflow.psm1') -Force -DisableNameChecking
+            Import-Module (Join-Path $root 'src/Aria.SemanticProjection.psm1') -Force -DisableNameChecking
+            Import-Module (Join-Path $root 'src/Aria.EventSpine.psm1') -Force -DisableNameChecking
+            $null = Initialize-AriaEventSpine `
+                -WorkspaceRoot $workspaceRoot `
+                -Profile $closureProfile `
+                -Persist
+            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '416/416 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=416;failedCount=0}) -Render
+            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '416/416 gates'
         }
         { $_ -in @('gate','check') } {
             if (-not $Path) { throw 'gate requires a .aria source path.' }

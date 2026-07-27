@@ -2,6 +2,18 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Per-Card Execution Evidence alpha.10
+
+- Added canonical `aria.card-execution-evidence/1` receipts for completed and fractured Map, Filter, and Reduce exercises.
+- Bound each receipt to the verified card, compiler/runtime, source, semantic IR, exact artifact bytes, effect graph, policy, and admission-test contract.
+- Derived outcomes from verified terminal Event Spine states instead of accepting operation-supplied success assertions.
+- Embedded privacy-filtered SignalSubsets containing only terminal-event identity fields and explicit exclusions.
+- Recorded bounded aggregate counts while excluding elements, mapped values, filter payloads, initial values, accumulators, output text, event data, and projections.
+- Classified evidence as observational and rejected every authority or capability claim.
+- Added persistent `evidence.card.execution` linkage events with exact replay and tamper rejection.
+- Reverified the exact workspace Event Spine after suite-level module reloads before sealing aggregate conformance closure.
+- Added a 20-gate Per-Card Execution Evidence lattice and raised aggregate conformance to `416/416` across thirteen lattices.
+
 ## Verified Reduce alpha.9
 
 - Governed implementation through an executable ARIA plan plus a content-addressed intent, interpretation, human approval, independent challenge, and derived satisfied proof.

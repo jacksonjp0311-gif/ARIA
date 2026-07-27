@@ -33,10 +33,10 @@ brutally rigorous underneath
 
 | Layer | State |
 |---|---|
-| Compiler | `0.1.0-alpha.11` |
+| Compiler | `0.1.0-alpha.12` |
 | Language specification | `0.4.0` |
 | Source Core | bounded sequences + verified map/filter/reduce + glyph composition + whole-program effect proofs |
-| Conformance | `396/396` deterministic gates across twelve lattices |
+| Conformance | `416/416` deterministic gates across thirteen lattices |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
@@ -44,7 +44,7 @@ brutally rigorous underneath
 | Evolution | Persistent plans + verified authorization + rollback proof |
 | Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
 | Effect verification | Entry flow + function call closure + independently reconstructed bytecode graph |
-| Event model | Hash-chained Event Spine v3 + operation continuity + measured algorithm projections |
+| Event model | Hash-chained Event Spine v3 + operation continuity + per-card execution receipts |
 | Operator UI | Content-addressed cues + Etherflow + Bufferflow + Signalflow |
 | Git transport | Buffered, fast-forward-only, SHA-verified |
 | External AI provider | Not connected yet |
@@ -152,6 +152,9 @@ See [Verified Filter alpha.8](docs/48-verified-filter-alpha8.md) for stable,
 typed selection with measured input and selected-count evidence.
 See [Verified Reduce alpha.9](docs/49-verified-reduce-alpha9.md) for exact
 left-fold aggregation and bounded accumulator evidence.
+See [Per-Card Execution Evidence alpha.10](docs/50-per-card-execution-evidence-alpha10.md)
+for content-addressed receipts joining cards, artifacts, policy, events, and
+privacy-filtered aggregate observations.
 
 ---
 
@@ -174,7 +177,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ ALL LATTICES COHERENT PASS   396/396 gates
+◆ ALL LATTICES COHERENT PASS   416/416 gates
 ```
 
 ### Run an ordinary ARIA program
@@ -293,6 +296,12 @@ Run the complete Map → Filter → Reduce pipeline:
 of type `(A,T) → A`. It folds strictly left to right, returns the initial value
 for empty input, and records completed counts without elements, initial values,
 or accumulator values.
+
+Every completed or fractured `⨯`, `⫰`, and `Σ` exercise also returns one
+`executionEvidence` receipt. The receipt cryptographically joins the semantic
+card, source, IR, exact artifact, effect graph, policy, admission-test contract,
+terminal Event Spine event, and privacy-filtered aggregate counts. It is
+observational and cannot grant a capability or authorize another execution.
 
 ### Discover the CLI
 
@@ -987,7 +996,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ ALL LATTICES COHERENT PASS 396/396 gates
+◆ ALL LATTICES COHERENT PASS 416/416 gates
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
@@ -1025,6 +1034,7 @@ Start here:
 | `docs/47-verified-map-alpha7.md` | Typed pure map and measured iteration evidence |
 | `docs/48-verified-filter-alpha8.md` | Stable pure filter and measured selection evidence |
 | `docs/49-verified-reduce-alpha9.md` | Exact pure left fold and bounded accumulator evidence |
+| `docs/50-per-card-execution-evidence-alpha10.md` | Content-addressed per-card runtime receipts |
 
 Earlier documents record the architectural evolution and remain useful context.
 

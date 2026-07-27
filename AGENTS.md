@@ -16,7 +16,7 @@ A healthy baseline must report:
 
 - repository manifest integrity
 - `SYSTEM READY`
-- `396/396` aggregate conformance with zero failures
+- `416/416` aggregate conformance with zero failures
 
 ## Authoritative entrypoints
 
@@ -36,6 +36,8 @@ A healthy baseline must report:
 - `grammar/semantic-cues.json` — content-addressed human/machine cue contracts
 - `grammar/alchemy.json` — executable triadic glyph syntax
 - `tests/Run-Tests.ps1` — conformance lattice
+
+- `src/Aria.ExecutionEvidence.psm1` — per-card observational execution receipts
 
 ## Evolution rule
 

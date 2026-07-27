@@ -1,7 +1,7 @@
 {
     "schema":  "aria.runtime/1",
-    "release":  "0.1.0-alpha.11",
-    "languageEvolution":  "verified-reduce-alpha.9",
+    "release":  "0.1.0-alpha.12",
+    "languageEvolution":  "per-card-execution-evidence-alpha.10",
     "status":  "experimental",
     "repository":  {
                        "name":  "ARIA",
@@ -31,6 +31,7 @@
                          "semanticProjection":  "src/Aria.SemanticProjection.psm1",
                          "semanticCues":  "grammar/semantic-cues.json",
                          "eventSpine":  "src/Aria.EventSpine.psm1",
+                         "executionEvidence":  "src/Aria.ExecutionEvidence.psm1",
                          "signalIntegrityPlan":  "plans/signal-integrity-closure-alpha6-1.aria",
                          "verifiedMap":  "src/Aria.VM.psm1",
                          "verifiedMapPlan":  "plans/verified-map-alpha7.aria",
@@ -38,7 +39,9 @@
                          "verifiedFilterPlan":  "plans/verified-filter-alpha8.aria",
                          "verifiedReduce":  "src/Aria.VM.psm1",
                          "verifiedReducePlan":  "plans/verified-reduce-alpha9.aria",
-                         "verifiedReduceIntent":  "plans/verified-reduce-alpha9-intent.json"
+                         "verifiedReduceIntent":  "plans/verified-reduce-alpha9-intent.json",
+                         "executionEvidencePlan":  "plans/per-card-execution-evidence-alpha10.aria",
+                         "executionEvidenceIntent":  "plans/per-card-execution-evidence-alpha10-intent.json"
                      },
     "continuity":  {
                        "stableTag":  "aria-alpha21-stable",

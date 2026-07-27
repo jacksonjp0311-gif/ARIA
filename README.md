@@ -33,15 +33,16 @@ brutally rigorous underneath
 
 | Layer | State |
 |---|---|
-| Compiler | `0.1.0-alpha.12` |
+| Compiler | `0.1.0-alpha.13` |
 | Language specification | `0.4.0` |
 | Source Core | bounded sequences + verified map/filter/reduce + glyph composition + whole-program effect proofs |
-| Conformance | `416/416` deterministic gates across thirteen lattices |
+| Conformance | `436/436` deterministic gates across fourteen lattices |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
 | Graph substrate | Transactional execution + deterministic replay |
 | Evolution | Persistent plans + verified authorization + rollback proof |
+| Semantic proposals | Canonical meaning + exact scope + proof/test/rollback contracts + no self-approval |
 | Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
 | Effect verification | Entry flow + function call closure + independently reconstructed bytecode graph |
 | Event model | Hash-chained Event Spine v3 + operation continuity + per-card execution receipts |
@@ -155,6 +156,10 @@ left-fold aggregation and bounded accumulator evidence.
 See [Per-Card Execution Evidence alpha.10](docs/50-per-card-execution-evidence-alpha10.md)
 for content-addressed receipts joining cards, artifacts, policy, events, and
 privacy-filtered aggregate observations.
+See [Semantic Proposal Bundles alpha.11](docs/51-semantic-proposal-bundles-alpha11.md)
+for non-mutating, content-addressed language-change proposals that bind intent,
+semantic deltas, exact scope, proof obligations, tests, compatibility, rollback,
+and the independent human-approval boundary.
 
 ---
 
@@ -177,7 +182,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ ALL LATTICES COHERENT PASS   416/416 gates
+◆ ALL LATTICES COHERENT PASS   436/436 gates
 ```
 
 ### Run an ordinary ARIA program
@@ -996,7 +1001,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ ALL LATTICES COHERENT PASS 416/416 gates
+◆ ALL LATTICES COHERENT PASS 436/436 gates
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
@@ -1035,6 +1040,7 @@ Start here:
 | `docs/48-verified-filter-alpha8.md` | Stable pure filter and measured selection evidence |
 | `docs/49-verified-reduce-alpha9.md` | Exact pure left fold and bounded accumulator evidence |
 | `docs/50-per-card-execution-evidence-alpha10.md` | Content-addressed per-card runtime receipts |
+| `docs/51-semantic-proposal-bundles-alpha11.md` | Canonical non-mutating language-change contracts |
 
 Earlier documents record the architectural evolution and remain useful context.
 

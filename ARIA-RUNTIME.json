@@ -1,7 +1,7 @@
 {
     "schema":  "aria.runtime/1",
-    "release":  "0.1.0-alpha.12",
-    "languageEvolution":  "per-card-execution-evidence-alpha.10",
+    "release":  "0.1.0-alpha.13",
+    "languageEvolution":  "semantic-proposal-bundles-alpha.11",
     "status":  "experimental",
     "repository":  {
                        "name":  "ARIA",
@@ -41,7 +41,10 @@
                          "verifiedReducePlan":  "plans/verified-reduce-alpha9.aria",
                          "verifiedReduceIntent":  "plans/verified-reduce-alpha9-intent.json",
                          "executionEvidencePlan":  "plans/per-card-execution-evidence-alpha10.aria",
-                         "executionEvidenceIntent":  "plans/per-card-execution-evidence-alpha10-intent.json"
+                         "executionEvidenceIntent":  "plans/per-card-execution-evidence-alpha10-intent.json",
+                         "semanticProposal":  "src/Aria.SemanticProposal.psm1",
+                         "semanticProposalPlan":  "plans/semantic-proposal-bundles-alpha11.aria",
+                         "semanticProposalIntent":  "plans/semantic-proposal-bundles-alpha11-intent.json"
                      },
     "continuity":  {
                        "stableTag":  "aria-alpha21-stable",

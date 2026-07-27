@@ -2,11 +2,10 @@
 
 ## Current verified frontier
 
-Verified Reduce alpha.9 is active beside Verified Map and Filter. ARIA can
-transform, stably select, and left-fold immutable bounded sequences using
-compile-time pure functions, verifier-visible `MAP`, `FILTER`, and `REDUCE`
-bytecode, and value-free Event Spine iteration evidence. Per-Card Execution
-Evidence alpha.10 is the next bounded evolution.
+ARIA can transform, stably select, and left-fold immutable bounded sequences,
+bind each exercise to alpha.10 evidence, and express a proposed language change
+as an exact, authority-free alpha.11 semantic contract. Consent and Admission
+Receipts alpha.12 is the next bounded evolution.
 
 ## 0.1 — Bootstrap proof
 

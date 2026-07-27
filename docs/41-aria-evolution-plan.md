@@ -99,6 +99,7 @@ contract is explicitly proposed and admitted.
 | Verified Filter alpha.8 | Complete | `⫰` performs stable typed selection with measured count evidence |
 | Verified Reduce alpha.9 | Complete | `Σ` performs an exact pure left fold from an explicit initial accumulator |
 | Per-Card Execution Evidence alpha.10 | Complete | Verified sequence-card exercises emit bounded observational receipts |
+| Semantic Proposal Bundles alpha.11 | Complete | Canonical non-mutating contracts preserve semantic scope, rollback, evidence, and approval separation |
 | Core conformance | Complete | 202-test established language lattice |
 | Cross-platform attestation | Complete | Windows PowerShell 5.1, PowerShell 7 Windows, PowerShell 7 Linux |
 
@@ -796,38 +797,34 @@ data substrate
 
 # 9. Immediate Next Evolution Contract
 
-## Semantic Proposal Bundles alpha.11
+## Consent and Admission Receipts alpha.12
 
 ### Intent
 
-Let a human or AI propose a new or revised semantic card as one exact,
-content-addressed bundle without allowing the producer to approve or admit its
-own proposal.
+Bind an independent human decision to one exact semantic-proposal digest before
+the existing governed evolution transaction can admit or apply its bytes.
 
 ### Explicitly in scope
 
-- exact intent and proposer identities;
-- proposed card plus grammar, lowering, type, effect, opcode, and policy deltas;
-- changed-path allowlist and rollback strategy;
-- required proof obligations and generated test plan;
-- compatibility and migration analysis;
-- references to exact alpha.10 execution receipts when relevant;
-- documentation, examples, tests, CI, and manifest.
+- exact intent, proposal, verifier-result, and human-consent identities;
+- proposer/approver separation and proposal-drift rejection;
+- deterministic handoff into the existing apply transaction;
+- local-gate, remote-attestation, and closure-receipt bindings;
+- normal reversal commit on remote failure.
 
 ### Explicitly out of scope
 
-- self-approval or automatic admission;
-- repository mutation during proposal construction;
-- implicit capability or policy expansion;
+- self-approval;
+- consent that does not bind the exact proposal;
+- hidden path changes or force push;
 - unsigned remote execution;
 - native compiler migration.
 
 ### Admission target
 
-A dedicated proposal lattice must prove canonical identity, proposer/approver
-separation, changed-path confinement, complete rollback, proof-obligation and
-test-plan coverage, compatibility declarations, receipt-reference integrity,
-tamper rejection, and zero repository mutation before explicit admission.
+A dedicated admission lattice must prove consent identity, proposer/approver
+separation, proposal-drift rejection, exact path admission, deterministic
+apply, local and remote closure, and recoverable reversal.
 
 ---
 
@@ -875,7 +872,10 @@ verified layers beneath it.
 - Per-Card Execution Evidence alpha.10 binds each Map, Filter, and Reduce
   exercise to its card, artifact, effect graph, policy, admission-test
   contract, terminal Event Spine identity, and privacy-filtered aggregates.
-- The next bounded evolution is Semantic Proposal Bundles alpha.11.
+- Semantic Proposal Bundles alpha.11 adds canonical, non-mutating, authority-free
+  contracts with exact semantic deltas, path scope, obligations, compatibility,
+  rollback, and optional execution-evidence references.
+- The next bounded evolution is Consent and Admission Receipts alpha.12.
 - Integration Closure alpha.5.1 completes entry-flow effect coverage, derives
   intent authority from admitted artifacts, unifies all local lattices, and
   synchronizes release discovery before Semantic Projection Core alpha.6.

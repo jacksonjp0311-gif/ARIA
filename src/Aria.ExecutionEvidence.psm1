@@ -34,7 +34,7 @@ function ConvertTo-AriaEvidenceIdentity {
 }
 
 function Get-AriaRuntimeVersion {
-    '0.1.0-alpha.12'
+    '0.1.0-alpha.13'
 }
 
 function ConvertTo-AriaExecutionCounts {

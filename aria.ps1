@@ -37,6 +37,7 @@ Import-Module (Join-Path $root 'src/Aria.SemanticProjection.psm1') -Force -Disab
 Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.GlyphMemory.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.ExecutionEvidence.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.SemanticProposal.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Gitflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
@@ -76,6 +77,8 @@ function Show-AriaHelp {
   aria evolve plan <request.json> [-Workspace <repository>]
   aria evolve verify <proposal-id> -Capability <bundle.json> -Authorization <authorization.json> -IssuerPolicy <verification-policy.json>
   aria evolve apply <proposal-id> [-Message <commit-message>] [-Push]
+  aria semantic propose <semantic-proposal-request.json>
+  aria semantic verify <semantic-proposal.json>
   aria intent verify <intent-verification-bundle.json> [-Workspace <repository>]
   aria init <ProgramName>
 
@@ -173,6 +176,34 @@ try {
                         -Detail $result.receipt.commit `
                         -Duration $clock.Elapsed
                 }                default{throw "evolve supports 'plan', 'verify', and 'apply'."}
+            }
+        }
+        'semantic' {
+            if ($Path -notin @('propose','verify')) { throw "semantic supports 'propose' and 'verify'." }
+            if (-not $RequestPath) { throw "semantic $Path requires a JSON path." }
+            $clock=[Diagnostics.Stopwatch]::StartNew()
+            if ($Path -eq 'propose') {
+                Write-AriaBanner -Title 'ARIA / SEMANTIC PROPOSAL' -Subtitle 'canonical meaning · bounded scope · no authority · no mutation'
+                $proposal=Invoke-AriaSemanticProposalFile -Path $RequestPath
+                $null=Send-AriaEvent -Domain evolution -Phase semantic.proposal -State PASS -Energy planning -Information $proposal.digest -Coherence 'unapproved semantic proposal constructed' -Source 'aria.semantic.propose' -Data ([pscustomobject][ordered]@{proposalDigest=$proposal.digest;approvalState='unapproved';executable=$false}) -Render
+                Write-AriaTreeStage -Name 'semantic identity' -State Pass -Detail $proposal.digest
+                Write-AriaTreeStage -Name 'changed-path boundary' -State Pass -Detail ("{0} exact paths" -f @($proposal.changedPaths).Count)
+                Write-AriaTreeStage -Name 'authority' -State Info -Detail 'none granted'
+                Write-AriaTreeStage -Name 'approval' -State Warn -Detail 'independent human required'
+                if ($Json) { Write-Output (ConvertTo-AriaJson $proposal) }
+                $clock.Stop()
+                Write-AriaSummary -Title 'PROPOSAL CONSTRUCTED' -Passed $true -Detail 'non-executable' -Duration $clock.Elapsed
+            }
+            else {
+                Write-AriaBanner -Title 'ARIA / SEMANTIC VERIFY' -Subtitle 'identity · scope · rollback · obligations · approval boundary'
+                $proposal=Read-AriaUtf8Text $RequestPath|ConvertFrom-Json
+                $result=Test-AriaSemanticProposal $proposal
+                $null=Send-AriaEvent -Domain evolution -Phase semantic.verification -State $(if($result.valid){'PASS'}else{'REJECT'}) -Energy verification -Information $result.digest -Coherence $(if($result.valid){'proposal coherent but unapproved'}else{'proposal fractured'}) -Source 'aria.semantic.verify' -Data ([pscustomobject][ordered]@{proposalDigest=$result.digest;valid=[bool]$result.valid;executable=$false}) -Render
+                Write-AriaTreeStage -Name 'proposal coherence' -State $(if($result.valid){'Pass'}else{'Fail'}) -Detail $result.digest
+                Write-AriaTreeStage -Name 'execution boundary' -State Info -Detail 'non-executable'
+                $clock.Stop()
+                Write-AriaSummary -Title $(if($result.valid){'PROPOSAL VERIFIED'}else{'PROPOSAL REJECTED'}) -Passed ([bool]$result.valid) -Detail 'independent human approval still required' -Duration $clock.Elapsed
+                if (-not $result.valid) { throw ('Semantic proposal rejected: '+(@($result.errors)-join', ')) }
             }
         }
         'intent' {
@@ -522,6 +553,7 @@ try {
                 'Run-VerifiedFilterTests.ps1',
                 'Run-VerifiedReduceTests.ps1',
                 'Run-CardExecutionEvidenceTests.ps1'
+                'Run-SemanticProposalTests.ps1'
             )
             foreach($suite in $suites){
                 $suitePath=Join-Path $root ('tests/'+$suite)
@@ -541,8 +573,8 @@ try {
                 -WorkspaceRoot $workspaceRoot `
                 -Profile $closureProfile `
                 -Persist
-            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '416/416 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=416;failedCount=0}) -Render
-            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '416/416 gates'
+            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '436/436 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=436;failedCount=0}) -Render
+            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '436/436 gates'
         }
         { $_ -in @('gate','check') } {
             if (-not $Path) { throw 'gate requires a .aria source path.' }

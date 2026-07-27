@@ -2,6 +2,15 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Semantic Proposal Bundles alpha.11
+
+- Added canonical `aria.semantic-proposal/1` bundles between verified intent and governed repository mutation.
+- Bound proposer, baseline, semantic subject, every language-dimension delta, exact changed paths, proof obligations, generated tests, compatibility, rollback, and optional alpha.10 receipt references.
+- Made proposals explicitly unapproved, non-executable, and authority-free; rejected embedded approval and implicit authority expansion.
+- Added digest, path, rollback, compatibility, evidence-reference, and tamper verification.
+- Added `aria semantic propose|verify`, ADR 012, an executable ARIA evolution plan, and a 20-gate lattice.
+- Raised aggregate conformance to `436/436` across fourteen lattices.
+
 ## Per-Card Execution Evidence alpha.10
 
 - Added canonical `aria.card-execution-evidence/1` receipts for completed and fractured Map, Filter, and Reduce exercises.

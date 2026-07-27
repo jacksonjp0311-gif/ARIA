@@ -4,9 +4,9 @@
 
 </div>
 
-<p align="center">
-<a href="https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml"><img alt="ARIA gates" src="https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml/badge.svg?branch=main"></a> <img alt="Release 0.1.0-alpha.14" src="https://img.shields.io/badge/release-0.1.0--alpha.14-ff4fc8?style=flat-square"> <img alt="Conformance 460 of 460" src="https://img.shields.io/badge/conformance-460%2F460-67e8d5?style=flat-square"> <img alt="PowerShell 5.1 and 7" src="https://img.shields.io/badge/bootstrap-PowerShell_5.1_%7C_7-8a72ff?style=flat-square"> <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-d8d2e5?style=flat-square"></a>
-</p>
+| Gates | Release | Conformance | Bootstrap | License |
+| :---: | :---: | :---: | :---: | :---: |
+| [![ARIA gates](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml) | ![Release 0.1.0-alpha.14](https://img.shields.io/badge/0.1.0--alpha.14-ff4fc8?style=flat-square) | ![Conformance 460 of 460](https://img.shields.io/badge/460%2F460-67e8d5?style=flat-square) | ![PowerShell 5.1 and 7](https://img.shields.io/badge/PowerShell_5.1_%7C_7-8a72ff?style=flat-square) | [![Apache 2.0 license](https://img.shields.io/badge/Apache--2.0-d8d2e5?style=flat-square)](LICENSE) |
 
 <div align="center">
 

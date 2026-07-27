@@ -5,7 +5,8 @@
 ARIA can transform, stably select, and left-fold immutable bounded sequences,
 bind each exercise to alpha.10 evidence, and express a proposed language change
 as an exact, authority-free alpha.11 semantic contract. Consent and Admission
-Receipts alpha.12 is the next bounded evolution.
+Receipts alpha.12 now closes that admission boundary. Deterministic Semantic
+Replay alpha.13 is the next bounded evolution.
 
 ## 0.1 — Bootstrap proof
 

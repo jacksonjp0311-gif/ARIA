@@ -38,6 +38,7 @@ Import-Module (Join-Path $root 'src/Aria.Common.psm1') -Force -DisableNameChecki
 Import-Module (Join-Path $root 'src/Aria.GlyphMemory.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.ExecutionEvidence.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.SemanticProposal.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.Admission.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Gitflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
@@ -79,6 +80,8 @@ function Show-AriaHelp {
   aria evolve apply <proposal-id> [-Message <commit-message>] [-Push]
   aria semantic propose <semantic-proposal-request.json>
   aria semantic verify <semantic-proposal.json>
+  aria admit consent <consent-request.json>
+  aria admit verify <admission-bundle.json>
   aria intent verify <intent-verification-bundle.json> [-Workspace <repository>]
   aria init <ProgramName>
 
@@ -204,6 +207,32 @@ try {
                 $clock.Stop()
                 Write-AriaSummary -Title $(if($result.valid){'PROPOSAL VERIFIED'}else{'PROPOSAL REJECTED'}) -Passed ([bool]$result.valid) -Detail 'independent human approval still required' -Duration $clock.Elapsed
                 if (-not $result.valid) { throw ('Semantic proposal rejected: '+(@($result.errors)-join', ')) }
+            }
+        }
+        'admit' {
+            if ($Path -notin @('consent','verify')) { throw "admit supports 'consent' and 'verify'." }
+            if (-not $RequestPath) { throw "admit $Path requires a JSON path." }
+            $clock=[Diagnostics.Stopwatch]::StartNew()
+            if ($Path -eq 'consent') {
+                Write-AriaBanner -Title 'ARIA / SEMANTIC CONSENT' -Subtitle 'exact proposal · independent human · explicit boundary'
+                $consent=Invoke-AriaSemanticConsentFile -Path $RequestPath
+                Write-AriaTreeStage -Name 'proposal binding' -State Pass -Detail $consent.proposalDigest
+                Write-AriaTreeStage -Name 'identity separation' -State $(if($consent.proposerId-ne$consent.approverId){'Pass'}else{'Fail'}) -Detail ("{0} → {1}"-f$consent.proposerId,$consent.approverId)
+                Write-AriaTreeStage -Name 'decision' -State $(if($consent.decision-eq'approved'){'Pass'}else{'Reject'}) -Detail $consent.decision
+                if ($Json) { Write-Output (ConvertTo-AriaJson $consent) }
+                $clock.Stop()
+                Write-AriaSummary -Title 'CONSENT RECORDED' -Passed ($consent.proposerId-ne$consent.approverId) -Detail $consent.digest -Duration $clock.Elapsed
+            }
+            else {
+                Write-AriaBanner -Title 'ARIA / ADMISSION VERIFY' -Subtitle 'proposal · consent · baseline · scope · rollback · authority'
+                $receipt=Invoke-AriaAdmissionBundleFile -Path $RequestPath
+                $null=Send-AriaEvent -Domain evolution -Phase admission -State $(if($receipt.verdict-eq'admitted'){'PASS'}else{'REJECT'}) -Energy verification -Information $receipt.digest -Coherence $(if($receipt.verdict-eq'admitted'){'eligible for governed evolution planning'}else{'admission boundary closed'}) -Source 'aria.admit.verify' -Data ([pscustomobject][ordered]@{proposalDigest=$receipt.proposalDigest;consentDigest=$receipt.consentDigest;verdict=$receipt.verdict;nextBoundary=$receipt.nextBoundary}) -Render
+                foreach($obligation in @($receipt.obligations)){Write-AriaTreeStage -Name $obligation.id -State $(if($obligation.passed){'Pass'}else{'Fail'}) -Detail $(if($obligation.passed){'satisfied'}else{'rejected'})}
+                Write-AriaTreeStage -Name 'repository authority' -State Info -Detail 'none granted'
+                if ($Json) { Write-Output (ConvertTo-AriaJson $receipt) }
+                $clock.Stop()
+                Write-AriaSummary -Title $(if($receipt.verdict-eq'admitted'){'PROPOSAL ADMITTED'}else{'ADMISSION REJECTED'}) -Passed ($receipt.verdict-eq'admitted') -Detail $receipt.digest -Duration $clock.Elapsed
+                if($receipt.verdict-ne'admitted'){throw 'Admission rejected; no evolution-planning handoff is permitted.'}
             }
         }
         'intent' {
@@ -554,6 +583,7 @@ try {
                 'Run-VerifiedReduceTests.ps1',
                 'Run-CardExecutionEvidenceTests.ps1'
                 'Run-SemanticProposalTests.ps1'
+                'Run-AdmissionTests.ps1'
             )
             foreach($suite in $suites){
                 $suitePath=Join-Path $root ('tests/'+$suite)
@@ -573,8 +603,8 @@ try {
                 -WorkspaceRoot $workspaceRoot `
                 -Profile $closureProfile `
                 -Persist
-            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '436/436 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=436;failedCount=0}) -Render
-            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '436/436 gates'
+            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '460/460 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=460;failedCount=0}) -Render
+            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '460/460 gates'
         }
         { $_ -in @('gate','check') } {
             if (-not $Path) { throw 'gate requires a .aria source path.' }

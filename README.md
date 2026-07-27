@@ -33,16 +33,17 @@ brutally rigorous underneath
 
 | Layer | State |
 |---|---|
-| Compiler | `0.1.0-alpha.13` |
+| Compiler | `0.1.0-alpha.14` |
 | Language specification | `0.4.0` |
 | Source Core | bounded sequences + verified map/filter/reduce + glyph composition + whole-program effect proofs |
-| Conformance | `436/436` deterministic gates across fourteen lattices |
+| Conformance | `460/460` deterministic gates across fifteen lattices |
 | Runtime | Local PowerShell VM |
 | Policy | Deny by default |
 | Artifact | Deterministic bytecode + compressed `.ariac` container |
 | Graph substrate | Transactional execution + deterministic replay |
 | Evolution | Persistent plans + verified authorization + rollback proof |
 | Semantic proposals | Canonical meaning + exact scope + proof/test/rollback contracts + no self-approval |
+| Admission | Exact independent consent + deterministic non-mutating admission receipts |
 | Intent verification | Canonical intent + approved interpretation + independent challenge + evidence-derived proof |
 | Effect verification | Entry flow + function call closure + independently reconstructed bytecode graph |
 | Event model | Hash-chained Event Spine v3 + operation continuity + per-card execution receipts |
@@ -160,6 +161,9 @@ See [Semantic Proposal Bundles alpha.11](docs/51-semantic-proposal-bundles-alpha
 for non-mutating, content-addressed language-change proposals that bind intent,
 semantic deltas, exact scope, proof obligations, tests, compatibility, rollback,
 and the independent human-approval boundary.
+See [Consent and Admission Receipts alpha.12](docs/52-consent-admission-receipts-alpha12.md)
+for exact human consent and deterministic admission verdicts that reject drift
+and self-approval while granting no repository authority.
 
 ---
 
@@ -182,7 +186,7 @@ Expected shape:
 
 ```text
 ◆ SYSTEM READY          PASS   all gates online
-◆ ALL LATTICES COHERENT PASS   436/436 gates
+◆ ALL LATTICES COHERENT PASS   460/460 gates
 ```
 
 ### Run an ordinary ARIA program
@@ -1001,7 +1005,7 @@ Seal and verify the repository manifest:
 Current expected conformance:
 
 ```text
-◆ ALL LATTICES COHERENT PASS 436/436 gates
+◆ ALL LATTICES COHERENT PASS 460/460 gates
 ```
 
 CI runs PowerShell 7 on Windows and Ubuntu plus Windows PowerShell 5.1. Cross-runtime behavior is part of the contract.
@@ -1041,6 +1045,7 @@ Start here:
 | `docs/49-verified-reduce-alpha9.md` | Exact pure left fold and bounded accumulator evidence |
 | `docs/50-per-card-execution-evidence-alpha10.md` | Content-addressed per-card runtime receipts |
 | `docs/51-semantic-proposal-bundles-alpha11.md` | Canonical non-mutating language-change contracts |
+| `docs/52-consent-admission-receipts-alpha12.md` | Independent consent and deterministic admission receipts |
 
 Earlier documents record the architectural evolution and remain useful context.
 

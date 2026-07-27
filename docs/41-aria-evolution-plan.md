@@ -100,6 +100,7 @@ contract is explicitly proposed and admitted.
 | Verified Reduce alpha.9 | Complete | `Σ` performs an exact pure left fold from an explicit initial accumulator |
 | Per-Card Execution Evidence alpha.10 | Complete | Verified sequence-card exercises emit bounded observational receipts |
 | Semantic Proposal Bundles alpha.11 | Complete | Canonical non-mutating contracts preserve semantic scope, rollback, evidence, and approval separation |
+| Consent and Admission Receipts alpha.12 | Complete | Exact independent consent deterministically admits or rejects without granting repository authority |
 | Core conformance | Complete | 202-test established language lattice |
 | Cross-platform attestation | Complete | Windows PowerShell 5.1, PowerShell 7 Windows, PowerShell 7 Linux |
 
@@ -797,34 +798,35 @@ data substrate
 
 # 9. Immediate Next Evolution Contract
 
-## Consent and Admission Receipts alpha.12
+## Deterministic Semantic Replay alpha.13
 
 ### Intent
 
-Bind an independent human decision to one exact semantic-proposal digest before
-the existing governed evolution transaction can admit or apply its bytes.
+Reproduce the same admitted semantic state from the same baseline, proposal,
+consent, toolchain lock, policy, and evidence—or identify the exact drift
+boundary.
 
 ### Explicitly in scope
 
-- exact intent, proposal, verifier-result, and human-consent identities;
-- proposer/approver separation and proposal-drift rejection;
-- deterministic handoff into the existing apply transaction;
-- local-gate, remote-attestation, and closure-receipt bindings;
-- normal reversal commit on remote failure.
+- canonical replay input and result records;
+- exact baseline, proposal, consent, admission, toolchain, policy, and evidence identities;
+- deterministic re-execution of admission obligations;
+- first-difference drift classification;
+- equivalent-state or bounded-fracture verdict.
 
 ### Explicitly out of scope
 
-- self-approval;
-- consent that does not bind the exact proposal;
-- hidden path changes or force push;
-- unsigned remote execution;
+- repository mutation during replay;
+- hidden environment inputs;
+- nondeterministic success assertions;
+- treating equivalent replay as universal correctness;
 - native compiler migration.
 
 ### Admission target
 
-A dedicated admission lattice must prove consent identity, proposer/approver
-separation, proposal-drift rejection, exact path admission, deterministic
-apply, local and remote closure, and recoverable reversal.
+A dedicated replay lattice must reproduce exact admitted state, detect drift in
+each governed identity, identify the earliest broken boundary, and remain
+non-mutating and authority-free.
 
 ---
 
@@ -875,7 +877,9 @@ verified layers beneath it.
 - Semantic Proposal Bundles alpha.11 adds canonical, non-mutating, authority-free
   contracts with exact semantic deltas, path scope, obligations, compatibility,
   rollback, and optional execution-evidence references.
-- The next bounded evolution is Consent and Admission Receipts alpha.12.
+- Consent and Admission Receipts alpha.12 binds exact independent human consent
+  to deterministic admission obligations while granting no repository authority.
+- The next bounded evolution is Deterministic Semantic Replay alpha.13.
 - Integration Closure alpha.5.1 completes entry-flow effect coverage, derives
   intent authority from admitted artifacts, unifies all local lattices, and
   synchronizes release discovery before Semantic Projection Core alpha.6.

@@ -2,6 +2,16 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Consent and Admission Receipts alpha.12
+
+- Added content-addressed `aria.semantic-consent/1` artifacts over exact proposal, intent, scope, rollback, producer, approver, decision, and authority acknowledgements.
+- Added deterministic `aria.admission-receipt/1` verdicts reconstructed from eight explicit obligations.
+- Rejected self-approval, untrusted approval, proposal or scope drift, stale baselines, missing authority acknowledgement, and tampering.
+- Preserved withheld consent as valid rejection evidence.
+- Kept admission non-mutating and capability-free; admitted receipts stop at the existing governed evolution-planning boundary.
+- Added `aria admit consent|verify`, ADR 013, an executable ARIA evolution plan, and a 24-gate lattice.
+- Raised aggregate conformance to `460/460` across fifteen lattices.
+
 ## Semantic Proposal Bundles alpha.11
 
 - Added canonical `aria.semantic-proposal/1` bundles between verified intent and governed repository mutation.

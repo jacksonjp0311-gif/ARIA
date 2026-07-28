@@ -1,7 +1,7 @@
 {
     "schema":  "aria.runtime/1",
     "release":  "0.1.0-alpha.14",
-    "languageEvolution":  "agent-semantic-handshake-alpha.13",
+    "languageEvolution":  "cooperative-agent-mesh-alpha.17",
     "status":  "experimental",
     "repository":  {
                        "name":  "ARIA",
@@ -53,7 +53,16 @@
                          "agentHandshake":  "src/Aria.AgentHandshake.psm1",
                          "agentConnectionContract":  "ARIA-CONNECT.json",
                          "agentHandshakeSchema":  "schemas/aria-agent-handshake.schema.json",
-                         "agentHandshakePlan":  "plans/agent-semantic-handshake-alpha13.aria"
+                         "agentHandshakePlan":  "plans/agent-semantic-handshake-alpha13.aria",
+                         "semanticContinuity":  "src/Aria.SemanticContinuity.psm1",
+                         "semanticReplaySchema":  "schemas/semantic-replay.schema.json",
+                         "sessionHandoffSchema":  "schemas/session-handoff.schema.json",
+                         "providerBridgeSchema":  "schemas/provider-bridge.schema.json",
+                         "cooperativeMeshSchema":  "schemas/cooperative-mesh.schema.json"
+                         ,"semanticReplayPlan":  "plans/deterministic-semantic-replay-alpha14.aria"
+                         ,"sessionHandoffPlan":  "plans/portable-session-handoff-alpha15.aria"
+                         ,"providerBridgePlan":  "plans/provider-bridge-membrane-alpha16.aria"
+                         ,"cooperativeMeshPlan":  "plans/cooperative-agent-mesh-alpha17.aria"
                      },
     "continuity":  {
                        "stableTag":  "aria-alpha21-stable",

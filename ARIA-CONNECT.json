@@ -52,6 +52,10 @@
     "conformance": "./aria.cmd test",
     "languageConnection": "./aria.cmd connect",
     "repositoryIntegrity": "./aria.cmd verify"
+    ,"replayCreate": "./aria.cmd replay create <request.json> --json"
+    ,"handoffCreate": "./aria.cmd handoff create <request.json> --json"
+    ,"bridgeCreate": "./aria.cmd bridge create <request.json> --json"
+    ,"meshCreate": "./aria.cmd mesh create <request.json> --json"
   },
   "vocabulary": [
     {
@@ -101,6 +105,32 @@
     "Represent material ambiguity instead of silently resolving it.",
     "Derive success from evidence instead of asserting it.",
     "Preserve privacy by excluding secrets and unrelated payloads."
+  ],
+  "continuity": [
+    {
+      "milestone": "alpha.14",
+      "artifact": "aria.semantic-replay/1",
+      "command": "./aria.cmd replay create <request.json> --json",
+      "boundary": "Reconstructs meaning without repeating external effects."
+    },
+    {
+      "milestone": "alpha.15",
+      "artifact": "aria.session-handoff/1",
+      "command": "./aria.cmd handoff create <request.json> --json",
+      "boundary": "Transfers bounded semantic references, not prompts, consent, or authority."
+    },
+    {
+      "milestone": "alpha.16",
+      "artifact": "aria.provider-bridge/1",
+      "command": "./aria.cmd bridge create <request.json> --json",
+      "boundary": "Determines transport eligibility without calling a provider or activating capability."
+    },
+    {
+      "milestone": "alpha.17",
+      "artifact": "aria.cooperative-mesh/1",
+      "command": "./aria.cmd mesh create <request.json> --json",
+      "boundary": "Coordinates independent participants without asserting consensus or aggregating authority."
+    }
   ],
   "nextAction": {
     "command": "./aria.cmd doctor -Strict",

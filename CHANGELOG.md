@@ -2,6 +2,37 @@
 
 All notable changes to ARIA are recorded here. The compiler, language specification, and container contract are versioned independently.
 
+## Cooperative Agent Mesh alpha.17
+
+- Added `aria.cooperative-mesh/1` records over one shared state, distinct member artifacts, and unique provider-bridge identities.
+- Required producer, independent critic, and human roles with challenge-and-reconcile coordination.
+- Made material disagreement block closure and require human resolution.
+- Prohibited self-approval, manufactured consensus, shared authority, and capability aggregation.
+- Added `aria mesh create|verify`, a schema, examples, an ARIA plan, documentation, and an eight-gate lattice.
+
+## Provider Bridge Membrane alpha.16
+
+- Added `aria.provider-bridge/1` envelopes binding handoff, provider, model, operation, consent, requested capabilities, and an explicit capability ceiling.
+- Deterministically rejected capability requests outside the declared ceiling.
+- Kept provider transport deferred: no network call, payload, capability activation, or authority occurs in the membrane.
+- Added `aria bridge create|verify`, a schema, examples, an ARIA plan, documentation, and an eight-gate lattice.
+
+## Portable Session Handoff alpha.15
+
+- Added `aria.session-handoff/1` artifacts for continuation between distinct AI participants.
+- Limited handoff content to typed artifact references and a declared continuation boundary.
+- Explicitly excluded prompts, secrets, credentials, private payloads, and unrelated history.
+- Prohibited transfer of consent, capability, or authority.
+- Added `aria handoff create|verify`, a schema, examples, an ARIA plan, documentation, and an eight-gate lattice.
+
+## Deterministic Semantic Replay alpha.14
+
+- Added `aria.semantic-replay/1` records binding handshake, baseline, intent, interpretation, proposal, consent, policy, evidence, and terminal state.
+- Added causal comparison that returns coherence or the first exact drift boundary.
+- Made replay verify-only and prohibited repeated external effects or authority.
+- Added `aria replay create|verify`, a schema, examples, an ARIA plan, documentation, and an eight-gate lattice.
+- Raised aggregate conformance across alpha.14–17 to `500/500` across twenty lattices.
+
 ## Agent Semantic Handshake alpha.13
 
 - Added `ARIA-CONNECT.json` as a model-neutral, machine-readable connection contract with shared vocabulary, explicit completion conditions, valid commands, invariants, and a canonical read order.

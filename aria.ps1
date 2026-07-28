@@ -40,6 +40,7 @@ Import-Module (Join-Path $root 'src/Aria.ExecutionEvidence.psm1') -Force -Disabl
 Import-Module (Join-Path $root 'src/Aria.SemanticProposal.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Admission.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.AgentHandshake.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $root 'src/Aria.SemanticContinuity.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Gitflow.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Lexer.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $root 'src/Aria.Parser.psm1') -Force -DisableNameChecking
@@ -59,6 +60,10 @@ function Show-AriaHelp {
     @'
   aria begin --json
   aria handshake --json
+  aria replay create|verify <record.json> --json
+  aria handoff create|verify <record.json> --json
+  aria bridge create|verify <record.json> --json
+  aria mesh create|verify <record.json> --json
   aria doctor [-Workspace <repository>] [-Strict]
   aria verify
   aria manifest
@@ -588,6 +593,10 @@ try {
                 'Run-SemanticProposalTests.ps1'
                 'Run-AdmissionTests.ps1'
                 'Run-AgentHandshakeTests.ps1'
+                'Run-SemanticReplayTests.ps1'
+                'Run-SessionHandoffTests.ps1'
+                'Run-ProviderBridgeTests.ps1'
+                'Run-CooperativeMeshTests.ps1'
             )
             foreach($suite in $suites){
                 $suitePath=Join-Path $root ('tests/'+$suite)
@@ -607,8 +616,8 @@ try {
                 -WorkspaceRoot $workspaceRoot `
                 -Profile $closureProfile `
                 -Persist
-            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '468/468 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=468;failedCount=0}) -Render
-            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '468/468 gates'
+            $null = Send-AriaEvent -Domain verification -Phase conformance -State PASS -Energy validation -Information '500/500 gates' -Coherence 'all lattices coherent' -Source 'aria.test' -Data ([pscustomobject][ordered]@{verifiedCount=500;failedCount=0}) -Render
+            Write-AriaSummary -Title 'ALL LATTICES COHERENT' -Passed $true -Detail '500/500 gates'
         }
         { $_ -in @('gate','check') } {
             if (-not $Path) { throw 'gate requires a .aria source path.' }
@@ -766,6 +775,29 @@ flow Main {
             Write-AriaUtf8NoBom -Path $target -Text (Normalize-AriaText -Text $template)
             Write-AriaBanner -Title 'ARIA / INITIALIZE'
             Write-AriaSummary -Title 'PROGRAM CREATED' -Passed $true -Detail $target
+        }
+        { $_ -in @('replay','handoff','bridge','mesh') } {
+            $kind = [string]$Command.ToLowerInvariant()
+            if ($Path -notin @('create','verify')) {
+                throw "$kind supports 'create' and 'verify'."
+            }
+            if (-not $RequestPath) {
+                throw "$kind $Path requires a JSON path."
+            }
+            if (-not $Json) {
+                throw "$kind $Path requires --json so the continuity artifact remains machine-readable."
+            }
+            if ($Path -eq 'create') {
+                $record = Invoke-AriaContinuityCreateFile -Kind $kind -Path $RequestPath
+                Write-Output (ConvertTo-AriaJson $record)
+            }
+            else {
+                $verification = Invoke-AriaContinuityVerifyFile -Kind $kind -Path $RequestPath
+                Write-Output (ConvertTo-AriaJson $verification)
+                if (-not $verification.valid) {
+                    throw ("$kind verification rejected: " + (@($verification.errors) -join ', '))
+                }
+            }
         }
         'handshake' {
             if (-not $Json) {

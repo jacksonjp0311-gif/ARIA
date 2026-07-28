@@ -4,7 +4,7 @@
   "title": "ARIA agent connection contract",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "protocol", "identity", "purpose", "entrypoint", "phases", "readOrder", "commands", "vocabulary", "authority", "invariants", "nextAction"],
+  "required": ["schema", "protocol", "identity", "purpose", "entrypoint", "phases", "readOrder", "commands", "vocabulary", "authority", "invariants", "continuity", "nextAction"],
   "properties": {
     "schema": { "const": "aria.agent-connection/1" },
     "protocol": { "const": "semantic-sync/1" },
@@ -78,6 +78,22 @@
       }
     },
     "invariants": { "type": "array", "minItems": 6, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "continuity": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["milestone", "artifact", "command", "boundary"],
+        "properties": {
+          "milestone": { "enum": ["alpha.14", "alpha.15", "alpha.16", "alpha.17"] },
+          "artifact": { "type": "string", "pattern": "^aria\\.[a-z-]+/1$" },
+          "command": { "type": "string", "minLength": 1 },
+          "boundary": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "nextAction": {
       "type": "object",
       "additionalProperties": false,

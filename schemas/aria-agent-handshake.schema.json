@@ -50,7 +50,7 @@
     "synchronization": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["phases", "vocabulary", "invariants"],
+      "required": ["phases", "vocabulary", "invariants", "continuity"],
       "properties": {
         "phases": {
           "type": "array",
@@ -85,6 +85,22 @@
           "minItems": 6,
           "uniqueItems": true,
           "items": { "type": "string", "minLength": 1 }
+        },
+        "continuity": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["milestone", "artifact", "command", "boundary"],
+            "properties": {
+              "milestone": { "enum": ["alpha.14", "alpha.15", "alpha.16", "alpha.17"] },
+              "artifact": { "type": "string", "pattern": "^aria\\.[a-z-]+/1$" },
+              "command": { "type": "string", "minLength": 1 },
+              "boundary": { "type": "string", "minLength": 1 }
+            }
+          }
         }
       }
     },

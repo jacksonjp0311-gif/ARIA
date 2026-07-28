@@ -50,6 +50,7 @@ Those claims require later transaction and closure evidence.
 
 ## Next boundary
 
-Deterministic Semantic Replay alpha.13 should reproduce the same admitted
-semantic state from the same baseline, proposal, consent, toolchain lock,
-policy, and evidence—or identify the exact drift boundary.
+Deterministic Semantic Replay was renumbered alpha.14 after Agent Semantic
+Handshake alpha.13 and now reproduces the same admitted semantic state—or
+identifies the first exact drift boundary—before handoff, provider, or mesh
+coordination.

@@ -23,6 +23,10 @@ The documents in this directory define the language, its bootstrap implementatio
 - [`51-semantic-proposal-bundles-alpha11.md`](51-semantic-proposal-bundles-alpha11.md) — canonical non-mutating language-change proposals
 - [`52-consent-admission-receipts-alpha12.md`](52-consent-admission-receipts-alpha12.md) — independent human consent and deterministic admission
 - [`53-agent-semantic-handshake-alpha13.md`](53-agent-semantic-handshake-alpha13.md) — content-addressed AI discovery, shared vocabulary, and authority-free synchronization
+- [`54-deterministic-semantic-replay-alpha14.md`](54-deterministic-semantic-replay-alpha14.md) — verify-only semantic reconstruction and first-drift evidence
+- [`55-portable-session-handoff-alpha15.md`](55-portable-session-handoff-alpha15.md) — privacy-bounded continuity between distinct AI participants
+- [`56-provider-bridge-membrane-alpha16.md`](56-provider-bridge-membrane-alpha16.md) — provider-neutral eligibility below an explicit capability ceiling
+- [`57-cooperative-agent-mesh-alpha17.md`](57-cooperative-agent-mesh-alpha17.md) — producer, critic, and human coordination without consensus or authority aggregation
 
 ## Algorithms
 

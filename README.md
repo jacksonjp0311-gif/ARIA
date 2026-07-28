@@ -6,7 +6,7 @@
 
 | Gates | Release | Conformance | Bootstrap | License |
 | :---: | :---: | :---: | :---: | :---: |
-| [![ARIA gates](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml) | ![Release 0.1.0-alpha.14](https://img.shields.io/badge/0.1.0--alpha.14-ff4fc8?style=flat-square) | ![Conformance 468 of 468](https://img.shields.io/badge/468%2F468-67e8d5?style=flat-square) | ![PowerShell 5.1 and 7](https://img.shields.io/badge/PowerShell_5.1_%7C_7-8a72ff?style=flat-square) | [![Apache 2.0 license](https://img.shields.io/badge/Apache--2.0-d8d2e5?style=flat-square)](LICENSE) |
+| [![ARIA gates](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jacksonjp0311-gif/ARIA/actions/workflows/ci.yml) | ![Release 0.1.0-alpha.14](https://img.shields.io/badge/0.1.0--alpha.14-ff4fc8?style=flat-square) | ![Conformance 500 of 500](https://img.shields.io/badge/500%2F500-67e8d5?style=flat-square) | ![PowerShell 5.1 and 7](https://img.shields.io/badge/PowerShell_5.1_%7C_7-8a72ff?style=flat-square) | [![Apache 2.0 license](https://img.shields.io/badge/Apache--2.0-d8d2e5?style=flat-square)](LICENSE) |
 
 <div align="center">
 
@@ -88,7 +88,7 @@ Expected closure:
 
 ```text
 ◆ SYSTEM READY            PASS  all gates online
-◆ ALL LATTICES COHERENT   PASS  468/468 gates
+◆ ALL LATTICES COHERENT   PASS  500/500 gates
 ```
 
 Run the first program:
@@ -140,6 +140,37 @@ flowchart LR
 
 The handshake makes discovery seamless; it does not make authority ambient.
 See [Agent Semantic Handshake](docs/53-agent-semantic-handshake-alpha13.md).
+
+### Continue across AIs
+
+ARIA now carries verified meaning from one participant to many without copying
+private conversation or combining authority:
+
+```mermaid
+flowchart LR
+    H["α13<br/>Handshake"] --> R["α14<br/>Semantic replay"]
+    R --> S["α15<br/>Session handoff"]
+    S --> B["α16<br/>Provider membrane"]
+    B --> M["α17<br/>Cooperative mesh"]
+
+    R -. "first exact drift" .-> F["fracture"]
+    B -. "excess capability" .-> X["reject"]
+    M -. "material disagreement" .-> U["human resolution"]
+
+    classDef signal fill:#351b39,stroke:#ff4fc8,color:#fff;
+    classDef verify fill:#1b2830,stroke:#67e8d5,color:#fff;
+    classDef boundary fill:#25233a,stroke:#8f82ff,color:#fff;
+    class H,R,S,B,M signal;
+    class F,X boundary;
+    class U verify;
+```
+
+| Layer | What moves | What never moves automatically |
+|---|---|---|
+| Replay | canonical semantic identity | external effects |
+| Handoff | bounded artifact references | prompts, secrets, consent, authority |
+| Provider bridge | verified transport eligibility | payload, network execution, capability activation |
+| Cooperative mesh | shared state and independent challenges | consensus claims or aggregated authority |
 
 ## See the language
 
@@ -409,16 +440,16 @@ and [Consent and Admission Receipts](docs/52-consent-admission-receipts-alpha12.
 |---|---|
 | Release | `0.1.0-alpha.14` |
 | Language specification | `0.4.0` |
-| Aggregate conformance | `468/468` deterministic gates |
-| Test lattices | 16 |
+| Aggregate conformance | `500/500` deterministic gates |
+| Test lattices | 20 |
 | Runtime lanes | Windows PowerShell 5.1, PowerShell 7 Windows, PowerShell 7 Ubuntu |
 | Runtime | local PowerShell bootstrap VM |
 | Host effects | deny by default |
 | Algorithms | verified map, filter, reduce |
 | Event history | hash-chained Event Spine v3 |
-| AI connection | content-addressed semantic handshake + shared vocabulary + explicit synchronization phases |
+| AI continuity | handshake + replay + private handoff + provider membrane + cooperative mesh |
 | Evolution | semantic proposal + independent consent + deterministic admission + governed apply |
-| Next frontier | Deterministic Semantic Replay alpha.14 |
+| Next frontier | Capability-gated live provider adapter alpha.18 |
 
 ### Evolution ledger
 
@@ -436,14 +467,18 @@ flowchart LR
     A10 --> A11["α11 Semantic proposals"]
     A11 --> A12["α12 Consent + admission"]
     A12 --> A13["α13 Agent handshake"]
-    A13 -. next .-> A14["α14 Semantic replay"]
+    A13 --> A14["α14 Semantic replay"]
+    A14 --> A15["α15 Session handoff"]
+    A15 --> A16["α16 Provider membrane"]
+    A16 --> A17["α17 Cooperative mesh"]
+    A17 -. next .-> A18["α18 Live adapter"]
 
     classDef done fill:#1b2830,stroke:#67e8d5,color:#fff;
     classDef current fill:#351b39,stroke:#ff4fc8,color:#fff;
     classDef next fill:#1c1c2c,stroke:#8f82ff,color:#c9c2d4,stroke-dasharray:5 5;
-    class A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12 done;
-    class A13 current;
-    class A14 next;
+    class A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12,A13,A14,A15,A16 done;
+    class A17 current;
+    class A18 next;
 ```
 
 The detailed sequence and admission contracts live in the
@@ -456,6 +491,10 @@ Run `.\aria.cmd help` for the complete command surface.
 | Goal | Command |
 |---|---|
 | synchronize an AI | `.\aria.cmd handshake --json` |
+| construct semantic replay | `.\aria.cmd replay create <request.json> --json` |
+| create bounded handoff | `.\aria.cmd handoff create <request.json> --json` |
+| evaluate provider eligibility | `.\aria.cmd bridge create <request.json> --json` |
+| form cooperative mesh | `.\aria.cmd mesh create <request.json> --json` |
 | verify installation | `.\aria.cmd doctor -Strict` |
 | run every lattice | `.\aria.cmd test` |
 | verify repository identity | `.\aria.cmd verify` |
@@ -523,6 +562,10 @@ Choose the shortest path for what you need.
 ### Understand the human–machine interface
 
 - [Agent Semantic Handshake](docs/53-agent-semantic-handshake-alpha13.md)
+- [Deterministic Semantic Replay](docs/54-deterministic-semantic-replay-alpha14.md)
+- [Portable Session Handoff](docs/55-portable-session-handoff-alpha15.md)
+- [Provider Bridge Membrane](docs/56-provider-bridge-membrane-alpha16.md)
+- [Cooperative Agent Mesh](docs/57-cooperative-agent-mesh-alpha17.md)
 - [AI bridge boundary](docs/08-ai-bridge.md)
 - [Connectflow](docs/16-connectflow.md)
 - [Operator renderer](docs/13-operator-renderer.md)
@@ -601,16 +644,20 @@ discover identity
 → implement
 → run local gates
 → obtain remote attestation
+→ seal replay state
+→ hand off only bounded references
+→ preserve independent challenge in any mesh
 → report exact closure
 ```
 
 ## Evolution frontier
 
-The next bounded milestone is **Deterministic Semantic Replay alpha.14**:
+The next bounded milestone is **Capability-Gated Live Provider Adapter alpha.18**:
 
-> Given the same baseline, semantic proposal, consent, admission receipt,
-> toolchain lock, policy, and evidence, reproduce the same admitted semantic
-> state—or identify the first exact drift boundary.
+> Consume an eligible alpha.16 provider membrane through an explicit network
+> capability, transmit a privacy-filtered payload, verify the response
+> envelope, and return evidence to the alpha.17 mesh without granting the model
+> authority.
 
 After Epoch III closes, ARIA’s PowerShell implementation is intended to become
 a frozen reference oracle for a native front end. It will be preserved as

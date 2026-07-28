@@ -798,21 +798,24 @@ data substrate
 
 # 9. Immediate Next Evolution Contract
 
-## Deterministic Semantic Replay alpha.13
+## Semantic Continuity Epoch alpha.14–17
 
 ### Intent
 
-Reproduce the same admitted semantic state from the same baseline, proposal,
-consent, toolchain lock, policy, and evidence—or identify the exact drift
-boundary.
+Carry the same admitted semantic state through replay, private handoff,
+provider eligibility, and multi-agent cooperation—or identify the exact drift,
+privacy, capability, disagreement, or authority boundary.
 
 ### Explicitly in scope
 
-- canonical replay input and result records;
+- canonical replay, handoff, bridge, and mesh records;
 - exact baseline, proposal, consent, admission, toolchain, policy, and evidence identities;
 - deterministic re-execution of admission obligations;
 - first-difference drift classification;
-- equivalent-state or bounded-fracture verdict.
+- equivalent-state or bounded-fracture verdict;
+- privacy-bounded transfer between distinct agents;
+- provider capability ceilings without transport execution;
+- independent producer, critic, and human mesh roles.
 
 ### Explicitly out of scope
 
@@ -820,13 +823,16 @@ boundary.
 - hidden environment inputs;
 - nondeterministic success assertions;
 - treating equivalent replay as universal correctness;
-- native compiler migration.
+- native compiler migration;
+- live provider network calls;
+- transferring consent or aggregating authority.
 
 ### Admission target
 
-A dedicated replay lattice must reproduce exact admitted state, detect drift in
-each governed identity, identify the earliest broken boundary, and remain
-non-mutating and authority-free.
+Four dedicated lattices must reproduce exact admitted state, preserve only
+bounded references during handoff, reject excess provider capability, require
+independent challenge and human conflict resolution, and remain non-mutating
+and authority-free.
 
 ---
 
@@ -879,7 +885,17 @@ verified layers beneath it.
   rollback, and optional execution-evidence references.
 - Consent and Admission Receipts alpha.12 binds exact independent human consent
   to deterministic admission obligations while granting no repository authority.
-- The next bounded evolution is Deterministic Semantic Replay alpha.13.
+- Agent Semantic Handshake alpha.13 makes repository identity, vocabulary,
+  synchronization, health, and authority boundaries discoverable in one record.
+- Deterministic Semantic Replay alpha.14 identifies the first exact causal drift
+  without repeating external effects.
+- Portable Session Handoff alpha.15 transfers bounded artifact references while
+  excluding private conversation, consent, and authority.
+- Provider Bridge Membrane alpha.16 verifies capability-bounded provider
+  eligibility without network execution or payload transport.
+- Cooperative Agent Mesh alpha.17 requires independent producer, critic, and
+  human roles while prohibiting consensus claims and authority aggregation.
+- The next bounded evolution is Capability-Gated Live Provider Adapter alpha.18.
 - Integration Closure alpha.5.1 completes entry-flow effect coverage, derives
   intent authority from admitted artifacts, unifies all local lattices, and
   synchronizes release discovery before Semantic Projection Core alpha.6.

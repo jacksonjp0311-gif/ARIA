@@ -17,7 +17,7 @@ A healthy baseline must report:
 
 - repository manifest integrity
 - `SYSTEM READY`
-- `468/468` aggregate conformance with zero failures
+- `500/500` aggregate conformance with zero failures
 
 ## Authoritative entrypoints
 
@@ -26,6 +26,7 @@ A healthy baseline must report:
 - `ARIA-RUNTIME.json` — machine-readable repository map
 - `ARIA-CONNECT.json` — canonical model-neutral connection contract
 - `src/Aria.AgentHandshake.psm1` — deterministic discovery and synchronization record
+- `src/Aria.SemanticContinuity.psm1` — replay, handoff, provider membrane, and cooperative mesh
 - `src/Aria.Gate.psm1` — compiler gate
 - `src/Aria.Parser.psm1` — parser
 - `src/Aria.Semantics.psm1` — semantic analysis
@@ -58,6 +59,20 @@ Handshake success grants no authority. Do not infer consent, capability,
 correctness, or permission from discovery. A proposal remains non-authoritative
 until the independent human, capability, policy, and execution boundaries admit
 it.
+
+Continuity commands are machine-readable:
+
+```powershell
+.\aria.cmd replay  create <request.json> --json
+.\aria.cmd handoff create <request.json> --json
+.\aria.cmd bridge  create <request.json> --json
+.\aria.cmd mesh    create <request.json> --json
+```
+
+Replay never repeats effects. Handoff excludes private conversation and does
+not transfer consent. Provider eligibility performs no network call. Mesh
+coordination requires an independent critic and human resolution of material
+disagreement. None of these artifacts grants or aggregates authority.
 
 ## Evolution rule
 
